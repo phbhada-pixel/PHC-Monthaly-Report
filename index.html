@@ -157,6 +157,19 @@
 
             <div id="reportsSection" class="hidden">
                 <h3>मासिक अहवाल डाउनलोड करा</h3>
+
+                <div class="row-flex" id="adminRoleFilterDiv" style="margin-bottom: 15px; display: none; background: #e8f4f8; padding: 10px; border-radius: 8px; border: 1px solid #bce8f1;">
+                    <div style="flex: 1;">
+                        <label style="font-weight:bold; color:#31708f;">कर्मचाऱ्याचे पद (फक्त ॲडमिनसाठी):</label>
+                        <select id="reportRoleFilter">
+                            <option value="सर्व">सर्व कर्मचारी (All Combined)</option>
+                            <option value="ANM">फक्त ANM चा डेटा</option>
+                            <option value="MPW">फक्त MPW चा डेटा</option>
+                            <option value="CHO">फक्त CHO चा डेटा</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="row-flex" style="margin-bottom: 15px;">
                     <div style="flex: 2;"><label>अहवाल निवडा:</label><select id="reportFormSelect"></select></div>
                 </div>
@@ -284,6 +297,7 @@
         
         if(user.role === "Admin") { 
             document.getElementById('tabAdmin').classList.remove('hidden'); 
+            document.getElementById('adminRoleFilterDiv').style.display = "flex"; // 🌟 ॲडमिनला फिल्टर दाखवा
             renderFormsListForEdit(); 
         }
         updateFormDropdowns();
@@ -340,7 +354,6 @@
         });
     }
 
-    // 🌟 सुधारित: Role नुसार गावे लपवणे (Duplicate Entry Check) 🌟
     function updateVillageDropdown() {
         const vSel = document.getElementById('selVillage');
         const fId = document.getElementById('selForm').value;
@@ -360,20 +373,15 @@
         masterData.villages.filter(v => {
             const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
             if(!belongsToSubCenter) return false;
-            
             if(isStatsForm) {
-                // 🌟 लोकल मेमरीमध्ये आता मोबाईल नंबर पण चेक करेल (एकाच फोनवरील २ युजर्ससाठी)
                 const isLocalFilled = localHistory.some(h => 
                     h.formID === fId && h.village === v.VillageName && 
                     h.month === month && h.year == year && 
                     h.mobile === String(user.mobile).trim()
                 );
-                
                 const isServerFilled = serverHistory.some(h => {
                     if(h.formID !== fId || h.village !== v.VillageName || h.month !== month || h.year != year) return false;
-                    // जर फॉर्म 'All' असेल तर कोणीही भरलेला डेटा ग्राह्य धरा आणि गाव लपवा
                     if(h.isAllForm || isAll) return true;
-                    // जर फॉर्म Specific (उदा. MPW) असेल, तर फक्त या युजरचा स्वतःचा डेटा असेल तरच गाव लपवा
                     return h.mobile === String(user.mobile).trim();
                 });
                 if(isLocalFilled || isServerFilled) return false;
@@ -381,6 +389,7 @@
             return true;
         }).forEach(v => { vSel.innerHTML += `<option value="${v.VillageName}">${v.VillageName}</option>`; });
     }
+
     function loadDynamicFields() {
         const fId = document.getElementById('selForm').value;
         const area = document.getElementById('dynamicFormArea');
@@ -433,7 +442,7 @@
         });
     }
 
-   async function saveDataLocal() {
+    async function saveDataLocal() {
         if(isSaving) return; 
         const saveBtn = document.getElementById('mainSaveBtn');
         if(saveBtn) saveBtn.disabled = true; 
@@ -464,7 +473,6 @@
         q.push(entry);
         localStorage.setItem("syncQueue", JSON.stringify(q));
 
-        // 🌟 लोकल हिस्ट्री मध्ये मोबाईल नंबर सेव्ह करणे (डबल युजरसाठी) 🌟
         let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
         history.push({formID: fId, village: vName, month: month, year: year, mobile: String(user.mobile).trim()});
         localStorage.setItem("submissionHistory", JSON.stringify(history));
@@ -474,6 +482,7 @@
         loadDynamicFields(); 
         isSaving = false; 
     }
+
     async function syncDataToServer(statusId, btnId) {
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
         if(q.length === 0) return;
@@ -482,7 +491,7 @@
         const saveBtn = document.getElementById(btnId);
 
         statusText.style.color = "orange";
-        statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
+        statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत অফিসে... कृपया थांबा.";
 
         try {
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
@@ -506,7 +515,6 @@
         }
     }
 
-    // 🌟 सुधारित: Role नुसार एडिट करण्यासाठी गावे दाखवणे 🌟
     function updateEditVillageDropdown() {
         const vSel = document.getElementById('editVillageSelect');
         const fId = document.getElementById('editFormSelect').value;
@@ -526,9 +534,9 @@
         serverHistory.forEach(h => {
             if(h.formID === fId && h.month === month && String(h.year) === String(year)) {
                 let canEdit = false;
-                if(user.role === "Admin") canEdit = true; // ॲडमिन सर्व एडिट करू शकतो
-                else if(isAll && h.subcenter.toLowerCase() === user.subcenter.toLowerCase()) canEdit = true; // 'All' फॉर्म: उपकेंद्रानुसार एडिट
-                else if(!isAll && h.mobile === String(user.mobile).trim()) canEdit = true; // 'Specific' फॉर्म: फक्त स्वतःचाच डेटा एडिट
+                if(user.role === "Admin") canEdit = true;
+                else if(isAll && h.subcenter.toLowerCase() === user.subcenter.toLowerCase()) canEdit = true;
+                else if(!isAll && h.mobile === String(user.mobile).trim()) canEdit = true;
 
                 if(canEdit && !addedVillages.includes(h.village)) {
                     vSel.innerHTML += `<option value="${h.village}">${h.village}</option>`;
@@ -554,7 +562,6 @@
         document.getElementById('editSaveBtn').classList.add('hidden');
 
         try {
-            // 🌟 Role आणि Mobile Number पाठवणे 🌟
             const payload = { formID: formID, village: village, month: month, year: year, subCenter: user.subcenter, mobileNo: user.mobile, role: user.role };
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getRecordForEdit", payload}) });
             const textResponse = await r.text();
@@ -668,7 +675,6 @@
             } else { updatedFormData[field.label] = document.getElementById(`edit_inp_${i}`).value; }
         });
 
-        // 🌟 Role आणि Mobile Number पाठवणे 🌟
         const payload = { formID: fId, village: vName, month: month, year: year, mobileNo: user.mobile, subCenter: user.subcenter, role: user.role, formData: updatedFormData };
 
         statusText.style.color = "orange";
@@ -737,7 +743,6 @@
         let isNumericCol = Array(headers.length).fill(false);
         for(let c of showIndices) {
             let colName = headers[c] || "";
-            // मोबाईल नंबर, आयडी किंवा मजकूर असणारे रकाने वगळा
             if(colName.includes("मोबाईल") || colName.includes("क्रमांक") || colName === "तारीख" || colName === "महिना" || colName === "वर्ष" || colName === "उपकेंद्र" || colName === "गाव" || colName === "ग्रामपंचायत" || colName.includes("नाव") || colName.includes("स्तर")) {
                 continue; 
             }
@@ -763,6 +768,7 @@
         return { totals, isNumericCol };
     }
 
+    // 🌟 सुधारित: Role Filter सह रिपोर्ट डाऊनलोड 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -770,12 +776,24 @@
 
         if(!formID) { alert("कृपया अहवाल निवडा"); return; }
         
+        let filterRole = "सर्व";
+        if(user && user.role === "Admin" && document.getElementById('reportRoleFilter')) {
+            filterRole = document.getElementById('reportRoleFilter').value;
+        }
+
         document.getElementById('reportLoader').style.display = "block";
         document.getElementById('reportContentArea').classList.add('hidden');
         document.getElementById('reportTableContainer').innerHTML = "";
         
         try {
-            const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
+            const payload = { 
+                formID: formID, 
+                role: user.role, 
+                subcenter: user.subcenter, 
+                mobileNo: user.mobile, 
+                filterRole: filterRole 
+            };
+            
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
             const responseText = await r.text();
             
@@ -801,12 +819,11 @@
                         
                         for(let i=1; i<rep.data.length; i++) {
                             let row = rep.data[i];
-                            let matchMonth = (selMonth === "सर्व" || row[monthIdx] === selMonth);
-                            let matchYear = (selYear === "सर्व" || String(row[yearIdx]) === String(selYear));
+                            let matchMonth = (selMonth === "सर्व" || String(row[monthIdx]).trim() === String(selMonth).trim());
+                            let matchYear = (selYear === "सर्व" || String(row[yearIdx]).trim() === String(selYear).trim());
                             if(matchMonth && matchYear) dataRows.push(row);
                         }
                         
-                        // 🌟 क्रमवारी: उपकेंद्र आणि गावानुसार (Sorting by Subcenter & Village) 🌟
                         if(subCenterIdx > -1 && villageIdx > -1) {
                             dataRows.sort((a, b) => {
                                 let subA = String(a[subCenterIdx] || "").trim();
@@ -899,7 +916,6 @@
                     showIndices.forEach(idx => { html += `<td>${data[i][idx] || "-"}</td>`; });
                     html += `</tr>`;
                 }
-                // 🌟 उभी बेरीज जोडणे 🌟
                 if(isStats && data.length > 1) {
                     let { totals, isNumericCol } = getTotalsRow(data, headers, showIndices);
                     html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
@@ -919,7 +935,9 @@
         if(currentReports.length === 0) return;
         let month = document.getElementById('reportMonth').value;
         let year = document.getElementById('reportYear').value;
+        let filterRole = document.getElementById('reportRoleFilter') ? document.getElementById('reportRoleFilter').value : "सर्व";
         let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year}`;
+        if(user.role === 'Admin' && filterRole !== 'सर्व') periodText += ` (${filterRole})`;
         let wb = XLSX.utils.book_new();
 
         currentReports.forEach((rep, index) => {
@@ -969,7 +987,6 @@
                     sheetData.push(rowData);
                 }
                 
-                // 🌟 Excel मध्ये उभी बेरीज जोडणे 🌟
                 if(isStats && data.length > 1) {
                     let { totals, isNumericCol } = getTotalsRow(data, headers, showIndices);
                     let totalRow = ["एकूण"];
@@ -1049,7 +1066,6 @@
         }
     }
 
-    // --- Admin Form Builder Logic ---
     function toggleRoles(checkbox) {
         document.getElementById('specificRoles').style.display = checkbox.checked ? 'none' : 'block';
         if(checkbox.checked) {
@@ -1058,10 +1074,10 @@
     }
 
     function getSelectedRoles() {
-        if(document.getElementById('roleAll').checked) return "All";
+        if(document.getElementById('roleAll').checked) return "ALL";
         let roles = [];
         document.querySelectorAll('.form-role:checked').forEach(cb => roles.push(cb.value));
-        return roles.length > 0 ? roles.join(',') : "All";
+        return roles.length > 0 ? roles.join(',') : "ALL";
     }
 
     function openNewFormBuilder() {
@@ -1097,7 +1113,7 @@
         document.getElementById('newFormName').value = f.FormName;
         document.getElementById('newFormType').value = f.FormType;
         
-        let roles = f.AllowedRoles ? f.AllowedRoles.split(',') : ["ALL"];
+        let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
         if(roles.includes("ALL")) {
             document.getElementById('roleAll').checked = true;
             toggleRoles(document.getElementById('roleAll'));
@@ -1221,7 +1237,7 @@
     async function saveFullForm() {
         const name = document.getElementById('newFormName').value;
         const type = document.getElementById('newFormType').value;
-        const allowedRoles = getSelectedRoles();
+        const allowedRoles = getSelectedRoles(); 
         
         if(!name) { alert("फॉर्मचे नाव टाका"); return; }
         if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
@@ -1236,7 +1252,7 @@
         const formID = document.getElementById('editFormID').value;
         const name = document.getElementById('newFormName').value;
         const type = document.getElementById('newFormType').value;
-        const allowedRoles = getSelectedRoles();
+        const allowedRoles = getSelectedRoles(); 
 
         if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
 
