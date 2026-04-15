@@ -203,6 +203,7 @@
     let masterData = { forms: [], villages: [], filledStats: [] };
     let user = null;
     let currentReports = []; 
+    let isSaving = false; // 🌟 नवीन: डबल क्लिक रोखण्यासाठी व्हेरिएबल 🌟
 
     async function unlockApp() {
         if(document.getElementById('sitePass').value === "1234") {
@@ -834,8 +835,14 @@
         });
     }
 
-    // 🌟 नवीन ॲटो सिंक लॉजिक (Auto-Sync) 🌟
+    // 🌟 डबल क्लिक रोखण्यासाठी सुधारित फंक्शन 🌟
     async function saveDataLocal() {
+        if(isSaving) return; // आधीच सेव्ह होत असेल तर थांबवा
+        
+        const saveBtn = document.getElementById('mainSaveBtn');
+        if(saveBtn) saveBtn.disabled = true; // बटण लगेच बंद करा
+        isSaving = true;
+
         calculateAutoSums(); 
         
         const fId = document.getElementById('selForm').value;
@@ -843,7 +850,13 @@
         const month = document.getElementById('selMonth').value;
         const year = document.getElementById('selYear').value;
 
-        if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); return; }
+        if(!fId || !vName) { 
+            alert("कृपया फॉर्म आणि गाव निवडा!"); 
+            isSaving = false;
+            if(saveBtn) saveBtn.disabled = false;
+            return; 
+        }
+        
         let formData = {};
         formData["महिना"] = month;
         formData["वर्ष"] = year;
@@ -869,19 +882,20 @@
 
         updateVillageDropdown(); 
         loadDynamicFields(); 
+
+        isSaving = false; // सर्व प्रोसेस पूर्ण झाल्यावर
     }
 
-    // 🌟 बटण लॉक (Disable) करणे आणि थेट सिंक करणे 🌟
+    // 🌟 सिंक फंक्शनमध्ये सुरक्षितता 🌟
     async function syncDataToServer() {
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
         if(q.length === 0) return;
         
         const statusText = document.getElementById('syncStatus');
-        const saveBtn = document.getElementById('mainSaveBtn'); // सेव्ह बटण
+        const saveBtn = document.getElementById('mainSaveBtn');
 
         statusText.style.color = "orange";
         statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
-        if(saveBtn) saveBtn.disabled = true; // डबल क्लिक टाळण्यासाठी बटण बंद करणे
 
         try {
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
@@ -891,7 +905,7 @@
                 statusText.style.color = "green";
                 statusText.innerText = "✅ माहिती यशस्वीरित्या गुगल शीटवर सेव्ह झाली!"; 
                 setTimeout(() => { statusText.innerText = ""; }, 4000);
-                fetchData(); // नवीन माहिती रिपोर्टमध्ये दिसावी म्हणून रिफ्रेश
+                await fetchData(); // रिपोर्टसाठी नवीन डेटा रिफ्रेश करा
             } else {
                 throw new Error("Server error");
             }
@@ -900,7 +914,7 @@
             statusText.innerText = "⚠️ इंटरनेट एरर! माहिती मोबाईलमध्ये सुरक्षित आहे, नेटवर्क आल्यावर पुन्हा जतन करा दाबा.";
             setTimeout(() => { statusText.innerText = ""; }, 5000);
         } finally {
-            if(saveBtn) saveBtn.disabled = false; // प्रोसेस पूर्ण झाल्यावर बटण पुन्हा चालू करणे
+            if(saveBtn) saveBtn.disabled = false; // प्रोसेस संपल्यावर बटण पुन्हा सुरू करा
         }
     }
 </script>
