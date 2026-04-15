@@ -234,11 +234,7 @@
 
     async function fetchData() {
         try {
-            // POST मेथड वापरली आहे आणि Headers काढून टाकले आहेत जेणेकरून CORS एरर येणार नाही
-            const r = await fetch(GAS_URL, { 
-                method: "POST", 
-                body: JSON.stringify({action:"getInitialData"}) 
-            });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getInitialData"}) });
             const textResponse = await r.text();
             if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
             const d = JSON.parse(textResponse);
@@ -256,10 +252,7 @@
         if(!m || !p) return;
         document.getElementById('netStatus').innerText = "तपासत आहे...";
         try {
-            const r = await fetch(GAS_URL, { 
-                method: "POST", 
-                body: JSON.stringify({action:"login", mobileNo:m, password:p}) 
-            });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"login", mobileNo:m, password:p}) });
             const textResponse = await r.text();
             if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
             const d = JSON.parse(textResponse);
@@ -460,10 +453,7 @@
         statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
 
         try {
-            const r = await fetch(GAS_URL, { 
-                method: "POST", 
-                body: JSON.stringify({action:"syncData", payload: q}) 
-            });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
             const textResponse = await r.text();
             if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
 
@@ -518,10 +508,7 @@
 
         try {
             const payload = { formID: formID, village: village, month: month, year: year, subCenter: user.subcenter };
-            const r = await fetch(GAS_URL, { 
-                method: "POST", 
-                body: JSON.stringify({action:"getRecordForEdit", payload}) 
-            });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getRecordForEdit", payload}) });
             const textResponse = await r.text();
             
             if(textResponse.trim().startsWith("<")) throw new Error("Google Server Blocked the Request.");
@@ -639,10 +626,7 @@
         statusText.innerText = "☁️ नवीन बदल गुगल शीटवर सेव्ह होत आहेत...";
 
         try {
-            const r = await fetch(GAS_URL, { 
-                method: "POST", 
-                body: JSON.stringify({action:"updateRecord", payload: payload}) 
-            });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateRecord", payload: payload}) });
             const textResponse = await r.text();
             
             if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
@@ -699,6 +683,38 @@
         });
     }
 
+    // 🌟 उभ्या बेरजेसाठी लॉजिक (Total Calculation Helper) 🌟
+    function getTotalsRow(data, headers, showIndices) {
+        let totals = Array(headers.length).fill(0);
+        let isNumericCol = Array(headers.length).fill(false);
+        for(let c of showIndices) {
+            let colName = headers[c] || "";
+            // मोबाईल नंबर किंवा आयडी असणारे रकाने वगळा
+            if(colName.includes("मोबाईल") || colName.includes("क्रमांक") || colName === "तारीख" || colName === "महिना" || colName === "वर्ष" || colName === "उपकेंद्र" || colName === "गाव" || colName === "ग्रामपंचायत" || colName.includes("नाव")) {
+                continue; 
+            }
+            let isNum = false; 
+            let colSum = 0;
+            for(let r=1; r<data.length; r++) {
+                let val = String(data[r][c] || "").trim();
+                if(val !== "" && val !== "-") {
+                    if(!isNaN(val)) {
+                        isNum = true;
+                        colSum += parseFloat(val);
+                    } else {
+                        isNum = false;
+                        break; // जर मजकूर सापडला तर बेरीज करू नका
+                    }
+                }
+            }
+            if(isNum) {
+                isNumericCol[c] = true;
+                totals[c] = colSum;
+            }
+        }
+        return { totals, isNumericCol };
+    }
+
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -713,16 +729,10 @@
         try {
             const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
             
-            const r = await fetch(GAS_URL, { 
-                method: "POST", 
-                body: JSON.stringify({action:"getReportData", payload}) 
-            });
-            
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
             const responseText = await r.text();
             
-            if(responseText.trim().startsWith("<")) {
-                throw new Error("गुगल सर्व्हर ब्लॉक करत आहे (Multiple Gmail Accounts Issue). कृपया ॲप 'Incognito/Private' टॅबमध्ये उघडा.");
-            }
+            if(responseText.trim().startsWith("<")) throw new Error("गुगल सर्व्हर ब्लॉक करत आहे.");
             
             const d = JSON.parse(responseText);
             document.getElementById('reportLoader').style.display = "none";
@@ -736,14 +746,37 @@
                         
                         let monthIdx = headers.indexOf("महिना");
                         let yearIdx = headers.indexOf("वर्ष");
+                        let subCenterIdx = headers.indexOf("उपकेंद्र");
+                        let villageIdx = headers.indexOf("गाव");
 
                         let fData = [headers];
+                        let dataRows = [];
+                        
                         for(let i=1; i<rep.data.length; i++) {
                             let row = rep.data[i];
                             let matchMonth = (selMonth === "सर्व" || row[monthIdx] === selMonth);
                             let matchYear = (selYear === "सर्व" || String(row[yearIdx]) === String(selYear));
-                            if(matchMonth && matchYear) fData.push(row);
+                            if(matchMonth && matchYear) dataRows.push(row);
                         }
+                        
+                        // 🌟 क्रमवारी: उपकेंद्र आणि गावानुसार (Sorting by Subcenter & Village) 🌟
+                        if(subCenterIdx > -1 && villageIdx > -1) {
+                            dataRows.sort((a, b) => {
+                                let subA = String(a[subCenterIdx] || "").trim();
+                                let subB = String(b[subCenterIdx] || "").trim();
+                                if(subA < subB) return -1;
+                                if(subA > subB) return 1;
+                                
+                                let vilA = String(a[villageIdx] || "").trim();
+                                let vilB = String(b[villageIdx] || "").trim();
+                                if(vilA < vilB) return -1;
+                                if(vilA > vilB) return 1;
+                                
+                                return 0;
+                            });
+                        }
+                        
+                        fData = fData.concat(dataRows);
                         finalReports.push({ formName: rep.formName, data: fData });
                     });
 
@@ -751,15 +784,9 @@
                         currentReports = finalReports;
                         renderMultipleTables(finalReports, selMonth, selYear);
                         document.getElementById('reportContentArea').classList.remove('hidden');
-                    } else {
-                        alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही.");
-                    }
-                } else {
-                    alert("अद्याप कोणतीही माहिती उपलब्ध नाही.");
-                }
-            } else {
-                alert("सर्व्हरकडून माहिती मिळाली नाही: " + (d.message || "एरर"));
-            }
+                    } else { alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही."); }
+                } else { alert("अद्याप कोणतीही माहिती उपलब्ध नाही."); }
+            } else { alert("सर्व्हरकडून माहिती मिळाली नाही."); }
         } catch(e) {
             console.error("Report Fetch Error:", e);
             document.getElementById('reportLoader').style.display = "none";
@@ -776,6 +803,9 @@
             let showIndices = [];
             headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
             let colCount = showIndices.length + 1; 
+            
+            const formObj = masterData.forms.find(x => x.FormName === rep.formName);
+            const isStats = formObj && formObj.FormType === 'Stats';
 
             let h1Arr = []; let h2Arr = [];
             showIndices.forEach(idx => {
@@ -822,6 +852,16 @@
                     showIndices.forEach(idx => { html += `<td>${data[i][idx] || "-"}</td>`; });
                     html += `</tr>`;
                 }
+                // 🌟 उभी बेरीज जोडणे 🌟
+                if(isStats && data.length > 1) {
+                    let { totals, isNumericCol } = getTotalsRow(data, headers, showIndices);
+                    html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
+                    showIndices.forEach(idx => {
+                        if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
+                        else html += `<td>-</td>`;
+                    });
+                    html += `</tr>`;
+                }
             }
             html += `</tbody></table>`;
         });
@@ -841,6 +881,9 @@
             let showIndices = [];
             headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
             let colCount = showIndices.length + 1; 
+            
+            const formObj = masterData.forms.find(x => x.FormName === rep.formName);
+            const isStats = formObj && formObj.FormType === 'Stats';
 
             let h1Arr = []; let h2Arr = [];
             showIndices.forEach(idx => {
@@ -865,6 +908,8 @@
             }
 
             let isNil = false;
+            let totalRowIndex = -1;
+
             if(data.length === 1) {
                 isNil = true;
                 let nilRow = Array(colCount).fill("");
@@ -875,6 +920,18 @@
                     let rowData = [i];
                     showIndices.forEach(idx => rowData.push(data[i][idx] || "-"));
                     sheetData.push(rowData);
+                }
+                
+                // 🌟 Excel मध्ये उभी बेरीज जोडणे 🌟
+                if(isStats && data.length > 1) {
+                    let { totals, isNumericCol } = getTotalsRow(data, headers, showIndices);
+                    let totalRow = ["एकूण"];
+                    showIndices.forEach(idx => {
+                        if(isNumericCol[idx]) totalRow.push(totals[idx]);
+                        else totalRow.push("-");
+                    });
+                    sheetData.push(totalRow);
+                    totalRowIndex = sheetData.length - 1; // एकूण ओळीची जागा सेव्ह करणे
                 }
             }
 
@@ -909,6 +966,10 @@
                     } else if(R >= 3 && R < dataStartRow) {
                         cellStyle.fill = { fgColor: { rgb: R === 3 ? "F4B400" : "FFE082" } }; 
                         cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "000000" } };
+                        cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+                    } else if(R === totalRowIndex) { // 🌟 एकूण ओळीची डिझाईन 🌟
+                        cellStyle.fill = { fgColor: { rgb: "D4EDDA" } };
+                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "155724" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
                     } else if(R >= dataStartRow) {
                         if(isNil) { cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "FF0000" } }; } 
