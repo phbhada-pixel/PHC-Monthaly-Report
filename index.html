@@ -209,7 +209,6 @@
     </div>
 
 <script>
-    // 🌟 नवीन लिंक येथे टाकली आहे 🌟
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
     let masterData = { forms: [], villages: [], filledStats: [] };
     let user = null;
@@ -242,8 +241,10 @@
         if(!m || !p) return;
         document.getElementById('netStatus').innerText = "तपासत आहे...";
         try {
-            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"login", mobileNo:m, password:p}) });
-            const d = await r.json();
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"login", mobileNo:m, password:p}) });
+            const textResponse = await r.text();
+            if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
+            const d = JSON.parse(textResponse);
             if(d.success) {
                 user = d.user; user.mobile = m;
                 localStorage.setItem("phc_user_session", JSON.stringify(user));
@@ -441,7 +442,7 @@
         statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
 
         try {
-            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"syncData", payload: q}) });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
             const textResponse = await r.text();
             if(textResponse.trim().startsWith("<")) throw new Error("Google HTML Error");
 
@@ -496,7 +497,7 @@
 
         try {
             const payload = { formID: formID, village: village, month: month, year: year, subCenter: user.subcenter };
-            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"getRecordForEdit", payload}) });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getRecordForEdit", payload}) });
             const textResponse = await r.text();
             
             if(textResponse.trim().startsWith("<")) throw new Error("Google Server Blocked the Request. Try in Incognito Mode.");
@@ -614,7 +615,7 @@
         statusText.innerText = "☁️ नवीन बदल गुगल शीटवर सेव्ह होत आहेत...";
 
         try {
-            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"updateRecord", payload: payload}) });
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateRecord", payload: payload}) });
             const textResponse = await r.text();
             
             if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
@@ -671,7 +672,6 @@
         });
     }
 
-    // 🌟 सुधारित: अहवाल तयार करा फंक्शन (Error Logging सह) 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -688,7 +688,6 @@
             
             const r = await fetch(GAS_URL, { 
                 method: "POST", 
-                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                 body: JSON.stringify({action:"getReportData", payload}) 
             });
             
@@ -959,7 +958,7 @@
                 labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची? (स्वल्पविरामाने अचूक नावे लिहा):";
                 inputEl.placeholder = "उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली";
             } else if(val === 'dropdown') {
-                labelEl.innerText = "येथे पर्याय लिहा (स्वल्पविरामाने , वेग আকারে करा):";
+                labelEl.innerText = "येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):";
                 inputEl.placeholder = "उदा. होय, नाही";
             }
         }
