@@ -149,8 +149,7 @@
                 <button class="btn-edit-tab" onclick="fetchRecordForEdit()" style="margin-top:15px; padding:12px;">माहिती मिळवा 🔍</button>
                 <div id="editLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा शोधत आहे...</div>
 
-                <div id="editDynamicFormArea" class="hidden" style="margin-top: 20px;">
-                    </div>
+                <div id="editDynamicFormArea" class="hidden" style="margin-top: 20px;"></div>
                 
                 <button id="editSaveBtn" class="btn-primary hidden" onclick="saveEditedData()" style="margin-top:20px; background:#e67e22;">बदल जतन करा (Update)</button>
                 <p id="editSyncStatus" style="text-align:center; font-size:14px; font-weight:bold; margin-top: 10px;"></p>
@@ -210,6 +209,7 @@
     </div>
 
 <script>
+    // 🌟 नवीन लिंक येथे टाकली आहे 🌟
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
     let masterData = { forms: [], villages: [], filledStats: [] };
     let user = null;
@@ -242,7 +242,7 @@
         if(!m || !p) return;
         document.getElementById('netStatus').innerText = "तपासत आहे...";
         try {
-            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"login", mobileNo:m, password:p}) });
+            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"login", mobileNo:m, password:p}) });
             const d = await r.json();
             if(d.success) {
                 user = d.user; user.mobile = m;
@@ -441,8 +441,11 @@
         statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
 
         try {
-            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
-            const d = await r.json();
+            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"syncData", payload: q}) });
+            const textResponse = await r.text();
+            if(textResponse.trim().startsWith("<")) throw new Error("Google HTML Error");
+
+            const d = JSON.parse(textResponse);
             if(d.success) { 
                 localStorage.setItem("syncQueue", "[]"); 
                 statusText.style.color = "green";
@@ -493,9 +496,12 @@
 
         try {
             const payload = { formID: formID, village: village, month: month, year: year, subCenter: user.subcenter };
-            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getRecordForEdit", payload}) });
-            const d = await r.json();
+            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"getRecordForEdit", payload}) });
+            const textResponse = await r.text();
             
+            if(textResponse.trim().startsWith("<")) throw new Error("Google Server Blocked the Request. Try in Incognito Mode.");
+            
+            const d = JSON.parse(textResponse);
             document.getElementById('editLoader').style.display = "none";
             
             if(d.success) {
@@ -505,7 +511,7 @@
             }
         } catch(e) {
             document.getElementById('editLoader').style.display = "none";
-            alert("डेटा लोड करण्यात एरर आला.");
+            alert("डेटा लोड करण्यात एरर आला: " + e.message);
         }
     }
 
@@ -608,8 +614,12 @@
         statusText.innerText = "☁️ नवीन बदल गुगल शीटवर सेव्ह होत आहेत...";
 
         try {
-            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateRecord", payload: payload}) });
-            const d = await r.json();
+            const r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({action:"updateRecord", payload: payload}) });
+            const textResponse = await r.text();
+            
+            if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
+
+            const d = JSON.parse(textResponse);
             if(d.success) { 
                 statusText.style.color = "green";
                 statusText.innerText = "✅ बदल यशस्वीरित्या अपडेट झाले!"; 
@@ -675,46 +685,59 @@
         
         try {
             const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
-            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
             
-            if(!r.ok) throw new Error("Network response was not ok");
+            const r = await fetch(GAS_URL, { 
+                method: "POST", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                body: JSON.stringify({action:"getReportData", payload}) 
+            });
             
-            const d = await r.json();
+            const responseText = await r.text();
+            
+            if(responseText.trim().startsWith("<")) {
+                throw new Error("गुगल सर्व्हर ब्लॉक करत आहे (Multiple Gmail Accounts Issue). कृपया ॲप 'Incognito/Private' टॅबमध्ये उघडा.");
+            }
+            
+            const d = JSON.parse(responseText);
             document.getElementById('reportLoader').style.display = "none";
             
-            if(d.success && d.reports && d.reports.length > 0) {
-                let finalReports = [];
-                d.reports.forEach(rep => {
-                    let headers = rep.data[0];
-                    if(!headers) return; 
-                    
-                    let monthIdx = headers.indexOf("महिना");
-                    let yearIdx = headers.indexOf("वर्ष");
+            if(d.success) {
+                if(d.reports && d.reports.length > 0) {
+                    let finalReports = [];
+                    d.reports.forEach(rep => {
+                        let headers = rep.data[0];
+                        if(!headers) return; 
+                        
+                        let monthIdx = headers.indexOf("महिना");
+                        let yearIdx = headers.indexOf("वर्ष");
 
-                    let fData = [headers];
-                    for(let i=1; i<rep.data.length; i++) {
-                        let row = rep.data[i];
-                        let matchMonth = (selMonth === "सर्व" || row[monthIdx] === selMonth);
-                        let matchYear = (selYear === "सर्व" || String(row[yearIdx]) === String(selYear));
-                        if(matchMonth && matchYear) fData.push(row);
+                        let fData = [headers];
+                        for(let i=1; i<rep.data.length; i++) {
+                            let row = rep.data[i];
+                            let matchMonth = (selMonth === "सर्व" || row[monthIdx] === selMonth);
+                            let matchYear = (selYear === "सर्व" || String(row[yearIdx]) === String(selYear));
+                            if(matchMonth && matchYear) fData.push(row);
+                        }
+                        finalReports.push({ formName: rep.formName, data: fData });
+                    });
+
+                    if(finalReports.length > 0) {
+                        currentReports = finalReports;
+                        renderMultipleTables(finalReports, selMonth, selYear);
+                        document.getElementById('reportContentArea').classList.remove('hidden');
+                    } else {
+                        alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही.");
                     }
-                    finalReports.push({ formName: rep.formName, data: fData });
-                });
-
-                if(finalReports.length > 0) {
-                    currentReports = finalReports;
-                    renderMultipleTables(finalReports, selMonth, selYear);
-                    document.getElementById('reportContentArea').classList.remove('hidden');
                 } else {
-                    alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही.");
+                    alert("अद्याप कोणतीही माहिती उपलब्ध नाही.");
                 }
             } else {
-                alert("अद्याप कोणतीही माहिती उपलब्ध नाही.");
+                alert("सर्व्हरकडून माहिती मिळाली नाही: " + (d.message || "एरर"));
             }
         } catch(e) {
             console.error("Report Fetch Error:", e);
             document.getElementById('reportLoader').style.display = "none";
-            alert("डेटा लोड करण्यात एरर आला. कृपया 'New Deployment' केले असल्याची खात्री करा.");
+            alert("एरर: " + e.message);
         }
     }
 
@@ -936,7 +959,7 @@
                 labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची? (स्वल्पविरामाने अचूक नावे लिहा):";
                 inputEl.placeholder = "उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली";
             } else if(val === 'dropdown') {
-                labelEl.innerText = "येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):";
+                labelEl.innerText = "येथे पर्याय लिहा (स्वल्पविरामाने , वेग আকারে करा):";
                 inputEl.placeholder = "उदा. होय, नाही";
             }
         }
