@@ -128,6 +128,11 @@
                 <button class="btn-primary" onclick="saveDataLocal()" style="margin-top:20px;">माहिती जतन करा</button>
                 <button onclick="syncDataToServer()" style="background:#28a745; color:white;">Cloud Sync</button>
                 <p id="syncStatus" style="text-align:center; font-size:14px; font-weight:bold; margin-top: 10px;"></p>
+
+                <div id="todayEditSection" style="margin-top: 30px; background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #b8daff;">
+                    <h4 style="margin:0 0 10px 0; color: #0056b3;">📝 आज सबमिट केलेले फॉर्म (एडिट करण्यासाठी)</h4>
+                    <div id="todayList"></div>
+                </div>
             </div>
 
             <div id="reportsSection" class="hidden">
@@ -163,7 +168,7 @@
 
                 <button class="btn-report" onclick="fetchReportData()">अहवाल तयार करा 📊</button>
                 
-                <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत आहे, कृपया थांबा...</div>
+                <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत গান্ধीनगर, कृपया थांबा...</div>
                 
                 <div id="reportContentArea" class="hidden" style="margin-top: 20px;">
                     <div style="text-align: right; margin-bottom: 10px;">
@@ -202,6 +207,7 @@
     let masterData = { forms: [], villages: [], filledStats: [] };
     let user = null;
     let currentReports = []; 
+    let currentEditID = null; // NEW: Track if we are editing an entry
 
     async function unlockApp() {
         if(document.getElementById('sitePass').value === "1234") {
@@ -252,6 +258,7 @@
             renderFormsListForEdit(); 
         }
         updateVillageDropdown();
+        showTodayEntries(); // NEW: Load today's entries
     }
 
     function logoutUser() {
@@ -546,7 +553,6 @@
         XLSX.writeFile(wb, fileName);
     }
 
-    // 🌟 1. स्मार्ट बेरीज (Smart Auto Sum) फंक्शन 🌟
     function calculateAutoSums() {
         let sumInputs = document.querySelectorAll('input[data-sum-targets]');
         sumInputs.forEach(sumInput => {
@@ -834,9 +840,77 @@
         });
     }
 
-    // 🌟 2. सेव्ह करण्यापूर्वी बेरीज रिफ्रेश करणे 🌟
+    // NEW: Function to show today's submissions for editing
+    function showTodayEntries() {
+        let todaySubs = JSON.parse(localStorage.getItem("todaySubmissions") || "[]");
+        let todayDate = new Date().toLocaleDateString();
+        let listDiv = document.getElementById('todayList');
+        listDiv.innerHTML = "";
+
+        let todaysData = todaySubs.filter(item => item.date === todayDate);
+
+        if(todaysData.length === 0) {
+            listDiv.innerHTML = "<p style='font-size:13px; color:gray;'>आज अद्याप कोणताही फॉर्म सबमिट केलेला नाही.</p>";
+            return;
+        }
+
+        todaysData.forEach(entry => {
+            listDiv.innerHTML += `
+            <div style="background:white; padding:10px; margin-bottom:8px; border-radius:5px; border:1px solid #ccc; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <b style="color:var(--primary);">${entry.village}</b> 
+                    <span style="font-size:12px; color:gray;">(${entry.formData["महिना"]} ${entry.formData["वर्ष"]})</span>
+                </div>
+                <button onclick="editEntry(${entry.entryID})" style="background:#ffc107; color:black; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;">✏️ Edit</button>
+            </div>`;
+        });
+    }
+
+    // NEW: Function to load data back into the form
+    function editEntry(id) {
+        let todaySubs = JSON.parse(localStorage.getItem("todaySubmissions") || "[]");
+        let entry = todaySubs.find(e => e.entryID === id);
+        if(!entry) return;
+
+        currentEditID = entry.entryID; // Set edit mode flag
+
+        document.getElementById('selForm').value = entry.formID;
+        updateVillageDropdown(); 
+        
+        let vSel = document.getElementById('selVillage');
+        if(![...vSel.options].some(opt => opt.value === entry.village)) {
+            vSel.innerHTML += `<option value="${entry.village}">${entry.village}</option>`;
+        }
+        vSel.value = entry.village;
+
+        document.getElementById('selMonth').value = entry.formData["महिना"];
+        document.getElementById('selYear').value = entry.formData["वर्ष"];
+
+        loadDynamicFields();
+
+        setTimeout(() => {
+            const f = masterData.forms.find(x => x.FormID === entry.formID);
+            JSON.parse(f.StructureJSON).forEach((field, i) => {
+                if (field.type === 'group') {
+                    field.subFields.forEach((sf, j) => { 
+                        let key = `${field.label} - ${sf.label}`;
+                        let inp = document.getElementById(`inp_${i}_${j}`);
+                        if(inp) inp.value = entry.formData[key] || "";
+                    });
+                } else { 
+                    let inp = document.getElementById('inp_'+i);
+                    if(inp) inp.value = entry.formData[field.label] || "";
+                }
+            });
+            calculateAutoSums();
+            window.scrollTo(0, 0);
+            alert("डेटा एडिट करण्यासाठी तयार आहे. बदल करून 'माहिती जतन करा' वर पुन्हा क्लिक करा.");
+        }, 500);
+    }
+
+    // UPDATED: Save function handles both new entries and updates
     function saveDataLocal() {
-        calculateAutoSums(); // <--- ही नवीन लाईन जोडली आहे
+        calculateAutoSums(); 
         
         const fId = document.getElementById('selForm').value;
         const vName = document.getElementById('selVillage').value;
@@ -855,22 +929,54 @@
             } else { formData[field.label] = document.getElementById('inp_'+i).value; }
         });
         
-        const entry = { entryID: Date.now(), mobileNo: user.mobile, subCenter: user.subcenter, village: vName, formID: fId, formData: formData };
+        let isEditMode = currentEditID ? true : false;
+        let finalEntryID = currentEditID ? currentEditID : Date.now(); 
+
+        const entry = { 
+            entryID: finalEntryID, 
+            mobileNo: user.mobile, 
+            subCenter: user.subcenter, 
+            village: vName, 
+            formID: fId, 
+            formData: formData,
+            isEdit: isEditMode, // Flag for server sync
+            date: new Date().toLocaleDateString() 
+        };
+
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-        q.push(entry);
+        if(isEditMode) {
+            let existingIdx = q.findIndex(e => e.entryID === finalEntryID);
+            if(existingIdx >= 0) { q[existingIdx] = entry; } 
+            else { q.push(entry); } 
+        } else {
+            q.push(entry);
+        }
         localStorage.setItem("syncQueue", JSON.stringify(q));
 
-        let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-        history.push({formID: fId, village: vName, month: month, year: year});
-        localStorage.setItem("submissionHistory", JSON.stringify(history));
+        let todaySubs = JSON.parse(localStorage.getItem("todaySubmissions") || "[]");
+        if(isEditMode) {
+            let tIdx = todaySubs.findIndex(e => e.entryID === finalEntryID);
+            if(tIdx >= 0) todaySubs[tIdx] = entry;
+        } else {
+            todaySubs.push(entry);
+        }
+        localStorage.setItem("todaySubmissions", JSON.stringify(todaySubs));
+
+        if(!isEditMode) {
+            let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+            history.push({formID: fId, village: vName, month: month, year: year});
+            localStorage.setItem("submissionHistory", JSON.stringify(history));
+        }
 
         const statusText = document.getElementById('syncStatus');
         statusText.style.color = "green";
-        statusText.innerText = "रेकॉर्ड सेव्ह झाला! लगेच पुढील गावाची माहिती भरा.";
+        statusText.innerText = isEditMode ? "✅ रेकॉर्ड यशस्वीरित्या अपडेट झाला!" : "✅ रेकॉर्ड सेव्ह झाला!";
         setTimeout(() => statusText.innerText = "", 3000);
         
+        currentEditID = null; // Reset edit mode
         updateVillageDropdown(); 
         loadDynamicFields(); 
+        showTodayEntries(); // Refresh list
     }
 
     async function syncDataToServer() {
