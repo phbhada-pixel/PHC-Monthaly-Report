@@ -264,7 +264,7 @@
             renderFormsListForEdit(); 
         }
         updateVillageDropdown();
-        updateEditVillageDropdown(); // Edit टॅब ड्रॉपडाऊन अपडेट करण्यासाठी
+        updateEditVillageDropdown();
     }
 
     function logoutUser() {
@@ -311,9 +311,6 @@
         });
     }
 
-    // ---------------------------------------------------------
-    // 🌟 1. डेटा एंट्री आणि सेव्ह करण्याची कार्यप्रणाली 🌟
-    // ---------------------------------------------------------
     function updateVillageDropdown() {
         const vSel = document.getElementById('selVillage');
         const fId = document.getElementById('selForm').value;
@@ -462,9 +459,6 @@
         }
     }
 
-    // ---------------------------------------------------------
-    // 🌟 2. नवीन: भरलेला फॉर्म एडिट करण्याची कार्यप्रणाली 🌟
-    // ---------------------------------------------------------
     function updateEditVillageDropdown() {
         const vSel = document.getElementById('editVillageSelect');
         const fId = document.getElementById('editFormSelect').value;
@@ -474,7 +468,6 @@
         vSel.innerHTML = '<option value="">-- भरलेले गाव / रेकॉर्ड निवडा --</option>';
         if(!user || !fId) return;
 
-        // फक्त तेच रेकॉर्ड दाखवा जे या युजरच्या उपकेंद्रातील आहेत आणि सर्व्हरवर सेव्ह आहेत
         const serverHistory = masterData.filledStats || [];
         serverHistory.forEach(h => {
             if(h.formID === fId && h.month === month && String(h.year) === String(year) && (user.role === "Admin" || h.subcenter === user.subcenter)) {
@@ -581,7 +574,7 @@
         
         area.classList.remove('hidden');
         document.getElementById('editSaveBtn').classList.remove('hidden');
-        calculateAutoSums('editDynamicFormArea'); // Load झाल्यावर बेरीज रिफ्रेश करणे
+        calculateAutoSums('editDynamicFormArea'); 
     }
 
     async function saveEditedData() {
@@ -636,9 +629,6 @@
         }
     }
 
-    // ---------------------------------------------------------
-    // स्मार्ट Auto Sum Function (दोन्ही टॅबसाठी)
-    // ---------------------------------------------------------
     function calculateAutoSums(containerId) {
         let container = document.getElementById(containerId);
         if(!container) return;
@@ -671,8 +661,63 @@
         });
     }
 
-    // --- Reports and Admin Functions ---
-    // (बाकीचे सर्व जुने रिपोर्ट्स आणि ॲडमिन फंक्शन्स जसेच्या तसे...)
+    // 🌟 सुधारित: अहवाल तयार करा फंक्शन (Error Logging सह) 🌟
+    async function fetchReportData() {
+        const formID = document.getElementById('reportFormSelect').value;
+        const selMonth = document.getElementById('reportMonth').value;
+        const selYear = document.getElementById('reportYear').value;
+
+        if(!formID) { alert("कृपया अहवाल निवडा"); return; }
+        
+        document.getElementById('reportLoader').style.display = "block";
+        document.getElementById('reportContentArea').classList.add('hidden');
+        document.getElementById('reportTableContainer').innerHTML = "";
+        
+        try {
+            const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
+            
+            if(!r.ok) throw new Error("Network response was not ok");
+            
+            const d = await r.json();
+            document.getElementById('reportLoader').style.display = "none";
+            
+            if(d.success && d.reports && d.reports.length > 0) {
+                let finalReports = [];
+                d.reports.forEach(rep => {
+                    let headers = rep.data[0];
+                    if(!headers) return; 
+                    
+                    let monthIdx = headers.indexOf("महिना");
+                    let yearIdx = headers.indexOf("वर्ष");
+
+                    let fData = [headers];
+                    for(let i=1; i<rep.data.length; i++) {
+                        let row = rep.data[i];
+                        let matchMonth = (selMonth === "सर्व" || row[monthIdx] === selMonth);
+                        let matchYear = (selYear === "सर्व" || String(row[yearIdx]) === String(selYear));
+                        if(matchMonth && matchYear) fData.push(row);
+                    }
+                    finalReports.push({ formName: rep.formName, data: fData });
+                });
+
+                if(finalReports.length > 0) {
+                    currentReports = finalReports;
+                    renderMultipleTables(finalReports, selMonth, selYear);
+                    document.getElementById('reportContentArea').classList.remove('hidden');
+                } else {
+                    alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही.");
+                }
+            } else {
+                alert("अद्याप कोणतीही माहिती उपलब्ध नाही.");
+            }
+        } catch(e) {
+            console.error("Report Fetch Error:", e);
+            document.getElementById('reportLoader').style.display = "none";
+            alert("डेटा लोड करण्यात एरर आला. कृपया 'New Deployment' केले असल्याची खात्री करा.");
+        }
+    }
+
     function renderMultipleTables(reports, month, year) {
         let container = document.getElementById('reportTableContainer');
         let html = "";
