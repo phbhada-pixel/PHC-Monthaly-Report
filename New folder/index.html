@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHC Advance Management</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+    <style>
+        :root { --primary: #00705a; --secondary: #0056b3; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding: 0; font-size: 16px; }
+        .container { max-width: 800px; margin: 20px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h2, h3, h4 { text-align: center; color: #333; margin-top: 5px; }
+        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
+        .btn-primary { background: var(--primary); color: white; font-weight: bold; border: none; cursor: pointer; }
+        .btn-admin { background: #6c757d; color: white; border: none; cursor: pointer; }
+        .btn-report { background: #17a2b8; color: white; border: none; cursor: pointer; font-weight: bold; }
+        
+        .field-card { border: 2px solid #ccc; padding: 15px; padding-top: 45px; margin: 10px 0; border-radius: 8px; background: #fafafa; position: relative; }
+        .sub-field-item { position: relative; display: flex; flex-direction: column; gap: 5px; background: #fff; padding: 12px; padding-top: 40px; border-radius: 5px; border: 1px solid #ccc; margin-top: 10px; }
+        
+        .btn-remove { 
+            background: #ff4d4d !important; 
+            color: white !important; 
+            padding: 6px 12px !important; 
+            font-size: 13px !important; 
+            border: none !important; 
+            width: auto !important; 
+            border-radius: 4px !important; 
+            font-weight: bold !important; 
+            cursor: pointer !important; 
+            position: absolute !important; 
+            top: 8px !important; 
+            right: 8px !important; 
+            margin: 0 !important; 
+        }
+
+        .hidden { display: none !important; }
+        .status-bar { padding: 10px; text-align: center; font-weight: bold; border-radius: 5px; margin-bottom: 15px; }
+        .online { background: #d4edda; color: #155724; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        .btn-logout { background: #dc3545; color: white; padding: 6px 12px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; width: auto; }
+        .row-flex { display: flex; gap: 10px; align-items: center; }
+        .row-flex > div { flex: 1; }
+        
+        .table-responsive { width: 100%; overflow-x: auto; margin-top: 15px; }
+        .report-table { width: 100%; border-collapse: collapse; min-width: 600px; background: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid #ddd; }
+        .report-table th { padding: 10px; text-align: center; white-space: nowrap; border: 1px solid #ddd; }
+        .report-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 14px; color: #333; text-align: center; }
+        .report-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .report-table tr:hover { background-color: #f1f1f1; }
+        
+        .nav-tabs { display: flex; gap: 5px; margin-bottom: 20px; background: #eee; padding: 5px; border-radius: 8px; }
+        .nav-tab { flex: 1; text-align: center; padding: 10px; background: transparent; border: none; font-weight: bold; color: #555; border-radius: 6px; cursor: pointer; }
+        .nav-tab.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+    <div id="lockScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0f1c24; z-index:9999; display:flex; justify-content:center; align-items:center;">
+        <div style="background:white; padding:30px; border-radius:10px; width:85%; max-width:350px;">
+            <h3>Security Access</h3>
+            <input type="password" id="sitePass" placeholder="Enter Password (1234)">
+            <button class="btn-primary" onclick="unlockApp()">Unlock</button>
+        </div>
+    </div>
+
+    <div class="container hidden" id="mainApp">
+        <div id="netStatus" class="status-bar online">Online</div>
+
+        <div id="loginBox">
+            <h3>कर्मचारी लॉगिन</h3>
+            <input type="tel" id="mob" placeholder="मोबाईल नंबर">
+            <input type="password" id="pwd" placeholder="वैयक्तिक पासवर्ड">
+            <button class="btn-primary" onclick="handleLogin()">प्रवेश करा</button>
+        </div>
+
+        <div id="dashboardWrapper" class="hidden">
+            <div class="header-bar">
+                <div>
+                    <h3 style="margin: 0;">स्वागत आहे, <span id="uName"></span></h3>
+                    <p id="uSub" style="margin: 2px 0 0 0; font-size: 13px; color: gray;"></p>
+                </div>
+                <button class="btn-logout" onclick="logoutUser()">Log Out</button>
+            </div>
+
+            <div class="nav-tabs">
+                <button class="nav-tab active" id="tabEntry" onclick="switchTab('entry')">📝 डेटा एंट्री</button>
+                <button class="nav-tab" id="tabReports" onclick="switchTab('reports')">📊 रिपोर्ट्स</button>
+                <button class="nav-tab hidden" id="tabAdmin" onclick="switchTab('admin')">⚙️ ॲडमिन</button>
+            </div>
+
+            <div id="entrySection">
+                <label>फॉर्म निवडा:</label>
+                <select id="selForm" onchange="updateVillageDropdown(); loadDynamicFields();"></select>
+                
+                <div class="row-flex" style="margin-top: 10px;">
+                    <div>
+                        <label>महिना:</label>
+                        <select id="selMonth" onchange="updateVillageDropdown()">
+                            <option value="जानेवारी">जानेवारी</option><option value="फेब्रुवारी">फेब्रुवारी</option>
+                            <option value="मार्च">मार्च</option><option value="एप्रिल" selected>एप्रिल</option>
+                            <option value="मे">मे</option><option value="जून">जून</option>
+                            <option value="जुलै">जुलै</option><option value="ऑगस्ट">ऑगस्ट</option>
+                            <option value="सप्टेंबर">सप्टेंबर</option><option value="ऑक्टोबर">ऑक्टोबर</option>
+                            <option value="नोव्हेंबर">नोव्हेंबर</option><option value="डिसेंबर">डिसेंबर</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>वर्ष:</label>
+                        <select id="selYear" onchange="updateVillageDropdown()">
+                            <option value="2025">2025</option><option value="2026" selected>2026</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 10px;">
+                    <label style="margin:0;">गाव निवडा:</label>
+                    <button onclick="clearLocalHistory()" style="background:#ffc107; color:#000; border:none; padding:5px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:auto;">
+                        🔄 गावे रीसेट करा
+                    </button>
+                </div>
+                <select id="selVillage"></select>
+
+                <div id="dynamicFormArea"></div>
+                
+                <button class="btn-primary" onclick="saveDataLocal()" style="margin-top:20px;">माहिती जतन करा</button>
+                <button onclick="syncDataToServer()" style="background:#28a745; color:white;">Cloud Sync</button>
+                <p id="syncStatus" style="text-align:center; font-size:14px; font-weight:bold; margin-top: 10px;"></p>
+            </div>
+
+            <div id="reportsSection" class="hidden">
+                <h3>मासिक अहवाल डाउनलोड करा</h3>
+                
+                <div class="row-flex" style="margin-bottom: 15px;">
+                    <div style="flex: 2;">
+                        <label>अहवाल निवडा:</label>
+                        <select id="reportFormSelect"></select>
+                    </div>
+                </div>
+                <div class="row-flex" style="margin-bottom: 15px;">
+                    <div>
+                        <label>महिना:</label>
+                        <select id="reportMonth">
+                            <option value="सर्व">सर्व महिने</option>
+                            <option value="जानेवारी">जानेवारी</option><option value="फेब्रुवारी">फेब्रुवारी</option>
+                            <option value="मार्च">मार्च</option><option value="एप्रिल" selected>एप्रिल</option>
+                            <option value="मे">मे</option><option value="जून">जून</option>
+                            <option value="जुलै">जुलै</option><option value="ऑगस्ट">ऑगस्ट</option>
+                            <option value="सप्टेंबर">सप्टेंबर</option><option value="ऑक्टोबर">ऑक्टोबर</option>
+                            <option value="नोव्हेंबर">नोव्हेंबर</option><option value="डिसेंबर">डिसेंबर</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>वर्ष:</label>
+                        <select id="reportYear">
+                            <option value="सर्व">सर्व वर्षे</option>
+                            <option value="2025">2025</option><option value="2026" selected>2026</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-report" onclick="fetchReportData()">अहवाल तयार करा 📊</button>
+                
+                <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत आहे, कृपया थांबा...</div>
+                
+                <div id="reportContentArea" class="hidden" style="margin-top: 20px;">
+                    <div style="text-align: right; margin-bottom: 10px;">
+                        <button onclick="downloadConsolidatedExcel()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 Excel (.xlsx) डाउनलोड करा</button>
+                    </div>
+                    <div class="table-responsive" id="reportTableContainer"></div>
+                </div>
+            </div>
+
+            <div id="adminSection" class="hidden">
+                <button class="btn-admin" onclick="openNewFormBuilder()">➕ नवीन फॉर्म तयार करा</button>
+                <div id="existingFormsArea" style="margin-top:20px;">
+                    <h4>अस्तित्वात असलेले फॉर्म (Edit करा)</h4>
+                    <div id="formsEditList"></div>
+                </div>
+                <hr>
+                <div id="formBuilder" class="hidden" style="background: #fff8f0; padding: 15px; border-radius: 8px; border: 1px solid orange;">
+                    <h3 id="builderTitle">नवीन फॉर्म तयार करा</h3>
+                    <input type="hidden" id="editFormID">
+                    <input type="text" id="newFormName" placeholder="फॉर्मचे नाव">
+                    <select id="newFormType">
+                        <option value="List">गावनिहाय लिस्ट</option>
+                        <option value="Stats">गावनिहाय आकडेवारी</option>
+                    </select>
+                    <div id="fieldsList"></div>
+                    <button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ नवीन प्रश्न जोडा</button>
+                    <button id="mainActionBtn" class="btn-primary" onclick="saveFullForm()">फॉर्म सेव्ह करा</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
+    let masterData = { forms: [], villages: [], filledStats: [] };
+    let user = null;
+    let currentReports = []; 
+
+    async function unlockApp() {
+        if(document.getElementById('sitePass').value === "1234") {
+            document.getElementById('lockScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('netStatus').innerText = "डेटा लोड होत आहे...";
+            await fetchData();
+            document.getElementById('netStatus').innerText = "Online";
+
+            const savedUser = localStorage.getItem("phc_user_session");
+            if(savedUser) { user = JSON.parse(savedUser); showAppAfterLogin(); }
+        } else { alert("चुकीचा पासवर्ड!"); }
+    }
+
+    async function fetchData() {
+        try {
+            const r = await fetch(GAS_URL + "?action=getInitialData");
+            const d = await r.json();
+            if(d.success) { masterData = d; updateFormDropdowns(); renderFormsListForEdit(); }
+        } catch(e) { console.error("Fetch failed"); }
+    }
+
+    async function handleLogin() {
+        const m = document.getElementById('mob').value.trim();
+        const p = document.getElementById('pwd').value.trim();
+        if(!m || !p) return;
+        document.getElementById('netStatus').innerText = "तपासत आहे...";
+        try {
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"login", mobileNo:m, password:p}) });
+            const d = await r.json();
+            if(d.success) {
+                user = d.user; user.mobile = m;
+                localStorage.setItem("phc_user_session", JSON.stringify(user));
+                showAppAfterLogin();
+            } else { alert(d.message); }
+            document.getElementById('netStatus').innerText = "Online";
+        } catch(e) { alert("लॉगिन अयशस्वी."); document.getElementById('netStatus').innerText = "Offline"; }
+    }
+
+    function showAppAfterLogin() {
+        document.getElementById('loginBox').classList.add('hidden');
+        document.getElementById('dashboardWrapper').classList.remove('hidden');
+        document.getElementById('uName').innerText = user.name;
+        document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
+        
+        if(user.role === "Admin") { 
+            document.getElementById('tabAdmin').classList.remove('hidden'); 
+            renderFormsListForEdit(); 
+        }
+        updateVillageDropdown();
+    }
+
+    function logoutUser() {
+        if(confirm("लॉग आऊट करायचे आहे का?")) {
+            localStorage.removeItem("phc_user_session"); location.reload();
+        }
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('entrySection').classList.add('hidden');
+        document.getElementById('reportsSection').classList.add('hidden');
+        document.getElementById('adminSection').classList.add('hidden');
+
+        if(tab === 'entry') {
+            document.getElementById('tabEntry').classList.add('active');
+            document.getElementById('entrySection').classList.remove('hidden');
+        } else if(tab === 'reports') {
+            document.getElementById('tabReports').classList.add('active');
+            document.getElementById('reportsSection').classList.remove('hidden');
+        } else if(tab === 'admin') {
+            document.getElementById('tabAdmin').classList.add('active');
+            document.getElementById('adminSection').classList.remove('hidden');
+        }
+    }
+
+    function updateFormDropdowns() {
+        const selForm = document.getElementById('selForm');
+        const repForm = document.getElementById('reportFormSelect');
+        selForm.innerHTML = '<option value="">-- निवडा --</option>';
+        repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
+        masterData.forms.forEach(f => {
+            let opt = `<option value="${f.FormID}">${f.FormName}</option>`;
+            selForm.innerHTML += opt;
+            repForm.innerHTML += opt;
+        });
+    }
+
+    async function fetchReportData() {
+        const formID = document.getElementById('reportFormSelect').value;
+        const selMonth = document.getElementById('reportMonth').value;
+        const selYear = document.getElementById('reportYear').value;
+
+        if(!formID) { alert("कृपया अहवाल निवडा"); return; }
+        
+        document.getElementById('reportLoader').style.display = "block";
+        document.getElementById('reportContentArea').classList.add('hidden');
+        document.getElementById('reportTableContainer').innerHTML = "";
+        
+        try {
+            const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
+            const d = await r.json();
+            
+            document.getElementById('reportLoader').style.display = "none";
+            
+            if(d.success && d.reports && d.reports.length > 0) {
+                let finalReports = [];
+                d.reports.forEach(rep => {
+                    let headers = rep.data[0];
+                    let monthIdx = headers.indexOf("महिना");
+                    let yearIdx = headers.indexOf("वर्ष");
+
+                    let fData = [headers];
+                    for(let i=1; i<rep.data.length; i++) {
+                        let row = rep.data[i];
+                        let matchMonth = (selMonth === "सर्व" || row[monthIdx] === selMonth);
+                        let matchYear = (selYear === "सर्व" || String(row[yearIdx]) === String(selYear));
+                        if(matchMonth && matchYear) fData.push(row);
+                    }
+                    finalReports.push({ formName: rep.formName, data: fData });
+                });
+
+                if(finalReports.length > 0) {
+                    currentReports = finalReports;
+                    renderMultipleTables(finalReports, selMonth, selYear);
+                    document.getElementById('reportContentArea').classList.remove('hidden');
+                } else {
+                    alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही.");
+                }
+            } else {
+                alert("अद्याप कोणतीही माहिती उपलब्ध नाही.");
+            }
+        } catch(e) {
+            document.getElementById('reportLoader').style.display = "none";
+            alert("डेटा लोड करण्यात एरर आला.");
+        }
+    }
+
+    const hiddenColumns = ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)"];
+
+    function renderMultipleTables(reports, month, year) {
+        let container = document.getElementById('reportTableContainer');
+        let html = "";
+        
+        reports.forEach(rep => {
+            let data = rep.data;
+            let headers = data[0];
+            
+            let showIndices = [];
+            headers.forEach((h, i) => { if(!hiddenColumns.includes(h)) showIndices.push(i); });
+            let colCount = showIndices.length + 1; 
+
+            let h1Arr = [];
+            let h2Arr = [];
+            showIndices.forEach(idx => {
+                let parts = headers[idx].split(" - ");
+                h1Arr.push(parts[0]);
+                h2Arr.push(parts.length > 1 ? parts[1] : "");
+            });
+            
+            let hasSubQ = h2Arr.some(sub => sub !== "");
+
+            html += `<table class="report-table"><thead>`;
+            html += `<tr><th colspan="${colCount}" style="font-size:18px; background:var(--primary); color:white; padding:12px;">${rep.formName}</th></tr>`;
+            
+            if(hasSubQ) {
+                let row1HTML = `<tr><th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">अ.क्र.</th>`;
+                let row2HTML = `<tr>`;
+                
+                let c = 0;
+                while(c < h1Arr.length) {
+                    let end = c;
+                    while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
+                    
+                    let colspan = end - c + 1;
+                    if(colspan > 1) {
+                        row1HTML += `<th colspan="${colspan}" style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
+                        for(let k=c; k<=end; k++) {
+                            row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[k]}</th>`;
+                        }
+                    } else {
+                        if(h2Arr[c] === "") {
+                            row1HTML += `<th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">${h1Arr[c]}</th>`;
+                        } else {
+                            row1HTML += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
+                            row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[c]}</th>`;
+                        }
+                    }
+                    c = end + 1;
+                }
+                row1HTML += `</tr>`;
+                row2HTML += `</tr>`;
+                html += row1HTML + row2HTML;
+            } else {
+                html += `<tr><th style="background:#f4b400; color:#000; border:1px solid #ddd;">अ.क्र.</th>`;
+                h1Arr.forEach(h => { html += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h}</th>`; });
+                html += `</tr>`;
+            }
+            
+            html += `</thead><tbody>`;
+
+            if(data.length === 1) {
+                html += `<tr><td colspan="${colCount}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
+            } else {
+                for(let i=1; i<data.length; i++) {
+                    html += `<tr><td>${i}</td>`;
+                    showIndices.forEach(idx => { html += `<td>${data[i][idx] || "-"}</td>`; });
+                    html += `</tr>`;
+                }
+            }
+            html += `</tbody></table>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function downloadConsolidatedExcel() {
+        if(currentReports.length === 0) return;
+        
+        let month = document.getElementById('reportMonth').value;
+        let year = document.getElementById('reportYear').value;
+        let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year}`;
+        
+        let wb = XLSX.utils.book_new();
+
+        currentReports.forEach((rep, index) => {
+            let data = rep.data;
+            let headers = data[0];
+            
+            let showIndices = [];
+            headers.forEach((h, i) => { if(!hiddenColumns.includes(h)) showIndices.push(i); });
+            let colCount = showIndices.length + 1; 
+
+            let h1Arr = [];
+            let h2Arr = [];
+            showIndices.forEach(idx => {
+                let parts = headers[idx].split(" - ");
+                h1Arr.push(parts[0]);
+                h2Arr.push(parts.length > 1 ? parts[1] : "");
+            });
+            let hasSubQ = h2Arr.some(sub => sub !== "");
+
+            let sheetData = [];
+            
+            let titleRow = Array(colCount).fill("");
+            titleRow[0] = `${rep.formName} अहवाल`;
+            sheetData.push(titleRow);
+            
+            let subTitleRow = Array(colCount).fill("");
+            subTitleRow[0] = `उपकेंद्र: ${user.subcenter}   |   अहवाल महिना: ${periodText}`;
+            sheetData.push(subTitleRow);
+            
+            sheetData.push(Array(colCount).fill(""));
+
+            let headerRow1 = ["अ.क्र."].concat(h1Arr);
+            sheetData.push(headerRow1);
+
+            let dataStartRow = 4;
+
+            if(hasSubQ) {
+                let headerRow2 = [""].concat(h2Arr);
+                sheetData.push(headerRow2);
+                dataStartRow = 5;
+            }
+
+            let isNil = false;
+            if(data.length === 1) {
+                isNil = true;
+                let nilRow = Array(colCount).fill("");
+                nilRow[0] = "निरंक (Nil)";
+                sheetData.push(nilRow);
+            } else {
+                for(let i=1; i<data.length; i++) {
+                    let rowData = [i];
+                    showIndices.forEach(idx => rowData.push(data[i][idx] || "-"));
+                    sheetData.push(rowData);
+                }
+            }
+
+            let ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+            ws["!merges"] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }
+            ];
+
+            if(hasSubQ) {
+                ws["!merges"].push({ s: { r: 3, c: 0 }, e: { r: 4, c: 0 } });
+                
+                let c = 0;
+                while(c < h1Arr.length) {
+                    let end = c;
+                    while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
+                    
+                    if(end > c) {
+                        ws["!merges"].push({ s: { r: 3, c: c + 1 }, e: { r: 3, c: end + 1 } });
+                    } else if(h2Arr[c] === "") {
+                        ws["!merges"].push({ s: { r: 3, c: c + 1 }, e: { r: 4, c: c + 1 } });
+                    }
+                    c = end + 1;
+                }
+            }
+            
+            if(isNil) { ws["!merges"].push({ s: { r: dataStartRow, c: 0 }, e: { r: dataStartRow, c: colCount - 1 } }); }
+
+            for(let R=0; R<sheetData.length; R++) {
+                for(let C=0; C<colCount; C++) {
+                    let cellRef = XLSX.utils.encode_cell({r: R, c: C});
+                    if(!ws[cellRef]) continue; 
+
+                    let cellStyle = { font: { name: "Arial", sz: 11, color: { rgb: "000000" } }, alignment: { vertical: "center", horizontal: "center", wrapText: true } };
+
+                    if(R === 0) {
+                        cellStyle.fill = { fgColor: { rgb: "00705A" } };
+                        cellStyle.font = { name: "Arial", sz: 16, bold: true, color: { rgb: "FFFFFF" } };
+                    } else if(R === 1) {
+                        cellStyle.fill = { fgColor: { rgb: "E9ECEF" } };
+                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "000000" } };
+                    } else if(R >= 3 && R < dataStartRow) {
+                        cellStyle.fill = { fgColor: { rgb: R === 3 ? "F4B400" : "FFE082" } }; 
+                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "000000" } };
+                        cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+                    } else if(R >= dataStartRow) {
+                        if(isNil) { cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "FF0000" } }; } 
+                        else { cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } }; }
+                    }
+                    ws[cellRef].s = cellStyle; 
+                }
+            }
+
+            let wscols = [{ wch: 8 }]; 
+            for(let c=1; c<colCount; c++) wscols.push({ wch: 20 }); 
+            ws["!cols"] = wscols;
+
+            let safeSheetName = rep.formName.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 31);
+            if(!safeSheetName) safeSheetName = "Sheet" + (index + 1);
+            
+            XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+        });
+
+        let fileName = `मासिक_अहवाल_${user.subcenter}_${periodText}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    // 🌟 1. स्मार्ट बेरीज (Smart Auto Sum) फंक्शन 🌟
+    function calculateAutoSums() {
+        let sumInputs = document.querySelectorAll('input[data-sum-targets]');
+        sumInputs.forEach(sumInput => {
+            let targets = sumInput.getAttribute('data-sum-targets').split(',');
+            let total = 0;
+            targets.forEach(targetLabel => {
+                let tLabel = targetLabel.trim();
+                let targetElement = document.querySelector(`[data-label="${tLabel}"]`);
+                
+                if(!targetElement) {
+                    let allInputs = document.querySelectorAll('[data-label]');
+                    let cleanTarget = tLabel.replace(/\s+/g, '');
+                    for(let inp of allInputs) {
+                        let cleanActual = inp.getAttribute('data-label').replace(/\s+/g, '');
+                        if(cleanActual === cleanTarget) {
+                            targetElement = inp;
+                            break;
+                        }
+                    }
+                }
+
+                if(targetElement && targetElement.value) {
+                    let val = parseFloat(targetElement.value);
+                    if(!isNaN(val)) total += val;
+                }
+            });
+            sumInput.value = total > 0 ? total : ""; 
+        });
+    }
+
+    function clearLocalHistory() {
+        if(confirm("जर तुम्ही गुगल शीटमधील जुना डेटा डिलीट केला असेल, तरच हे बटण दाबा. यामुळे लपलेली सर्व गावे पुन्हा दिसू लागतील. तुम्हाला गावे रीसेट करायची आहेत का?")) {
+            localStorage.removeItem("submissionHistory"); 
+            updateVillageDropdown(); 
+            const statusText = document.getElementById('syncStatus');
+            statusText.style.color = "#ffc107";
+            statusText.innerText = "✅ गावांची यादी यशस्वीरित्या रीसेट झाली आहे!";
+            setTimeout(() => { statusText.innerText = ""; statusText.style.color = "green"; }, 3000);
+        }
+    }
+
+    function openNewFormBuilder() {
+        document.getElementById('existingFormsArea').classList.add('hidden');
+        document.getElementById('formBuilder').classList.remove('hidden');
+        document.getElementById('builderTitle').innerText = "नवीन फॉर्म तयार करा";
+        document.getElementById('editFormID').value = "";
+        document.getElementById('newFormName').value = "";
+        document.getElementById('fieldsList').innerHTML = "";
+        document.getElementById('mainActionBtn').innerText = "फॉर्म सेव्ह करा";
+        document.getElementById('mainActionBtn').onclick = saveFullForm;
+    }
+    
+    function renderFormsListForEdit() {
+        const listDiv = document.getElementById('formsEditList');
+        listDiv.innerHTML = "";
+        masterData.forms.forEach(f => {
+            listDiv.innerHTML += `<div class="edit-row"><span><b>${f.FormName}</b></span><button class="btn-edit" onclick="startEditing('${f.FormID}')">Edit</button></div>`;
+        });
+    }
+
+    function startEditing(fId) {
+        const f = masterData.forms.find(x => x.FormID === fId);
+        if(!f) return;
+        document.getElementById('existingFormsArea').classList.add('hidden');
+        document.getElementById('formBuilder').classList.remove('hidden');
+        document.getElementById('builderTitle').innerText = "फॉर्म एडिट: " + f.FormName;
+        document.getElementById('editFormID').value = f.FormID;
+        document.getElementById('newFormName').value = f.FormName;
+        document.getElementById('newFormType').value = f.FormType;
+        document.getElementById('fieldsList').innerHTML = "";
+        document.getElementById('mainActionBtn').innerText = "बदल अपडेट करा (Update)";
+        document.getElementById('mainActionBtn').onclick = updateExistingForm;
+        JSON.parse(f.StructureJSON).forEach(field => addField(field));
+    }
+
+    function toggleFieldOptions(id, val) {
+        document.getElementById('opts_' + id).style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        document.getElementById('group_' + id).style.display = (val === 'group') ? 'block' : 'none';
+        
+        let labelEl = document.querySelector(`#opts_${id} label`);
+        let inputEl = document.querySelector(`#opts_${id} .foptions`);
+        if(labelEl && inputEl) {
+            if(val === 'sum') {
+                labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची? (स्वल्पविरामाने अचूक नावे लिहा):";
+                inputEl.placeholder = "उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली";
+            } else if(val === 'dropdown') {
+                labelEl.innerText = "येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):";
+                inputEl.placeholder = "उदा. होय, नाही";
+            }
+        }
+    }
+
+    function toggleSubFieldOptions(sfId, val) {
+        let container = document.getElementById(`sfopts_container_${sfId}`);
+        let labelEl = document.getElementById(`sflabel_${sfId}`);
+        let inputEl = document.getElementById(`sfopts_${sfId}`);
+        
+        container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        
+        if(val === 'sum') {
+            labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची? (उदा. मुख्य प्रश्न - उपप्रश्न):";
+            inputEl.placeholder = "उदा. रुग्ण - पुरुष, रुग्ण - स्त्री";
+        } else if(val === 'dropdown') {
+            labelEl.innerText = "पर्याय लिहा (स्वल्पविरामाने वेगळे करा):";
+            inputEl.placeholder = "उदा. होय, नाही";
+        }
+    }
+
+    function addField(data = null) {
+        const id = Math.floor(Math.random() * 1000000); 
+        const html = `
+            <div class="field-card" id="f_${id}">
+                <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
+                <div style="display:flex; flex-direction:column; gap:5px; margin-top: 5px;">
+                    <label style="font-size:14px; color:#555; font-weight:bold;">मुख्य प्रश्नाचे नाव:</label>
+                    <input type="text" placeholder="उदा. ब्लिचिंग पावडर" class="fname" style="width:100%; margin-top:0;" value="${data ? data.label : ''}">
+                </div>
+                <select class="ftype" onchange="toggleFieldOptions('${id}', this.value)" style="margin-top:10px; background:#f0f8ff;">
+                    <option value="text" ${data && data.type==='text'?'selected':''}>Text (साधा मजकूर)</option>
+                    <option value="number" ${data && data.type==='number'?'selected':''}>Number (आकडे)</option>
+                    <option value="date" ${data && data.type==='date'?'selected':''}>Date (तारीख)</option>
+                    <option value="dropdown" ${data && data.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
+                    <option value="group" ${data && data.type==='group'?'selected':''}>Group / गट (उप-प्रश्न)</option>
+                    <option value="sum" ${data && data.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
+                </select>
+                <div id="opts_${id}" style="display:${data && (data.type==='dropdown' || data.type==='sum') ? 'block' : 'none'}; margin-top:10px; background:#ffe4b5; padding:10px; border-radius:5px;">
+                    <label style="font-size:12px; font-weight:bold; color:#d35400;">
+                        ${data && data.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची? (स्वल्पविरामाने अचूक नावे लिहा):' : 'येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):'}
+                    </label>
+                    <input type="text" placeholder="${data && data.type==='sum' ? 'उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली' : 'उदा. होय, नाही'}" class="foptions" value="${data ? (data.options || '') : ''}">
+                </div>
+                <div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
+                    <label style="font-size:13px; font-weight:bold; color:var(--primary);">या गटातील उप-प्रश्न जोडा:</label>
+                    <div id="subfields_container_${id}"></div>
+                    <button type="button" onclick="addSubFieldUI('${id}')" style="margin-top:10px; font-size:13px; background:#fff; border:1px solid #ccc; padding:6px; cursor:pointer; width:100%;">+ उप-प्रश्न जोडा</button>
+                </div>
+            </div>`;
+        document.getElementById('fieldsList').insertAdjacentHTML('beforeend', html);
+        if(data && data.type === 'group' && data.subFields) { data.subFields.forEach(sf => addSubFieldUI(id, sf)); } 
+        else if (data && data.type === 'group') { addSubFieldUI(id); }
+    }
+
+    function addSubFieldUI(parentId, sfData = null) {
+        const sfId = Math.floor(Math.random() * 1000000);
+        const html = `
+            <div class="sub-field-item" id="sf_${sfId}">
+                <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
+                <input type="text" placeholder="उप-प्रश्नाचे नाव" class="sfname" style="width: 100%; margin-top: 5px;" value="${sfData ? sfData.label : ''}">
+                
+                <select class="sftype" style="width: 100%; margin-top: 5px;" onchange="toggleSubFieldOptions('${sfId}', this.value)">
+                    <option value="text" ${sfData && sfData.type==='text'?'selected':''}>Text (मजकूर)</option>
+                    <option value="number" ${sfData && sfData.type==='number'?'selected':''}>Number (आकडे)</option>
+                    <option value="date" ${sfData && sfData.type==='date'?'selected':''}>Date (तारीख)</option>
+                    <option value="dropdown" ${sfData && sfData.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
+                    <option value="sum" ${sfData && sfData.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
+                </select>
+                
+                <div id="sfopts_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='sum') ? 'block' : 'none'}; margin-top: 5px; background:#fff3e0; padding:8px; border-radius:4px;">
+                    <label id="sflabel_${sfId}" style="font-size:11px; font-weight:bold; color:#d35400;">
+                        ${sfData && sfData.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची? (उदा. मुख्य प्रश्न - उपप्रश्न):' : 'पर्याय लिहा (स्वल्पविरामाने वेगळे करा):'}
+                    </label>
+                    <input type="text" id="sfopts_${sfId}" placeholder="${sfData && sfData.type==='sum' ? 'उदा. रुग्ण - पुरुष, रुग्ण - स्त्री' : 'उदा. होय, नाही'}" class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
+                </div>
+            </div>
+        `;
+        document.getElementById('subfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
+    }
+
+    function getFieldsData() {
+        let fields = [];
+        document.querySelectorAll('.field-card').forEach(el => {
+            let fieldObj = { label: el.querySelector('.fname').value, type: el.querySelector('.ftype').value, options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "" };
+            if (fieldObj.type === 'group') {
+                fieldObj.subFields = [];
+                el.querySelectorAll('.sub-field-item').forEach(sfEl => {
+                    fieldObj.subFields.push({ label: sfEl.querySelector('.sfname').value, type: sfEl.querySelector('.sftype').value, options: sfEl.querySelector('.sfopts').value });
+                });
+            }
+            fields.push(fieldObj);
+        });
+        return fields;
+    }
+
+    async function saveFullForm() {
+        const name = document.getElementById('newFormName').value;
+        const type = document.getElementById('newFormType').value;
+        if(!name) { alert("फॉर्मचे नाव टाका"); return; }
+        const payload = { name, type, fields: getFieldsData(), adminMobile: user.mobile };
+        const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"createForm", payload}) });
+        const d = await r.json();
+        if(d.success) { alert(d.message); location.reload(); }
+    }
+
+    async function updateExistingForm() {
+        const formID = document.getElementById('editFormID').value;
+        const name = document.getElementById('newFormName').value;
+        const type = document.getElementById('newFormType').value;
+        const payload = { formID, name, type, fields: getFieldsData() };
+        const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateForm", payload}) });
+        const d = await r.json();
+        if(d.success) { alert(d.message); location.reload(); }
+    }
+
+    function updateVillageDropdown() {
+        const vSel = document.getElementById('selVillage');
+        const fId = document.getElementById('selForm').value;
+        const month = document.getElementById('selMonth').value;
+        const year = document.getElementById('selYear').value;
+        
+        vSel.innerHTML = '<option value="">-- गाव निवडा --</option>';
+        if(!user) return;
+
+        const selectedForm = masterData.forms.find(f => f.FormID === fId);
+        const isStatsForm = selectedForm && selectedForm.FormType === 'Stats';
+        
+        const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+        const serverHistory = masterData.filledStats || [];
+
+        masterData.villages.filter(v => {
+            const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
+            if(!belongsToSubCenter) return false;
+            
+            if(isStatsForm) {
+                const isLocalFilled = localHistory.some(h => h.formID === fId && h.village === v.VillageName && h.month === month && h.year == year);
+                const isServerFilled = serverHistory.some(h => h.formID === fId && h.village === v.VillageName && h.month === month && h.year == year);
+                if(isLocalFilled || isServerFilled) return false;
+            }
+            return true;
+        }).forEach(v => {
+            vSel.innerHTML += `<option value="${v.VillageName}">${v.VillageName}</option>`;
+        });
+    }
+
+    function loadDynamicFields() {
+        const fId = document.getElementById('selForm').value;
+        const area = document.getElementById('dynamicFormArea');
+        area.innerHTML = "";
+        const f = masterData.forms.find(x => x.FormID === fId);
+        if(!f) return;
+        
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            let exactLabel = field.label;
+            
+            if (field.type === 'group') {
+                let html = `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
+                            <h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
+                field.subFields.forEach((sf, j) => {
+                    let exactSubLabel = `${field.label} - ${sf.label}`;
+                    html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
+                    if (sf.type === 'dropdown') {
+                        html += `<select id="inp_${i}_${j}" data-label="${exactSubLabel}" onchange="calculateAutoSums()"><option value="">-- निवडा --</option>`;
+                        if(sf.options) { sf.options.split(',').forEach(opt => { let o = opt.trim(); if(o) html += `<option value="${o}">${o}</option>`; }); }
+                        html += `</select>`;
+                    } else if(sf.type === 'sum') {
+                        html += `<input type="number" id="inp_${i}_${j}" data-label="${exactSubLabel}" data-sum-targets="${sf.options}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
+                    } else if(sf.type === 'number') {
+                        html += `<input type="number" id="inp_${i}_${j}" data-label="${exactSubLabel}" oninput="calculateAutoSums()">`;
+                    } else if(sf.type === 'date') {
+                        html += `<input type="date" id="inp_${i}_${j}" data-label="${exactSubLabel}" onchange="calculateAutoSums()">`;
+                    } else { 
+                        html += `<input type="text" id="inp_${i}_${j}" data-label="${exactSubLabel}" oninput="calculateAutoSums()">`; 
+                    }
+                    html += `</div>`;
+                });
+                html += `</div>`;
+                area.innerHTML += html;
+            } else {
+                let html = `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
+                
+                if(field.type === 'dropdown') {
+                    html += `<select id="inp_${i}" data-label="${exactLabel}" onchange="calculateAutoSums()"><option value="">-- निवडा --</option>`;
+                    if(field.options) { field.options.split(',').forEach(opt => { let o = opt.trim(); if(o) html += `<option value="${o}">${o}</option>`; }); }
+                    html += `</select>`;
+                } else if(field.type === 'sum') {
+                    html += `<input type="number" id="inp_${i}" data-label="${exactLabel}" data-sum-targets="${field.options}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
+                } else if(field.type === 'number') { 
+                    html += `<input type="number" id="inp_${i}" data-label="${exactLabel}" oninput="calculateAutoSums()">`; 
+                } else if(field.type === 'date') { 
+                    html += `<input type="date" id="inp_${i}" data-label="${exactLabel}" onchange="calculateAutoSums()">`; 
+                } else {
+                    html += `<input type="${field.type}" id="inp_${i}" data-label="${exactLabel}" oninput="calculateAutoSums()">`; 
+                }
+                area.innerHTML += html + `</div>`;
+            }
+        });
+    }
+
+    // 🌟 2. सेव्ह करण्यापूर्वी बेरीज रिफ्रेश करणे 🌟
+    function saveDataLocal() {
+        calculateAutoSums(); // <--- ही नवीन लाईन जोडली आहे
+        
+        const fId = document.getElementById('selForm').value;
+        const vName = document.getElementById('selVillage').value;
+        const month = document.getElementById('selMonth').value;
+        const year = document.getElementById('selYear').value;
+
+        if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); return; }
+        let formData = {};
+        formData["महिना"] = month;
+        formData["वर्ष"] = year;
+
+        const f = masterData.forms.find(x => x.FormID === fId);
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            if (field.type === 'group') {
+                field.subFields.forEach((sf, j) => { formData[`${field.label} - ${sf.label}`] = document.getElementById(`inp_${i}_${j}`).value; });
+            } else { formData[field.label] = document.getElementById('inp_'+i).value; }
+        });
+        
+        const entry = { entryID: Date.now(), mobileNo: user.mobile, subCenter: user.subcenter, village: vName, formID: fId, formData: formData };
+        let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
+        q.push(entry);
+        localStorage.setItem("syncQueue", JSON.stringify(q));
+
+        let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+        history.push({formID: fId, village: vName, month: month, year: year});
+        localStorage.setItem("submissionHistory", JSON.stringify(history));
+
+        const statusText = document.getElementById('syncStatus');
+        statusText.style.color = "green";
+        statusText.innerText = "रेकॉर्ड सेव्ह झाला! लगेच पुढील गावाची माहिती भरा.";
+        setTimeout(() => statusText.innerText = "", 3000);
+        
+        updateVillageDropdown(); 
+        loadDynamicFields(); 
+    }
+
+    async function syncDataToServer() {
+        let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
+        if(q.length === 0) { alert("सर्व्हरवर पाठवण्यासाठी नवीन डेटा नाही."); return; }
+        const statusText = document.getElementById('syncStatus');
+        statusText.style.color = "orange";
+        statusText.innerText = "डेटा पाठवत आहे...";
+        try {
+            const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
+            const d = await r.json();
+            if(d.success) { 
+                localStorage.setItem("syncQueue", "[]"); 
+                statusText.style.color = "green";
+                statusText.innerText = "✅ ऑनलाइन अपडेट यशस्वी!"; 
+                setTimeout(() => statusText.innerText = "", 3000);
+                fetchData(); 
+            }
+        } catch(e) { 
+            statusText.style.color = "red";
+            statusText.innerText = "एरर आला. इंटरनेट तपासा.";
+            setTimeout(() => statusText.innerText = "", 3000);
+        }
+    }
+</script>
+</body>
+</html>
