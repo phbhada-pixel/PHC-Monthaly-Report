@@ -199,9 +199,20 @@
                     <input type="hidden" id="editFormID">
                     <input type="text" id="newFormName" placeholder="फॉर्मचे नाव">
                     <select id="newFormType"><option value="List">गावनिहाय लिस्ट</option><option value="Stats">गावनिहाय आकडेवारी</option></select>
+                    
+                    <div style="background:#e8f4f8; padding:10px; border-radius:5px; margin-bottom:10px; margin-top:10px; border:1px solid #bce8f1;">
+                        <label style="font-weight:bold; color:#31708f;">हा फॉर्म कोणी भरावा? (Access Role):</label><br>
+                        <input type="checkbox" id="roleAll" value="All" checked onchange="toggleRoles(this)"> सर्वांसाठी (All)<br>
+                        <div id="specificRoles" style="margin-top:5px; display:none;">
+                            <input type="checkbox" class="form-role" value="ANM"> ANM &nbsp;&nbsp;
+                            <input type="checkbox" class="form-role" value="MPW"> MPW &nbsp;&nbsp;
+                            <input type="checkbox" class="form-role" value="CHO"> CHO
+                        </div>
+                    </div>
+
                     <div id="fieldsList"></div>
                     <button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ नवीन प्रश्न जोडा</button>
-                    <button id="mainActionBtn" class="btn-primary" onclick="saveFullForm()">फॉर्म सेव्ह करा</button>
+                    <button id="mainActionBtn" class="btn-primary" onclick="saveFullForm()" style="margin-top:15px;">फॉर्म सेव्ह करा</button>
                 </div>
             </div>
 
@@ -220,6 +231,7 @@
     let currentReports = []; 
     let isSaving = false; 
 
+    // --- Authentication & Initialization ---
     async function unlockApp() {
         if(document.getElementById('sitePass').value === "1234") {
             document.getElementById('lockScreen').classList.add('hidden');
@@ -275,6 +287,7 @@
             document.getElementById('tabAdmin').classList.remove('hidden'); 
             renderFormsListForEdit(); 
         }
+        updateFormDropdowns(); // 🌟 Login झाल्यावर पदानुसार (Role) फॉर्म्स फिल्टर करणे 
         updateVillageDropdown();
         updateEditVillageDropdown();
     }
@@ -306,6 +319,7 @@
         }
     }
 
+    // 🌟 सुधारित: Role-Based Form Filtering 🌟
     function updateFormDropdowns() {
         const selForm = document.getElementById('selForm');
         const editForm = document.getElementById('editFormSelect');
@@ -316,13 +330,20 @@
         repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
         
         masterData.forms.forEach(f => {
-            let opt = `<option value="${f.FormID}">${f.FormName}</option>`;
-            selForm.innerHTML += opt;
-            editForm.innerHTML += opt;
-            repForm.innerHTML += opt;
+            let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',') : ["All"];
+            let userRole = user ? String(user.role).trim().toUpperCase() : "";
+            
+            // जर ॲडमिन असेल, किंवा फॉर्म 'All' साठी असेल, किंवा फॉर्ममध्ये युजरचे पद असेल तरच फॉर्म दाखवा
+            if (userRole === "ADMIN" || allowedRoles.includes("All") || allowedRoles.map(r=>r.trim().toUpperCase()).includes(userRole)) {
+                let opt = `<option value="${f.FormID}">${f.FormName}</option>`;
+                selForm.innerHTML += opt;
+                editForm.innerHTML += opt;
+                repForm.innerHTML += opt;
+            }
         });
     }
 
+    // --- Entry Section Logic ---
     function updateVillageDropdown() {
         const vSel = document.getElementById('selVillage');
         const fId = document.getElementById('selForm').value;
@@ -474,6 +495,7 @@
         }
     }
 
+    // --- Edit Section Logic ---
     function updateEditVillageDropdown() {
         const vSel = document.getElementById('editVillageSelect');
         const fId = document.getElementById('editFormSelect').value;
@@ -628,7 +650,6 @@
         try {
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateRecord", payload: payload}) });
             const textResponse = await r.text();
-            
             if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
 
             const d = JSON.parse(textResponse);
@@ -651,6 +672,7 @@
         }
     }
 
+    // --- Helper Functions ---
     function calculateAutoSums(containerId) {
         let container = document.getElementById(containerId);
         if(!container) return;
@@ -683,14 +705,13 @@
         });
     }
 
-    // 🌟 उभ्या बेरजेसाठी लॉजिक (Total Calculation Helper) 🌟
     function getTotalsRow(data, headers, showIndices) {
         let totals = Array(headers.length).fill(0);
         let isNumericCol = Array(headers.length).fill(false);
         for(let c of showIndices) {
             let colName = headers[c] || "";
-            // मोबाईल नंबर किंवा आयडी असणारे रकाने वगळा
-            if(colName.includes("मोबाईल") || colName.includes("क्रमांक") || colName === "तारीख" || colName === "महिना" || colName === "वर्ष" || colName === "उपकेंद्र" || colName === "गाव" || colName === "ग्रामपंचायत" || colName.includes("नाव")) {
+            // मोबाईल नंबर, आयडी किंवा मजकूर असणारे रकाने वगळा
+            if(colName.includes("मोबाईल") || colName.includes("क्रमांक") || colName === "तारीख" || colName === "महिना" || colName === "वर्ष" || colName === "उपकेंद्र" || colName === "गाव" || colName === "ग्रामपंचायत" || colName.includes("नाव") || colName.includes("स्तर")) {
                 continue; 
             }
             let isNum = false; 
@@ -703,7 +724,7 @@
                         colSum += parseFloat(val);
                     } else {
                         isNum = false;
-                        break; // जर मजकूर सापडला तर बेरीज करू नका
+                        break; 
                     }
                 }
             }
@@ -715,6 +736,7 @@
         return { totals, isNumericCol };
     }
 
+    // --- Reports Section Logic ---
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -728,7 +750,6 @@
         
         try {
             const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
-            
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
             const responseText = await r.text();
             
@@ -931,7 +952,7 @@
                         else totalRow.push("-");
                     });
                     sheetData.push(totalRow);
-                    totalRowIndex = sheetData.length - 1; // एकूण ओळीची जागा सेव्ह करणे
+                    totalRowIndex = sheetData.length - 1; 
                 }
             }
 
@@ -967,7 +988,7 @@
                         cellStyle.fill = { fgColor: { rgb: R === 3 ? "F4B400" : "FFE082" } }; 
                         cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "000000" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-                    } else if(R === totalRowIndex) { // 🌟 एकूण ओळीची डिझाईन 🌟
+                    } else if(R === totalRowIndex) { 
                         cellStyle.fill = { fgColor: { rgb: "D4EDDA" } };
                         cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "155724" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
@@ -1002,12 +1023,31 @@
         }
     }
 
+    // --- Admin Form Builder Logic ---
+    function toggleRoles(checkbox) {
+        document.getElementById('specificRoles').style.display = checkbox.checked ? 'none' : 'block';
+        if(checkbox.checked) {
+            document.querySelectorAll('.form-role').forEach(cb => cb.checked = false);
+        }
+    }
+
+    function getSelectedRoles() {
+        if(document.getElementById('roleAll').checked) return "All";
+        let roles = [];
+        document.querySelectorAll('.form-role:checked').forEach(cb => roles.push(cb.value));
+        return roles.length > 0 ? roles.join(',') : "All";
+    }
+
     function openNewFormBuilder() {
         document.getElementById('existingFormsArea').classList.add('hidden');
         document.getElementById('formBuilder').classList.remove('hidden');
         document.getElementById('builderTitle').innerText = "नवीन फॉर्म तयार करा";
         document.getElementById('editFormID').value = "";
         document.getElementById('newFormName').value = "";
+        
+        document.getElementById('roleAll').checked = true;
+        toggleRoles(document.getElementById('roleAll'));
+
         document.getElementById('fieldsList').innerHTML = "";
         document.getElementById('mainActionBtn').innerText = "फॉर्म सेव्ह करा";
         document.getElementById('mainActionBtn').onclick = saveFullForm;
@@ -1030,6 +1070,20 @@
         document.getElementById('editFormID').value = f.FormID;
         document.getElementById('newFormName').value = f.FormName;
         document.getElementById('newFormType').value = f.FormType;
+        
+        // 🌟 Roles सेट करणे 🌟
+        let roles = f.AllowedRoles ? f.AllowedRoles.split(',') : ["All"];
+        if(roles.includes("All")) {
+            document.getElementById('roleAll').checked = true;
+            toggleRoles(document.getElementById('roleAll'));
+        } else {
+            document.getElementById('roleAll').checked = false;
+            toggleRoles(document.getElementById('roleAll'));
+            document.querySelectorAll('.form-role').forEach(cb => {
+                cb.checked = roles.includes(cb.value);
+            });
+        }
+
         document.getElementById('fieldsList').innerHTML = "";
         document.getElementById('mainActionBtn').innerText = "बदल अपडेट करा (Update)";
         document.getElementById('mainActionBtn').onclick = updateExistingForm;
@@ -1142,8 +1196,12 @@
     async function saveFullForm() {
         const name = document.getElementById('newFormName').value;
         const type = document.getElementById('newFormType').value;
+        const allowedRoles = getSelectedRoles(); // 🌟 नवीन
+        
         if(!name) { alert("फॉर्मचे नाव टाका"); return; }
-        const payload = { name, type, fields: getFieldsData(), adminMobile: user.mobile };
+        if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
+
+        const payload = { name, type, allowedRoles, fields: getFieldsData(), adminMobile: user.mobile };
         const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"createForm", payload}) });
         const d = await r.json();
         if(d.success) { alert(d.message); location.reload(); }
@@ -1153,7 +1211,11 @@
         const formID = document.getElementById('editFormID').value;
         const name = document.getElementById('newFormName').value;
         const type = document.getElementById('newFormType').value;
-        const payload = { formID, name, type, fields: getFieldsData() };
+        const allowedRoles = getSelectedRoles(); // 🌟 नवीन
+
+        if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
+
+        const payload = { formID, name, type, allowedRoles, fields: getFieldsData() };
         const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateForm", payload}) });
         const d = await r.json();
         if(d.success) { alert(d.message); location.reload(); }
