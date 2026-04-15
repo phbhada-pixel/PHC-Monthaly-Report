@@ -233,14 +233,81 @@
         } else { alert("चुकीचा पासवर्ड!"); }
     }
 
-    async function fetchData() {
-        try {
-            const r = await fetch(GAS_URL + "?action=getInitialData");
-            const d = await r.json();
-            if(d.success) { masterData = d; updateFormDropdowns(); renderFormsListForEdit(); }
-        } catch(e) { console.error("Fetch failed"); }
-    }
+   // 🌟 सुधारित: अहवाल तयार करा फंक्शन (Smart Trim Filter सह) 🌟
+    async function fetchReportData() {
+        const formID = document.getElementById('reportFormSelect').value;
+        const selMonth = document.getElementById('reportMonth').value;
+        const selYear = document.getElementById('reportYear').value;
 
+        if(!formID) { alert("कृपया अहवाल निवडा"); return; }
+        
+        document.getElementById('reportLoader').style.display = "block";
+        document.getElementById('reportContentArea').classList.add('hidden');
+        document.getElementById('reportTableContainer').innerHTML = "";
+        
+        try {
+            const payload = { formID: formID, role: user.role, subcenter: user.subcenter };
+            
+            const r = await fetch(GAS_URL, { 
+                method: "POST", 
+                body: JSON.stringify({action:"getReportData", payload}) 
+            });
+            
+            const responseText = await r.text();
+            if(responseText.trim().startsWith("<")) {
+                throw new Error("गुगल सर्व्हर ब्लॉक करत आहे (Multiple Gmail Accounts Issue). कृपया ॲप 'Incognito/Private' टॅबमध्ये उघडा.");
+            }
+            
+            const d = JSON.parse(responseText);
+            document.getElementById('reportLoader').style.display = "none";
+            
+            if(d.success) {
+                if(d.reports && d.reports.length > 0) {
+                    let finalReports = [];
+                    d.reports.forEach(rep => {
+                        let originalHeaders = rep.data[0];
+                        if(!originalHeaders) return; 
+                        
+                        // 🌟 हेडिंग्समधील स्पेस काढून अचूक कॉलम शोधणे 🌟
+                        let cleanHeaders = originalHeaders.map(h => String(h).trim());
+                        let monthIdx = cleanHeaders.indexOf("महिना");
+                        let yearIdx = cleanHeaders.indexOf("वर्ष");
+
+                        let fData = [originalHeaders]; // ओरिजनल हेडिंग्स ठेवणे
+                        for(let i=1; i<rep.data.length; i++) {
+                            let row = rep.data[i];
+                            
+                            // 🌟 डेटा मधील स्पेस काढून महिना आणि वर्ष तपासणे 🌟
+                            let rowMonth = monthIdx > -1 ? String(row[monthIdx]).trim() : "";
+                            let rowYear = yearIdx > -1 ? String(row[yearIdx]).trim() : "";
+
+                            let matchMonth = (selMonth === "सर्व" || rowMonth === String(selMonth).trim());
+                            let matchYear = (selYear === "सर्व" || rowYear === String(selYear).trim());
+
+                            if(matchMonth && matchYear) fData.push(row);
+                        }
+                        finalReports.push({ formName: rep.formName, data: fData });
+                    });
+
+                    if(finalReports.length > 0) {
+                        currentReports = finalReports;
+                        renderMultipleTables(finalReports, selMonth, selYear);
+                        document.getElementById('reportContentArea').classList.remove('hidden');
+                    } else {
+                        alert("निवडलेल्या महिना आणि वर्षासाठी कोणताही डेटा उपलब्ध नाही.");
+                    }
+                } else {
+                    alert("अद्याप कोणतीही माहिती उपलब्ध नाही.");
+                }
+            } else {
+                alert("सर्व्हरकडून माहिती मिळाली नाही: " + (d.message || "एरर"));
+            }
+        } catch(e) {
+            console.error("Report Fetch Error:", e);
+            document.getElementById('reportLoader').style.display = "none";
+            alert("एरर: " + e.message);
+        }
+    }
     async function handleLogin() {
         const m = document.getElementById('mob').value.trim();
         const p = document.getElementById('pwd').value.trim();
