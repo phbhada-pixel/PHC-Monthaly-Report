@@ -210,6 +210,12 @@
 
 <script>
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
+    
+    // 🌟 Professional Way: Configuration Object (एरर फिक्स करण्यासाठी) 🌟
+    const CONFIG = {
+        hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)"]
+    };
+
     let masterData = { forms: [], villages: [], filledStats: [] };
     let user = null;
     let currentReports = []; 
@@ -672,6 +678,7 @@
         });
     }
 
+    // 🌟 अहवाल तयार करा फंक्शन 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -747,7 +754,8 @@
             let data = rep.data;
             let headers = data[0];
             let showIndices = [];
-            headers.forEach((h, i) => { if(!hiddenColumns.includes(h)) showIndices.push(i); });
+            // 🌟 CONFIG चा वापर 🌟
+            headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
             let colCount = showIndices.length + 1; 
 
             let h1Arr = []; let h2Arr = [];
@@ -812,7 +820,8 @@
             let data = rep.data;
             let headers = data[0];
             let showIndices = [];
-            headers.forEach((h, i) => { if(!hiddenColumns.includes(h)) showIndices.push(i); });
+            // 🌟 CONFIG चा वापर 🌟
+            headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
             let colCount = showIndices.length + 1; 
 
             let h1Arr = []; let h2Arr = [];
