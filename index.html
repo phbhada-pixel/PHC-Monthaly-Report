@@ -362,10 +362,16 @@
             if(!belongsToSubCenter) return false;
             
             if(isStatsForm) {
-                const isLocalFilled = localHistory.some(h => h.formID === fId && h.village === v.VillageName && h.month === month && h.year == year);
+                // 🌟 लोकल मेमरीमध्ये आता मोबाईल नंबर पण चेक करेल (एकाच फोनवरील २ युजर्ससाठी)
+                const isLocalFilled = localHistory.some(h => 
+                    h.formID === fId && h.village === v.VillageName && 
+                    h.month === month && h.year == year && 
+                    h.mobile === String(user.mobile).trim()
+                );
+                
                 const isServerFilled = serverHistory.some(h => {
                     if(h.formID !== fId || h.village !== v.VillageName || h.month !== month || h.year != year) return false;
-                    // जर फॉर्म 'All' असेल तर कोणीही भरलेला डेटा ग्राह्य धरा
+                    // जर फॉर्म 'All' असेल तर कोणीही भरलेला डेटा ग्राह्य धरा आणि गाव लपवा
                     if(h.isAllForm || isAll) return true;
                     // जर फॉर्म Specific (उदा. MPW) असेल, तर फक्त या युजरचा स्वतःचा डेटा असेल तरच गाव लपवा
                     return h.mobile === String(user.mobile).trim();
@@ -375,7 +381,6 @@
             return true;
         }).forEach(v => { vSel.innerHTML += `<option value="${v.VillageName}">${v.VillageName}</option>`; });
     }
-
     function loadDynamicFields() {
         const fId = document.getElementById('selForm').value;
         const area = document.getElementById('dynamicFormArea');
@@ -428,7 +433,7 @@
         });
     }
 
-    async function saveDataLocal() {
+   async function saveDataLocal() {
         if(isSaving) return; 
         const saveBtn = document.getElementById('mainSaveBtn');
         if(saveBtn) saveBtn.disabled = true; 
@@ -459,8 +464,9 @@
         q.push(entry);
         localStorage.setItem("syncQueue", JSON.stringify(q));
 
+        // 🌟 लोकल हिस्ट्री मध्ये मोबाईल नंबर सेव्ह करणे (डबल युजरसाठी) 🌟
         let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-        history.push({formID: fId, village: vName, month: month, year: year});
+        history.push({formID: fId, village: vName, month: month, year: year, mobile: String(user.mobile).trim()});
         localStorage.setItem("submissionHistory", JSON.stringify(history));
 
         await syncDataToServer("syncStatus", "mainSaveBtn");
@@ -468,7 +474,6 @@
         loadDynamicFields(); 
         isSaving = false; 
     }
-
     async function syncDataToServer(statusId, btnId) {
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
         if(q.length === 0) return;
