@@ -17,6 +17,8 @@
         .btn-admin { background: #6c757d; color: white; border: none; cursor: pointer; }
         .btn-report { background: #17a2b8; color: white; border: none; cursor: pointer; font-weight: bold; }
         
+        button:disabled { background: #ccc !important; color: #666 !important; cursor: not-allowed !important; box-shadow: none !important; }
+
         .field-card { border: 2px solid #ccc; padding: 15px; padding-top: 45px; margin: 10px 0; border-radius: 8px; background: #fafafa; position: relative; }
         .sub-field-item { position: relative; display: flex; flex-direction: column; gap: 5px; background: #fff; padding: 12px; padding-top: 40px; border-radius: 5px; border: 1px solid #ccc; margin-top: 10px; }
         
@@ -125,14 +127,8 @@
 
                 <div id="dynamicFormArea"></div>
                 
-                <button class="btn-primary" onclick="saveDataLocal()" style="margin-top:20px;">माहिती जतन करा</button>
-                <button onclick="syncDataToServer()" style="background:#28a745; color:white;">Cloud Sync</button>
+                <button id="mainSaveBtn" class="btn-primary" onclick="saveDataLocal()" style="margin-top:20px;">माहिती जतन करा (Save to Cloud)</button>
                 <p id="syncStatus" style="text-align:center; font-size:14px; font-weight:bold; margin-top: 10px;"></p>
-
-                <div id="todayEditSection" style="margin-top: 30px; background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #b8daff;">
-                    <h4 style="margin:0 0 10px 0; color: #0056b3;">📝 आज सबमिट केलेले फॉर्म (एडिट करण्यासाठी)</h4>
-                    <div id="todayList"></div>
-                </div>
             </div>
 
             <div id="reportsSection" class="hidden">
@@ -168,7 +164,7 @@
 
                 <button class="btn-report" onclick="fetchReportData()">अहवाल तयार करा 📊</button>
                 
-                <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत গান্ধीनगर, कृपया थांबा...</div>
+                <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत आहे, कृपया थांबा...</div>
                 
                 <div id="reportContentArea" class="hidden" style="margin-top: 20px;">
                     <div style="text-align: right; margin-bottom: 10px;">
@@ -207,7 +203,6 @@
     let masterData = { forms: [], villages: [], filledStats: [] };
     let user = null;
     let currentReports = []; 
-    let currentEditID = null; // NEW: Track if we are editing an entry
 
     async function unlockApp() {
         if(document.getElementById('sitePass').value === "1234") {
@@ -258,7 +253,6 @@
             renderFormsListForEdit(); 
         }
         updateVillageDropdown();
-        showTodayEntries(); // NEW: Load today's entries
     }
 
     function logoutUser() {
@@ -840,76 +834,8 @@
         });
     }
 
-    // NEW: Function to show today's submissions for editing
-    function showTodayEntries() {
-        let todaySubs = JSON.parse(localStorage.getItem("todaySubmissions") || "[]");
-        let todayDate = new Date().toLocaleDateString();
-        let listDiv = document.getElementById('todayList');
-        listDiv.innerHTML = "";
-
-        let todaysData = todaySubs.filter(item => item.date === todayDate);
-
-        if(todaysData.length === 0) {
-            listDiv.innerHTML = "<p style='font-size:13px; color:gray;'>आज अद्याप कोणताही फॉर्म सबमिट केलेला नाही.</p>";
-            return;
-        }
-
-        todaysData.forEach(entry => {
-            listDiv.innerHTML += `
-            <div style="background:white; padding:10px; margin-bottom:8px; border-radius:5px; border:1px solid #ccc; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <b style="color:var(--primary);">${entry.village}</b> 
-                    <span style="font-size:12px; color:gray;">(${entry.formData["महिना"]} ${entry.formData["वर्ष"]})</span>
-                </div>
-                <button onclick="editEntry(${entry.entryID})" style="background:#ffc107; color:black; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;">✏️ Edit</button>
-            </div>`;
-        });
-    }
-
-    // NEW: Function to load data back into the form
-    function editEntry(id) {
-        let todaySubs = JSON.parse(localStorage.getItem("todaySubmissions") || "[]");
-        let entry = todaySubs.find(e => e.entryID === id);
-        if(!entry) return;
-
-        currentEditID = entry.entryID; // Set edit mode flag
-
-        document.getElementById('selForm').value = entry.formID;
-        updateVillageDropdown(); 
-        
-        let vSel = document.getElementById('selVillage');
-        if(![...vSel.options].some(opt => opt.value === entry.village)) {
-            vSel.innerHTML += `<option value="${entry.village}">${entry.village}</option>`;
-        }
-        vSel.value = entry.village;
-
-        document.getElementById('selMonth').value = entry.formData["महिना"];
-        document.getElementById('selYear').value = entry.formData["वर्ष"];
-
-        loadDynamicFields();
-
-        setTimeout(() => {
-            const f = masterData.forms.find(x => x.FormID === entry.formID);
-            JSON.parse(f.StructureJSON).forEach((field, i) => {
-                if (field.type === 'group') {
-                    field.subFields.forEach((sf, j) => { 
-                        let key = `${field.label} - ${sf.label}`;
-                        let inp = document.getElementById(`inp_${i}_${j}`);
-                        if(inp) inp.value = entry.formData[key] || "";
-                    });
-                } else { 
-                    let inp = document.getElementById('inp_'+i);
-                    if(inp) inp.value = entry.formData[field.label] || "";
-                }
-            });
-            calculateAutoSums();
-            window.scrollTo(0, 0);
-            alert("डेटा एडिट करण्यासाठी तयार आहे. बदल करून 'माहिती जतन करा' वर पुन्हा क्लिक करा.");
-        }, 500);
-    }
-
-    // UPDATED: Save function handles both new entries and updates
-    function saveDataLocal() {
+    // 🌟 नवीन ॲटो सिंक लॉजिक (Auto-Sync) 🌟
+    async function saveDataLocal() {
         calculateAutoSums(); 
         
         const fId = document.getElementById('selForm').value;
@@ -929,76 +855,52 @@
             } else { formData[field.label] = document.getElementById('inp_'+i).value; }
         });
         
-        let isEditMode = currentEditID ? true : false;
-        let finalEntryID = currentEditID ? currentEditID : Date.now(); 
-
-        const entry = { 
-            entryID: finalEntryID, 
-            mobileNo: user.mobile, 
-            subCenter: user.subcenter, 
-            village: vName, 
-            formID: fId, 
-            formData: formData,
-            isEdit: isEditMode, // Flag for server sync
-            date: new Date().toLocaleDateString() 
-        };
-
+        const entry = { entryID: Date.now(), mobileNo: user.mobile, subCenter: user.subcenter, village: vName, formID: fId, formData: formData };
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-        if(isEditMode) {
-            let existingIdx = q.findIndex(e => e.entryID === finalEntryID);
-            if(existingIdx >= 0) { q[existingIdx] = entry; } 
-            else { q.push(entry); } 
-        } else {
-            q.push(entry);
-        }
+        q.push(entry);
         localStorage.setItem("syncQueue", JSON.stringify(q));
 
-        let todaySubs = JSON.parse(localStorage.getItem("todaySubmissions") || "[]");
-        if(isEditMode) {
-            let tIdx = todaySubs.findIndex(e => e.entryID === finalEntryID);
-            if(tIdx >= 0) todaySubs[tIdx] = entry;
-        } else {
-            todaySubs.push(entry);
-        }
-        localStorage.setItem("todaySubmissions", JSON.stringify(todaySubs));
+        let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+        history.push({formID: fId, village: vName, month: month, year: year});
+        localStorage.setItem("submissionHistory", JSON.stringify(history));
 
-        if(!isEditMode) {
-            let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-            history.push({formID: fId, village: vName, month: month, year: year});
-            localStorage.setItem("submissionHistory", JSON.stringify(history));
-        }
+        // माहिती थेट सर्व्हरवर सिंक करण्यासाठी
+        await syncDataToServer();
 
-        const statusText = document.getElementById('syncStatus');
-        statusText.style.color = "green";
-        statusText.innerText = isEditMode ? "✅ रेकॉर्ड यशस्वीरित्या अपडेट झाला!" : "✅ रेकॉर्ड सेव्ह झाला!";
-        setTimeout(() => statusText.innerText = "", 3000);
-        
-        currentEditID = null; // Reset edit mode
         updateVillageDropdown(); 
         loadDynamicFields(); 
-        showTodayEntries(); // Refresh list
     }
 
+    // 🌟 बटण लॉक (Disable) करणे आणि थेट सिंक करणे 🌟
     async function syncDataToServer() {
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-        if(q.length === 0) { alert("सर्व्हरवर पाठवण्यासाठी नवीन डेटा नाही."); return; }
+        if(q.length === 0) return;
+        
         const statusText = document.getElementById('syncStatus');
+        const saveBtn = document.getElementById('mainSaveBtn'); // सेव्ह बटण
+
         statusText.style.color = "orange";
-        statusText.innerText = "डेटा पाठवत आहे...";
+        statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
+        if(saveBtn) saveBtn.disabled = true; // डबल क्लिक टाळण्यासाठी बटण बंद करणे
+
         try {
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
             const d = await r.json();
             if(d.success) { 
                 localStorage.setItem("syncQueue", "[]"); 
                 statusText.style.color = "green";
-                statusText.innerText = "✅ ऑनलाइन अपडेट यशस्वी!"; 
-                setTimeout(() => statusText.innerText = "", 3000);
-                fetchData(); 
+                statusText.innerText = "✅ माहिती यशस्वीरित्या गुगल शीटवर सेव्ह झाली!"; 
+                setTimeout(() => { statusText.innerText = ""; }, 4000);
+                fetchData(); // नवीन माहिती रिपोर्टमध्ये दिसावी म्हणून रिफ्रेश
+            } else {
+                throw new Error("Server error");
             }
         } catch(e) { 
             statusText.style.color = "red";
-            statusText.innerText = "एरर आला. इंटरनेट तपासा.";
-            setTimeout(() => statusText.innerText = "", 3000);
+            statusText.innerText = "⚠️ इंटरनेट एरर! माहिती मोबाईलमध्ये सुरक्षित आहे, नेटवर्क आल्यावर पुन्हा जतन करा दाबा.";
+            setTimeout(() => { statusText.innerText = ""; }, 5000);
+        } finally {
+            if(saveBtn) saveBtn.disabled = false; // प्रोसेस पूर्ण झाल्यावर बटण पुन्हा चालू करणे
         }
     }
 </script>
