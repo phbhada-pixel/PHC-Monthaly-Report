@@ -20,7 +20,7 @@
         button:disabled { background: #ccc !important; color: #666 !important; cursor: not-allowed !important; box-shadow: none !important; }
 
         .field-card { border: 2px solid #ccc; padding: 15px; padding-top: 45px; margin: 10px 0; border-radius: 8px; background: #fafafa; position: relative; }
-        .sub-field-item { position: relative; display: flex; flex-direction: column; gap: 5px; background: #fff; padding: 12px; padding-top: 40px; border-radius: 5px; border: 1px solid #ccc; margin-top: 10px; }
+        .sub-field-item { position: relative; display: flex; flex-direction: column; gap: 5px; background: #fff; padding: 12px; padding-top: 35px; border-radius: 5px; border: 1px solid #ccc; margin-top: 10px; }
         
         .btn-remove { background: #ff4d4d !important; color: white !important; padding: 6px 12px !important; font-size: 13px !important; border: none !important; width: auto !important; border-radius: 4px !important; font-weight: bold !important; cursor: pointer !important; position: absolute !important; top: 8px !important; right: 8px !important; margin: 0 !important; }
         .hidden { display: none !important; }
@@ -224,7 +224,7 @@
                     </div>
 
                     <div id="fieldsList"></div>
-                    <button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ नवीन प्रश्न जोडा</button>
+                    <button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ मुख्य प्रश्न जोडा</button>
                     <button id="mainActionBtn" class="btn-primary" onclick="saveFullForm()" style="margin-top:15px;">फॉर्म सेव्ह करा</button>
                 </div>
             </div>
@@ -235,8 +235,6 @@
 <script>
     // 🌟 Configuration 🌟
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
-    
-    // "कर्मचाऱ्याचे नाव" हा रकाना लपवला कारण तो आता आपण ग्रुप हेडिंग (Group Header) मध्ये वापरणार आहोत.
     const CONFIG = {
         hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)", "कर्मचाऱ्याचे नाव"]
     };
@@ -245,6 +243,29 @@
     let user = null;
     let currentReports = []; 
     let isSaving = false; 
+
+    // --- Helper for creating HTML Inputs (Keep Code DRY & Clean) ---
+    function generateInputHTML(f, id, label, areaId, val="") {
+        let html = "";
+        if (f.type === 'dropdown') {
+            html += `<select id="${id}" data-label="${label}" onchange="calculateAutoSums('${areaId}')"><option value="">-- निवडा --</option>`;
+            if(f.options) { f.options.split(',').forEach(opt => { 
+                let o = opt.trim(); 
+                let sel = (o === val) ? "selected" : "";
+                if(o) html += `<option value="${o}" ${sel}>${o}</option>`; 
+            }); }
+            html += `</select>`;
+        } else if(f.type === 'sum') {
+            html += `<input type="number" id="${id}" data-label="${label}" data-sum-targets="${f.options}" value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
+        } else if(f.type === 'number') {
+            html += `<input type="number" id="${id}" data-label="${label}" value="${val}" oninput="calculateAutoSums('${areaId}')">`;
+        } else if(f.type === 'date') {
+            html += `<input type="date" id="${id}" data-label="${label}" value="${val}" onchange="calculateAutoSums('${areaId}')">`;
+        } else { 
+            html += `<input type="text" id="${id}" data-label="${label}" value="${val}" oninput="calculateAutoSums('${areaId}')">`; 
+        }
+        return html;
+    }
 
     async function unlockApp() {
         if(document.getElementById('sitePass').value === "1234") {
@@ -394,6 +415,7 @@
         }).forEach(v => { vSel.innerHTML += `<option value="${v.VillageName}">${v.VillageName}</option>`; });
     }
 
+    // 🌟 सुधारित: 3-Level Data Entry UI (Nested Groups) 🌟
     function loadDynamicFields() {
         const fId = document.getElementById('selForm').value;
         const area = document.getElementById('dynamicFormArea');
@@ -401,51 +423,44 @@
         const f = masterData.forms.find(x => x.FormID === fId);
         if(!f) return;
         
+        let html = "";
         JSON.parse(f.StructureJSON).forEach((field, i) => {
-            let exactLabel = field.label;
             if (field.type === 'group') {
-                let html = `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
+                html += `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
                             <h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
                 field.subFields.forEach((sf, j) => {
-                    let exactSubLabel = `${field.label} - ${sf.label}`;
-                    html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
-                    if (sf.type === 'dropdown') {
-                        html += `<select id="inp_${i}_${j}" data-label="${exactSubLabel}" onchange="calculateAutoSums('dynamicFormArea')"><option value="">-- निवडा --</option>`;
-                        if(sf.options) { sf.options.split(',').forEach(opt => { let o = opt.trim(); if(o) html += `<option value="${o}">${o}</option>`; }); }
-                        html += `</select>`;
-                    } else if(sf.type === 'sum') {
-                        html += `<input type="number" id="inp_${i}_${j}" data-label="${exactSubLabel}" data-sum-targets="${sf.options}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
-                    } else if(sf.type === 'number') {
-                        html += `<input type="number" id="inp_${i}_${j}" data-label="${exactSubLabel}" oninput="calculateAutoSums('dynamicFormArea')">`;
-                    } else if(sf.type === 'date') {
-                        html += `<input type="date" id="inp_${i}_${j}" data-label="${exactSubLabel}" onchange="calculateAutoSums('dynamicFormArea')">`;
-                    } else { 
-                        html += `<input type="text" id="inp_${i}_${j}" data-label="${exactSubLabel}" oninput="calculateAutoSums('dynamicFormArea')">`; 
+                    if(sf.type === 'group') {
+                        // 🌟 Level 3: Sub-Group 🌟
+                        html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
+                                 <h5 style="margin:0 0 5px 0; color:#00838f;">${sf.label}</h5>`;
+                        sf.subFields.forEach((ssf, k) => {
+                            let exactSubSubLabel = `${field.label} - ${sf.label} - ${ssf.label}`;
+                            html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${ssf.label}:</b></label>`;
+                            html += generateInputHTML(ssf, `inp_${i}_${j}_${k}`, exactSubSubLabel, 'dynamicFormArea', "");
+                            html += `</div>`;
+                        });
+                        html += `</div>`;
+                    } else {
+                        // Level 2: Sub-Question
+                        let exactSubLabel = `${field.label} - ${sf.label}`;
+                        html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
+                        html += generateInputHTML(sf, `inp_${i}_${j}`, exactSubLabel, 'dynamicFormArea', "");
+                        html += `</div>`;
                     }
-                    html += `</div>`;
                 });
                 html += `</div>`;
-                area.innerHTML += html;
             } else {
-                let html = `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
-                if(field.type === 'dropdown') {
-                    html += `<select id="inp_${i}" data-label="${exactLabel}" onchange="calculateAutoSums('dynamicFormArea')"><option value="">-- निवडा --</option>`;
-                    if(field.options) { field.options.split(',').forEach(opt => { let o = opt.trim(); if(o) html += `<option value="${o}">${o}</option>`; }); }
-                    html += `</select>`;
-                } else if(field.type === 'sum') {
-                    html += `<input type="number" id="inp_${i}" data-label="${exactLabel}" data-sum-targets="${field.options}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
-                } else if(field.type === 'number') { 
-                    html += `<input type="number" id="inp_${i}" data-label="${exactLabel}" oninput="calculateAutoSums('dynamicFormArea')">`; 
-                } else if(field.type === 'date') { 
-                    html += `<input type="date" id="inp_${i}" data-label="${exactLabel}" onchange="calculateAutoSums('dynamicFormArea')">`; 
-                } else {
-                    html += `<input type="${field.type}" id="inp_${i}" data-label="${exactLabel}" oninput="calculateAutoSums('dynamicFormArea')">`; 
-                }
-                area.innerHTML += html + `</div>`;
+                // Level 1: Main Question
+                let exactLabel = field.label;
+                html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
+                html += generateInputHTML(field, `inp_${i}`, exactLabel, 'dynamicFormArea', "");
+                html += `</div>`;
             }
         });
+        area.innerHTML = html;
     }
 
+    // 🌟 सुधारित: 3-Level Data Saving 🌟
     async function saveDataLocal() {
         if(isSaving) return; 
         const saveBtn = document.getElementById('mainSaveBtn');
@@ -468,8 +483,18 @@
         const f = masterData.forms.find(x => x.FormID === fId);
         JSON.parse(f.StructureJSON).forEach((field, i) => {
             if (field.type === 'group') {
-                field.subFields.forEach((sf, j) => { formData[`${field.label} - ${sf.label}`] = document.getElementById(`inp_${i}_${j}`).value; });
-            } else { formData[field.label] = document.getElementById('inp_'+i).value; }
+                field.subFields.forEach((sf, j) => { 
+                    if(sf.type === 'group') {
+                        sf.subFields.forEach((ssf, k) => {
+                            formData[`${field.label} - ${sf.label} - ${ssf.label}`] = document.getElementById(`inp_${i}_${j}_${k}`).value;
+                        });
+                    } else {
+                        formData[`${field.label} - ${sf.label}`] = document.getElementById(`inp_${i}_${j}`).value;
+                    }
+                });
+            } else { 
+                formData[field.label] = document.getElementById(`inp_${i}`).value; 
+            }
         });
         
         const entry = { entryID: Date.now(), mobileNo: user.mobile, subCenter: user.subcenter, village: vName, formID: fId, formData: formData };
@@ -586,74 +611,55 @@
         }
     }
 
+    // 🌟 सुधारित: 3-Level Data Edit UI 🌟
     function renderEditForm(fId, formData) {
         const area = document.getElementById('editDynamicFormArea');
         area.innerHTML = "";
         const f = masterData.forms.find(x => x.FormID === fId);
         if(!f) return;
         
+        let html = "";
         JSON.parse(f.StructureJSON).forEach((field, i) => {
             let exactLabel = field.label;
-            
             if (field.type === 'group') {
-                let html = `<div style="margin-bottom:15px; background:#e3f2fd; padding:12px; border-radius:8px; border:1px solid #f39c12;">
+                html += `<div style="margin-bottom:15px; background:#e3f2fd; padding:12px; border-radius:8px; border:1px solid #f39c12;">
                             <h4 style="margin-top:0; color:#d35400; text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
                 field.subFields.forEach((sf, j) => {
-                    let exactSubLabel = `${field.label} - ${sf.label}`;
-                    let val = formData[exactSubLabel] || "";
-                    html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
-                    
-                    if (sf.type === 'dropdown') {
-                        html += `<select id="edit_inp_${i}_${j}" data-label="${exactSubLabel}" onchange="calculateAutoSums('editDynamicFormArea')"><option value="">-- निवडा --</option>`;
-                        if(sf.options) { sf.options.split(',').forEach(opt => { 
-                            let o = opt.trim(); 
-                            let sel = (o === val) ? "selected" : "";
-                            if(o) html += `<option value="${o}" ${sel}>${o}</option>`; 
-                        }); }
-                        html += `</select>`;
-                    } else if(sf.type === 'sum') {
-                        html += `<input type="number" id="edit_inp_${i}_${j}" data-label="${exactSubLabel}" data-sum-targets="${sf.options}" value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;">`;
-                    } else if(sf.type === 'number') {
-                        html += `<input type="number" id="edit_inp_${i}_${j}" data-label="${exactSubLabel}" value="${val}" oninput="calculateAutoSums('editDynamicFormArea')">`;
-                    } else if(sf.type === 'date') {
-                        html += `<input type="date" id="edit_inp_${i}_${j}" data-label="${exactSubLabel}" value="${val}" onchange="calculateAutoSums('editDynamicFormArea')">`;
-                    } else { 
-                        html += `<input type="text" id="edit_inp_${i}_${j}" data-label="${exactSubLabel}" value="${val}" oninput="calculateAutoSums('editDynamicFormArea')">`; 
+                    if(sf.type === 'group') {
+                        html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
+                                 <h5 style="margin:0 0 5px 0; color:#00838f;">${sf.label}</h5>`;
+                        sf.subFields.forEach((ssf, k) => {
+                            let exactSubSubLabel = `${field.label} - ${sf.label} - ${ssf.label}`;
+                            let val = formData[exactSubSubLabel] || "";
+                            html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${ssf.label}:</b></label>`;
+                            html += generateInputHTML(ssf, `edit_inp_${i}_${j}_${k}`, exactSubSubLabel, 'editDynamicFormArea', val);
+                            html += `</div>`;
+                        });
+                        html += `</div>`;
+                    } else {
+                        let exactSubLabel = `${field.label} - ${sf.label}`;
+                        let val = formData[exactSubLabel] || "";
+                        html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
+                        html += generateInputHTML(sf, `edit_inp_${i}_${j}`, exactSubLabel, 'editDynamicFormArea', val);
+                        html += `</div>`;
                     }
-                    html += `</div>`;
                 });
                 html += `</div>`;
-                area.innerHTML += html;
             } else {
                 let val = formData[exactLabel] || "";
-                let html = `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
-                
-                if(field.type === 'dropdown') {
-                    html += `<select id="edit_inp_${i}" data-label="${exactLabel}" onchange="calculateAutoSums('editDynamicFormArea')"><option value="">-- निवडा --</option>`;
-                    if(field.options) { field.options.split(',').forEach(opt => { 
-                        let o = opt.trim(); 
-                        let sel = (o === val) ? "selected" : "";
-                        if(o) html += `<option value="${o}" ${sel}>${o}</option>`; 
-                    }); }
-                    html += `</select>`;
-                } else if(field.type === 'sum') {
-                    html += `<input type="number" id="edit_inp_${i}" data-label="${exactLabel}" data-sum-targets="${field.options}" value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;">`;
-                } else if(field.type === 'number') { 
-                    html += `<input type="number" id="edit_inp_${i}" data-label="${exactLabel}" value="${val}" oninput="calculateAutoSums('editDynamicFormArea')">`; 
-                } else if(field.type === 'date') { 
-                    html += `<input type="date" id="edit_inp_${i}" data-label="${exactLabel}" value="${val}" onchange="calculateAutoSums('editDynamicFormArea')">`; 
-                } else {
-                    html += `<input type="${field.type}" id="edit_inp_${i}" data-label="${exactLabel}" value="${val}" oninput="calculateAutoSums('editDynamicFormArea')">`; 
-                }
-                area.innerHTML += html + `</div>`;
+                html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
+                html += generateInputHTML(field, `edit_inp_${i}`, exactLabel, 'editDynamicFormArea', val);
+                html += `</div>`;
             }
         });
+        area.innerHTML = html;
         
         area.classList.remove('hidden');
         document.getElementById('editSaveBtn').classList.remove('hidden');
         calculateAutoSums('editDynamicFormArea'); 
     }
 
+    // 🌟 सुधारित: 3-Level Data Editing 🌟
     async function saveEditedData() {
         if(isSaving) return;
         const saveBtn = document.getElementById('editSaveBtn');
@@ -675,8 +681,18 @@
         const f = masterData.forms.find(x => x.FormID === fId);
         JSON.parse(f.StructureJSON).forEach((field, i) => {
             if (field.type === 'group') {
-                field.subFields.forEach((sf, j) => { updatedFormData[`${field.label} - ${sf.label}`] = document.getElementById(`edit_inp_${i}_${j}`).value; });
-            } else { updatedFormData[field.label] = document.getElementById(`edit_inp_${i}`).value; }
+                field.subFields.forEach((sf, j) => { 
+                    if(sf.type === 'group') {
+                        sf.subFields.forEach((ssf, k) => {
+                            updatedFormData[`${field.label} - ${sf.label} - ${ssf.label}`] = document.getElementById(`edit_inp_${i}_${j}_${k}`).value;
+                        });
+                    } else {
+                        updatedFormData[`${field.label} - ${sf.label}`] = document.getElementById(`edit_inp_${i}_${j}`).value;
+                    }
+                });
+            } else { 
+                updatedFormData[field.label] = document.getElementById(`edit_inp_${i}`).value; 
+            }
         });
 
         const payload = { formID: fId, village: vName, month: month, year: year, mobileNo: user.mobile, subCenter: user.subcenter, role: user.role, formData: updatedFormData };
@@ -747,7 +763,6 @@
         let isNumericCol = Array(headers.length).fill(false);
         for(let c of showIndices) {
             let colName = headers[c] || "";
-            // मजकूर (Text) असणारे रकाने बेरजेतून वगळले
             if(colName.includes("मोबाईल") || colName.includes("क्रमांक") || colName === "तारीख" || colName === "महिना" || colName === "वर्ष" || colName === "उपकेंद्र" || colName === "गाव" || colName === "ग्रामपंचायत" || colName.includes("नाव") || colName.includes("स्तर")) {
                 continue; 
             }
@@ -773,7 +788,6 @@
         return { totals, isNumericCol };
     }
 
-    // 🌟 3-Level Grouping + Separate Totals सह रिपोर्ट डाऊनलोड 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -791,14 +805,7 @@
         document.getElementById('reportTableContainer').innerHTML = "";
         
         try {
-            const payload = { 
-                formID: formID, 
-                role: user.role, 
-                subcenter: user.subcenter, 
-                mobileNo: user.mobile, 
-                filterRole: filterRole 
-            };
-            
+            const payload = { formID: formID, role: user.role, subcenter: user.subcenter, mobileNo: user.mobile, filterRole: filterRole };
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getReportData", payload}) });
             const responseText = await r.text();
             
@@ -863,14 +870,14 @@
             let villageIdx = headers.indexOf("गाव");
 
             let h1Arr = []; let h2Arr = [];
+            // 🌟 3-Level Header Handling 🌟
             showIndices.forEach(idx => {
                 let parts = headers[idx].split(" - ");
                 h1Arr.push(parts[0]);
-                h2Arr.push(parts.length > 1 ? parts[1] : "");
+                h2Arr.push(parts.length > 1 ? parts.slice(1).join(" - ") : "");
             });
             let hasSubQ = h2Arr.some(sub => sub !== "");
 
-            // 🌟 Grouping Data by Subcenter and Employee 🌟
             let dataRows = data.slice(1);
             let groups = {};
             if(dataRows.length === 0) {
@@ -896,7 +903,6 @@
                 let gRows = groups[gKey];
                 let [sc, ename] = gKey.split("###");
                 
-                // 🌟 गावाच्या नावानुसार Sort करणे 🌟
                 if(villageIdx > -1) {
                     gRows.sort((a, b) => {
                         let vilA = String(a[villageIdx] || "").trim();
@@ -950,7 +956,6 @@
                         html += `</tr>`;
                     });
 
-                    // 🌟 स्वतंत्र उभी बेरीज (Separate Totals) 🌟
                     if(isStats && gRows.length > 0) { 
                         let pseudoData = [headers].concat(gRows);
                         let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
@@ -995,9 +1000,10 @@
             let villageIdx = headers.indexOf("गाव");
 
             let h1Arr = []; let h2Arr = [];
+            // 🌟 3-Level Header Handling in Excel 🌟
             showIndices.forEach(idx => {
                 let parts = headers[idx].split(" - ");
-                h1Arr.push(parts[0]); h2Arr.push(parts.length > 1 ? parts[1] : "");
+                h1Arr.push(parts[0]); h2Arr.push(parts.length > 1 ? parts.slice(1).join(" - ") : "");
             });
             let hasSubQ = h2Arr.some(sub => sub !== "");
 
@@ -1005,8 +1011,7 @@
             let merges = [];
             
             sheetData.push([`${rep.formName} अहवाल`]);
-            sheetData.push(Array(colCount).fill("")); // Blank row at top
-            
+            sheetData.push(Array(colCount).fill("")); 
             merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } });
             
             let dataRows = data.slice(1);
@@ -1026,7 +1031,7 @@
             }
 
             let groupKeys = Object.keys(groups).sort();
-            let currentR = 2; // Start after main header and blank row
+            let currentR = 2; 
             
             let groupHeaderRows = [];
             let headerRowIndices = [];
@@ -1045,7 +1050,6 @@
                     });
                 }
 
-                // 🌟 Group Header in Excel 🌟
                 if(dataRows.length > 0) {
                     let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
                     for(let x=1; x<colCount; x++) gHeaderArr.push("");
@@ -1067,7 +1071,7 @@
                     subHeaderRowIndices.push(currentR);
                     dataStartRow = currentR + 1;
                     
-                    merges.push({ s: { r: currentR - 1, c: 0 }, e: { r: currentR, c: 0 } }); // Sr No merge
+                    merges.push({ s: { r: currentR - 1, c: 0 }, e: { r: currentR, c: 0 } }); 
                     let c = 0;
                     while(c < h1Arr.length) {
                         let end = c;
@@ -1093,7 +1097,6 @@
                         currentR++;
                     });
 
-                    // 🌟 Separate Total Row in Excel 🌟
                     if(isStats) {
                         let pseudoData = [headers].concat(gRows);
                         let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
@@ -1108,7 +1111,6 @@
                     }
                 }
                 
-                // 🌟 एक रिकामी ओळ सोडणे (Blank Row) 🌟
                 sheetData.push(Array(colCount).fill("")); 
                 currentR++;
             });
@@ -1125,7 +1127,7 @@
                     if(R === 0) {
                         cellStyle.fill = { fgColor: { rgb: "00705A" } };
                         cellStyle.font = { name: "Arial", sz: 16, bold: true, color: { rgb: "FFFFFF" } };
-                    } else if(groupHeaderRows.includes(R)) { // Group Header Design
+                    } else if(groupHeaderRows.includes(R)) { 
                         cellStyle.fill = { fgColor: { rgb: "CDE4EC" } };
                         cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "0056B3" } };
                         cellStyle.alignment = { vertical: "center", horizontal: "left", wrapText: true };
@@ -1134,7 +1136,7 @@
                         cellStyle.fill = { fgColor: { rgb: headerRowIndices.includes(R) ? "F4B400" : "FFE082" } }; 
                         cellStyle.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "000000" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-                    } else if(totalRowIndices.includes(R)) { // Totals Row Design
+                    } else if(totalRowIndices.includes(R)) { 
                         cellStyle.fill = { fgColor: { rgb: "D4EDDA" } };
                         cellStyle.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "155724" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
@@ -1173,6 +1175,7 @@
         }
     }
 
+    // --- 🌟 3-Level Form Builder UI 🌟 ---
     function toggleRoles(checkbox) {
         document.getElementById('specificRoles').style.display = checkbox.checked ? 'none' : 'block';
         if(checkbox.checked) {
@@ -1206,7 +1209,10 @@
         const listDiv = document.getElementById('formsEditList');
         listDiv.innerHTML = "";
         masterData.forms.forEach(f => {
-            listDiv.innerHTML += `<div class="edit-row"><span><b>${f.FormName}</b></span><button class="btn-edit" onclick="startEditing('${f.FormID}')">Edit</button></div>`;
+            listDiv.innerHTML += `<div class="edit-row" style="background:white; padding:10px; margin-bottom:5px; border-radius:5px; border:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                                    <span><b>${f.FormName}</b></span>
+                                    <button class="btn-edit-tab" style="padding:6px 15px; width:auto; border-radius:4px;" onclick="startEditing('${f.FormID}')">Edit</button>
+                                  </div>`;
         });
     }
 
@@ -1256,16 +1262,28 @@
 
     function toggleSubFieldOptions(sfId, val) {
         let container = document.getElementById(`sfopts_container_${sfId}`);
+        let groupContainer = document.getElementById(`ssf_group_${sfId}`);
         let labelEl = document.getElementById(`sflabel_${sfId}`);
         let inputEl = document.getElementById(`sfopts_${sfId}`);
+        
         container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        if(groupContainer) groupContainer.style.display = (val === 'group') ? 'block' : 'none';
+
         if(val === 'sum') {
-            labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची? (उदा. मुख्य प्रश्न - उपप्रश्न):";
+            labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची?";
             inputEl.placeholder = "उदा. रुग्ण - पुरुष, रुग्ण - स्त्री";
         } else if(val === 'dropdown') {
             labelEl.innerText = "पर्याय लिहा (स्वल्पविरामाने वेगळे करा):";
             inputEl.placeholder = "उदा. होय, नाही";
         }
+    }
+    
+    function toggleSubSubFieldOptions(ssfId, val) {
+        let container = document.getElementById(`ssfopts_container_${ssfId}`);
+        let inputEl = document.getElementById(`ssfopts_${ssfId}`);
+        container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        if(val === 'sum') inputEl.placeholder = "बेरीज सूत्र (उदा. गट - उपगट - प्रश्न)...";
+        else if(val === 'dropdown') inputEl.placeholder = "पर्याय लिहा (उदा. होय, नाही)...";
     }
 
     function addField(data = null) {
@@ -1287,7 +1305,7 @@
                 </select>
                 <div id="opts_${id}" style="display:${data && (data.type==='dropdown' || data.type==='sum') ? 'block' : 'none'}; margin-top:10px; background:#ffe4b5; padding:10px; border-radius:5px;">
                     <label style="font-size:12px; font-weight:bold; color:#d35400;">
-                        ${data && data.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची? (स्वल्पविरामाने अचूक नावे लिहा):' : 'येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):'}
+                        ${data && data.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची?' : 'येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):'}
                     </label>
                     <input type="text" placeholder="${data && data.type==='sum' ? 'उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली' : 'उदा. होय, नाही'}" class="foptions" value="${data ? (data.options || '') : ''}">
                 </div>
@@ -1314,16 +1332,49 @@
                     <option value="date" ${sfData && sfData.type==='date'?'selected':''}>Date (तारीख)</option>
                     <option value="dropdown" ${sfData && sfData.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
                     <option value="sum" ${sfData && sfData.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
+                    <option value="group" ${sfData && sfData.type==='group'?'selected':''}>Group / उप-गट (Sub-Group)</option>
                 </select>
                 <div id="sfopts_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='sum') ? 'block' : 'none'}; margin-top: 5px; background:#fff3e0; padding:8px; border-radius:4px;">
                     <label id="sflabel_${sfId}" style="font-size:11px; font-weight:bold; color:#d35400;">
-                        ${sfData && sfData.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची? (उदा. मुख्य प्रश्न - उपप्रश्न):' : 'पर्याय लिहा (स्वल्पविरामाने वेगळे करा):'}
+                        ${sfData && sfData.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची?' : 'पर्याय लिहा (स्वल्पविरामाने वेगळे करा):'}
                     </label>
-                    <input type="text" id="sfopts_${sfId}" placeholder="${sfData && sfData.type==='sum' ? 'उदा. रुग्ण - पुरुष, रुग्ण - स्त्री' : 'उदा. होय, नाही'}" class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
+                    <input type="text" id="sfopts_${sfId}" placeholder="..." class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
+                </div>
+                <div id="ssf_group_${sfId}" style="display:${sfData && sfData.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
+                    <label style="font-size:12px; font-weight:bold; color:#00838f;">या उप-गटातील प्रश्न जोडा:</label>
+                    <div id="subsubfields_container_${sfId}"></div>
+                    <button type="button" onclick="addSubSubFieldUI('${sfId}')" style="margin-top:10px; font-size:12px; background:#fff; border:1px solid #ccc; padding:4px; cursor:pointer; width:100%;">+ उप-गटातील प्रश्न जोडा</button>
                 </div>
             </div>
         `;
         document.getElementById('subfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
+        
+        if(sfData && sfData.type === 'group' && sfData.subFields) {
+            sfData.subFields.forEach(ssf => addSubSubFieldUI(sfId, ssf));
+        } else if (sfData && sfData.type === 'group') {
+            addSubSubFieldUI(sfId);
+        }
+    }
+
+    function addSubSubFieldUI(parentId, ssfData = null) {
+        const ssfId = Math.floor(Math.random() * 1000000);
+        const html = `
+            <div class="sub-sub-field-item" id="ssf_${ssfId}" style="background:white; padding:8px; margin-top:5px; border:1px solid #b2ebf2; border-radius:4px; position:relative; padding-top:25px;">
+                <button type="button" class="btn-remove" style="padding:2px 6px !important; font-size:10px !important; top:4px !important; right:4px !important;" onclick="this.parentElement.remove()">X</button>
+                <input type="text" placeholder="प्रश्नाचे नाव" class="ssfname" style="width: 100%; font-size:13px; padding:6px;" value="${ssfData ? ssfData.label : ''}">
+                <select class="ssftype" style="width: 100%; font-size:13px; padding:6px; margin-top: 5px;" onchange="toggleSubSubFieldOptions('${ssfId}', this.value)">
+                    <option value="text" ${ssfData && ssfData.type==='text'?'selected':''}>Text</option>
+                    <option value="number" ${ssfData && ssfData.type==='number'?'selected':''}>Number</option>
+                    <option value="date" ${ssfData && ssfData.type==='date'?'selected':''}>Date</option>
+                    <option value="dropdown" ${ssfData && ssfData.type==='dropdown'?'selected':''}>Dropdown</option>
+                    <option value="sum" ${ssfData && ssfData.type==='sum'?'selected':''}>Total (Sum)</option>
+                </select>
+                <div id="ssfopts_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='sum') ? 'block' : 'none'}; margin-top: 5px; background:#f3e5f5; padding:6px; border-radius:4px;">
+                    <input type="text" id="ssfopts_${ssfId}" placeholder="${ssfData && ssfData.type==='sum' ? 'बेरीज सूत्र...' : 'पर्याय...'}" class="ssfopts" style="width: 100%; font-size:12px; padding:4px;" value="${ssfData ? (ssfData.options || '') : ''}">
+                </div>
+            </div>
+        `;
+        document.getElementById('subsubfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
     }
 
     function getFieldsData() {
@@ -1333,7 +1384,14 @@
             if (fieldObj.type === 'group') {
                 fieldObj.subFields = [];
                 el.querySelectorAll('.sub-field-item').forEach(sfEl => {
-                    fieldObj.subFields.push({ label: sfEl.querySelector('.sfname').value, type: sfEl.querySelector('.sftype').value, options: sfEl.querySelector('.sfopts').value });
+                    let sfObj = { label: sfEl.querySelector('.sfname').value, type: sfEl.querySelector('.sftype').value, options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "" };
+                    if(sfObj.type === 'group') {
+                        sfObj.subFields = [];
+                        sfEl.querySelectorAll('.sub-sub-field-item').forEach(ssfEl => {
+                            sfObj.subFields.push({ label: ssfEl.querySelector('.ssfname').value, type: ssfEl.querySelector('.ssftype').value, options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "" });
+                        });
+                    }
+                    fieldObj.subFields.push(sfObj);
                 });
             }
             fields.push(fieldObj);
