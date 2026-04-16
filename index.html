@@ -215,7 +215,7 @@
                     
                     <div style="background:#e8f4f8; padding:10px; border-radius:5px; margin-bottom:10px; margin-top:10px; border:1px solid #bce8f1;">
                         <label style="font-weight:bold; color:#31708f;">हा फॉर्म कोणी भरावा? (Access Role):</label><br>
-                        <input type="checkbox" id="roleAll" value="All" checked onchange="toggleRoles(this)"> सर्वांसाठी (All)<br>
+                        <input type="checkbox" id="roleAll" value="ALL" checked onchange="toggleRoles(this)"> सर्वांसाठी (ALL)<br>
                         <div id="specificRoles" style="margin-top:5px; display:none;">
                             <input type="checkbox" class="form-role" value="ANM"> ANM &nbsp;&nbsp;
                             <input type="checkbox" class="form-role" value="MPW"> MPW &nbsp;&nbsp;
@@ -297,7 +297,7 @@
         
         if(user.role === "Admin") { 
             document.getElementById('tabAdmin').classList.remove('hidden'); 
-            document.getElementById('adminRoleFilterDiv').style.display = "flex"; // 🌟 ॲडमिनला फिल्टर दाखवा
+            document.getElementById('adminRoleFilterDiv').style.display = "flex";
             renderFormsListForEdit(); 
         }
         updateFormDropdowns();
@@ -373,12 +373,14 @@
         masterData.villages.filter(v => {
             const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
             if(!belongsToSubCenter) return false;
+            
             if(isStatsForm) {
                 const isLocalFilled = localHistory.some(h => 
                     h.formID === fId && h.village === v.VillageName && 
                     h.month === month && h.year == year && 
                     h.mobile === String(user.mobile).trim()
                 );
+                
                 const isServerFilled = serverHistory.some(h => {
                     if(h.formID !== fId || h.village !== v.VillageName || h.month !== month || h.year != year) return false;
                     if(h.isAllForm || isAll) return true;
@@ -491,7 +493,7 @@
         const saveBtn = document.getElementById(btnId);
 
         statusText.style.color = "orange";
-        statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत অফিসে... कृपया थांबा.";
+        statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
 
         try {
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
@@ -768,7 +770,7 @@
         return { totals, isNumericCol };
     }
 
-    // 🌟 सुधारित: Role Filter सह रिपोर्ट डाऊनलोड 🌟
+    // 🌟 सुधारित: Role Filter सह अहवाल डाऊनलोड 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -1121,7 +1123,7 @@
             document.getElementById('roleAll').checked = false;
             toggleRoles(document.getElementById('roleAll'));
             document.querySelectorAll('.form-role').forEach(cb => {
-                cb.checked = roles.includes(cb.value);
+                cb.checked = roles.includes(cb.value.toUpperCase());
             });
         }
 
