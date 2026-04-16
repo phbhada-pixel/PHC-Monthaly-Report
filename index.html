@@ -360,7 +360,7 @@
         const month = document.getElementById('selMonth').value;
         const year = document.getElementById('selYear').value;
         vSel.innerHTML = '<option value="">-- गाव निवडा --</option>';
-        if(!user) return;
+        if(!user || !fId) return;
 
         const selectedForm = masterData.forms.find(f => f.FormID === fId);
         const isStatsForm = selectedForm && selectedForm.FormType === 'Stats';
@@ -770,7 +770,7 @@
         return { totals, isNumericCol };
     }
 
-    // 🌟 सुधारित: Role Filter सह अहवाल डाऊनलोड 🌟
+    // 🌟 सुधारित: Role Filter आणि ३-स्तरीय ग्रुपिंगसह अहवाल डाऊनलोड 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -815,6 +815,7 @@
                         let yearIdx = headers.indexOf("वर्ष");
                         let subCenterIdx = headers.indexOf("उपकेंद्र");
                         let villageIdx = headers.indexOf("गाव");
+                        let mobIdx = headers.indexOf("मोबाईल क्र."); 
 
                         let fData = [headers];
                         let dataRows = [];
@@ -826,21 +827,25 @@
                             if(matchMonth && matchYear) dataRows.push(row);
                         }
                         
-                        if(subCenterIdx > -1 && villageIdx > -1) {
-                            dataRows.sort((a, b) => {
-                                let subA = String(a[subCenterIdx] || "").trim();
-                                let subB = String(b[subCenterIdx] || "").trim();
-                                if(subA < subB) return -1;
-                                if(subA > subB) return 1;
-                                
-                                let vilA = String(a[villageIdx] || "").trim();
-                                let vilB = String(b[villageIdx] || "").trim();
-                                if(vilA < vilB) return -1;
-                                if(vilA > vilB) return 1;
-                                
-                                return 0;
-                            });
-                        }
+                        // 🌟 ३-स्तरीय क्रमवारी: १. उपकेंद्र -> २. कर्मचारी (मोबाईल) -> ३. गाव 🌟
+                        dataRows.sort((a, b) => {
+                            let subA = subCenterIdx > -1 ? String(a[subCenterIdx] || "").trim() : "";
+                            let subB = subCenterIdx > -1 ? String(b[subCenterIdx] || "").trim() : "";
+                            if(subA < subB) return -1;
+                            if(subA > subB) return 1;
+                            
+                            let mobA = mobIdx > -1 ? String(a[mobIdx] || "").trim() : "";
+                            let mobB = mobIdx > -1 ? String(b[mobIdx] || "").trim() : "";
+                            if(mobA < mobB) return -1;
+                            if(mobA > mobB) return 1;
+                            
+                            let vilA = villageIdx > -1 ? String(a[villageIdx] || "").trim() : "";
+                            let vilB = villageIdx > -1 ? String(b[villageIdx] || "").trim() : "";
+                            if(vilA < vilB) return -1;
+                            if(vilA > vilB) return 1;
+                            
+                            return 0;
+                        });
                         
                         fData = fData.concat(dataRows);
                         finalReports.push({ formName: rep.formName, data: fData });
