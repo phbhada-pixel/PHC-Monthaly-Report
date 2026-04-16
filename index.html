@@ -235,8 +235,10 @@
 <script>
     // 🌟 Configuration 🌟
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
+    
+    // "कर्मचाऱ्याचे नाव" हा रकाना लपवला कारण तो आता आपण ग्रुप हेडिंग (Group Header) मध्ये वापरणार आहोत.
     const CONFIG = {
-        hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)"]
+        hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)", "कर्मचाऱ्याचे नाव"]
     };
 
     let masterData = { forms: [], villages: [], filledStats: [] };
@@ -745,6 +747,7 @@
         let isNumericCol = Array(headers.length).fill(false);
         for(let c of showIndices) {
             let colName = headers[c] || "";
+            // मजकूर (Text) असणारे रकाने बेरजेतून वगळले
             if(colName.includes("मोबाईल") || colName.includes("क्रमांक") || colName === "तारीख" || colName === "महिना" || colName === "वर्ष" || colName === "उपकेंद्र" || colName === "गाव" || colName === "ग्रामपंचायत" || colName.includes("नाव") || colName.includes("स्तर")) {
                 continue; 
             }
@@ -770,7 +773,7 @@
         return { totals, isNumericCol };
     }
 
-    // 🌟 सुधारित: Role Filter आणि ३-स्तरीय ग्रुपिंगसह अहवाल डाऊनलोड 🌟
+    // 🌟 3-Level Grouping + Separate Totals सह रिपोर्ट डाऊनलोड 🌟
     async function fetchReportData() {
         const formID = document.getElementById('reportFormSelect').value;
         const selMonth = document.getElementById('reportMonth').value;
@@ -813,41 +816,15 @@
                         
                         let monthIdx = headers.indexOf("महिना");
                         let yearIdx = headers.indexOf("वर्ष");
-                        let subCenterIdx = headers.indexOf("उपकेंद्र");
-                        let villageIdx = headers.indexOf("गाव");
-                        let mobIdx = headers.indexOf("मोबाईल क्र."); 
 
                         let fData = [headers];
-                        let dataRows = [];
-                        
                         for(let i=1; i<rep.data.length; i++) {
                             let row = rep.data[i];
                             let matchMonth = (selMonth === "सर्व" || String(row[monthIdx]).trim() === String(selMonth).trim());
                             let matchYear = (selYear === "सर्व" || String(row[yearIdx]).trim() === String(selYear).trim());
-                            if(matchMonth && matchYear) dataRows.push(row);
+                            if(matchMonth && matchYear) fData.push(row);
                         }
                         
-                        // 🌟 ३-स्तरीय क्रमवारी: १. उपकेंद्र -> २. कर्मचारी (मोबाईल) -> ३. गाव 🌟
-                        dataRows.sort((a, b) => {
-                            let subA = subCenterIdx > -1 ? String(a[subCenterIdx] || "").trim() : "";
-                            let subB = subCenterIdx > -1 ? String(b[subCenterIdx] || "").trim() : "";
-                            if(subA < subB) return -1;
-                            if(subA > subB) return 1;
-                            
-                            let mobA = mobIdx > -1 ? String(a[mobIdx] || "").trim() : "";
-                            let mobB = mobIdx > -1 ? String(b[mobIdx] || "").trim() : "";
-                            if(mobA < mobB) return -1;
-                            if(mobA > mobB) return 1;
-                            
-                            let vilA = villageIdx > -1 ? String(a[villageIdx] || "").trim() : "";
-                            let vilB = villageIdx > -1 ? String(b[villageIdx] || "").trim() : "";
-                            if(vilA < vilB) return -1;
-                            if(vilA > vilB) return 1;
-                            
-                            return 0;
-                        });
-                        
-                        fData = fData.concat(dataRows);
                         finalReports.push({ formName: rep.formName, data: fData });
                     });
 
@@ -868,6 +845,8 @@
     function renderMultipleTables(reports, month, year) {
         let container = document.getElementById('reportTableContainer');
         let html = "";
+        let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year !== 'सर्व' ? year : ''}`;
+
         reports.forEach(rep => {
             let data = rep.data;
             let headers = data[0];
@@ -878,6 +857,11 @@
             const formObj = masterData.forms.find(x => x.FormName === rep.formName);
             const isStats = formObj && formObj.FormType === 'Stats';
 
+            let subCenterIdx = headers.indexOf("उपकेंद्र");
+            let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
+            let mobIdx = headers.indexOf("मोबाईल क्र.");
+            let villageIdx = headers.indexOf("गाव");
+
             let h1Arr = []; let h2Arr = [];
             showIndices.forEach(idx => {
                 let parts = headers[idx].split(" - ");
@@ -886,54 +870,101 @@
             });
             let hasSubQ = h2Arr.some(sub => sub !== "");
 
-            html += `<table class="report-table"><thead><tr><th colspan="${colCount}" style="font-size:18px; background:var(--primary); color:white; padding:12px;">${rep.formName}</th></tr>`;
-            
-            if(hasSubQ) {
-                let row1HTML = `<tr><th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">अ.क्र.</th>`;
-                let row2HTML = `<tr>`;
-                let c = 0;
-                while(c < h1Arr.length) {
-                    let end = c;
-                    while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
-                    let colspan = end - c + 1;
-                    if(colspan > 1) {
-                        row1HTML += `<th colspan="${colspan}" style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
-                        for(let k=c; k<=end; k++) { row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[k]}</th>`; }
-                    } else {
-                        if(h2Arr[c] === "") { row1HTML += `<th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">${h1Arr[c]}</th>`; } 
-                        else {
-                            row1HTML += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
-                            row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[c]}</th>`;
-                        }
-                    }
-                    c = end + 1;
-                }
-                html += row1HTML + `</tr>` + row2HTML + `</tr>`;
+            // 🌟 Grouping Data by Subcenter and Employee 🌟
+            let dataRows = data.slice(1);
+            let groups = {};
+            if(dataRows.length === 0) {
+                groups["All"] = [];
             } else {
-                html += `<tr><th style="background:#f4b400; color:#000; border:1px solid #ddd;">अ.क्र.</th>`;
-                h1Arr.forEach(h => { html += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h}</th>`; });
-                html += `</tr>`;
+                dataRows.forEach(row => {
+                    let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
+                    let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
+                    let ename = nameIdx > -1 ? String(row[nameIdx] || "").trim() : mob; 
+                    if(ename === "undefined" || ename === "") ename = mob;
+                    let key = sc + "###" + ename; 
+                    if(!groups[key]) groups[key] = [];
+                    groups[key].push(row);
+                });
             }
-            html += `</thead><tbody>`;
 
-            if(data.length === 1) { html += `<tr><td colspan="${colCount}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`; } 
-            else {
-                for(let i=1; i<data.length; i++) {
-                    html += `<tr><td>${i}</td>`;
-                    showIndices.forEach(idx => { html += `<td>${data[i][idx] || "-"}</td>`; });
-                    html += `</tr>`;
-                }
-                if(isStats && data.length > 1) {
-                    let { totals, isNumericCol } = getTotalsRow(data, headers, showIndices);
-                    html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
-                    showIndices.forEach(idx => {
-                        if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
-                        else html += `<td>-</td>`;
+            let groupKeys = Object.keys(groups).sort();
+            
+            html += `<div style="background:white; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); margin-bottom:20px;">`;
+            html += `<h3 style="color:var(--primary); border-bottom:2px solid var(--primary); padding-bottom:10px;">${rep.formName} अहवाल</h3>`;
+
+            groupKeys.forEach((gKey) => {
+                let gRows = groups[gKey];
+                let [sc, ename] = gKey.split("###");
+                
+                // 🌟 गावाच्या नावानुसार Sort करणे 🌟
+                if(villageIdx > -1) {
+                    gRows.sort((a, b) => {
+                        let vilA = String(a[villageIdx] || "").trim();
+                        let vilB = String(b[villageIdx] || "").trim();
+                        return vilA.localeCompare(vilB);
                     });
+                }
+                
+                if(dataRows.length > 0) {
+                    html += `<div style="background:#e8f4f8; padding:10px; border-left:5px solid var(--secondary); margin-top:20px; font-weight:bold; color:#0056b3; border-radius:4px;">
+                                उपकेंद्र: <span style="color:#333;">${sc}</span> &nbsp;&nbsp;|&nbsp;&nbsp; कर्मचारी: <span style="color:#333;">${ename}</span> &nbsp;&nbsp;|&nbsp;&nbsp; अहवाल महिना: <span style="color:#333;">${periodText}</span>
+                             </div>`;
+                }
+
+                html += `<table class="report-table" style="margin-top:0; border-top:none;"><thead>`;
+                
+                if(hasSubQ) {
+                    let row1HTML = `<tr><th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">अ.क्र.</th>`;
+                    let row2HTML = `<tr>`;
+                    let c = 0;
+                    while(c < h1Arr.length) {
+                        let end = c;
+                        while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
+                        let colspan = end - c + 1;
+                        if(colspan > 1) {
+                            row1HTML += `<th colspan="${colspan}" style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
+                            for(let k=c; k<=end; k++) { row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[k]}</th>`; }
+                        } else {
+                            if(h2Arr[c] === "") { row1HTML += `<th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">${h1Arr[c]}</th>`; } 
+                            else {
+                                row1HTML += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
+                                row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[c]}</th>`;
+                            }
+                        }
+                        c = end + 1;
+                    }
+                    html += row1HTML + `</tr>` + row2HTML + `</tr>`;
+                } else {
+                    html += `<tr><th style="background:#f4b400; color:#000; border:1px solid #ddd;">अ.क्र.</th>`;
+                    h1Arr.forEach(h => { html += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h}</th>`; });
                     html += `</tr>`;
                 }
-            }
-            html += `</tbody></table>`;
+                html += `</thead><tbody>`;
+
+                if(gRows.length === 0) { 
+                    html += `<tr><td colspan="${colCount}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`; 
+                } else {
+                    gRows.forEach((row, i) => {
+                        html += `<tr><td>${i+1}</td>`;
+                        showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
+                        html += `</tr>`;
+                    });
+
+                    // 🌟 स्वतंत्र उभी बेरीज (Separate Totals) 🌟
+                    if(isStats && gRows.length > 0) { 
+                        let pseudoData = [headers].concat(gRows);
+                        let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+                        html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
+                        showIndices.forEach(idx => {
+                            if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
+                            else html += `<td>-</td>`;
+                        });
+                        html += `</tr>`;
+                    }
+                }
+                html += `</tbody></table>`;
+            });
+            html += `</div>`;
         });
         container.innerHTML = html;
     }
@@ -945,6 +976,7 @@
         let filterRole = document.getElementById('reportRoleFilter') ? document.getElementById('reportRoleFilter').value : "सर्व";
         let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year}`;
         if(user.role === 'Admin' && filterRole !== 'सर्व') periodText += ` (${filterRole})`;
+        
         let wb = XLSX.utils.book_new();
 
         currentReports.forEach((rep, index) => {
@@ -957,6 +989,11 @@
             const formObj = masterData.forms.find(x => x.FormName === rep.formName);
             const isStats = formObj && formObj.FormType === 'Stats';
 
+            let subCenterIdx = headers.indexOf("उपकेंद्र");
+            let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
+            let mobIdx = headers.indexOf("मोबाईल क्र.");
+            let villageIdx = headers.indexOf("गाव");
+
             let h1Arr = []; let h2Arr = [];
             showIndices.forEach(idx => {
                 let parts = headers[idx].split(" - ");
@@ -965,62 +1002,119 @@
             let hasSubQ = h2Arr.some(sub => sub !== "");
 
             let sheetData = [];
+            let merges = [];
+            
             sheetData.push([`${rep.formName} अहवाल`]);
-            sheetData.push([`उपकेंद्र: ${user.subcenter}   |   अहवाल महिना: ${periodText}`]);
-            sheetData.push(Array(colCount).fill(""));
-
-            let headerRow1 = ["अ.क्र."].concat(h1Arr);
-            sheetData.push(headerRow1);
-
-            let dataStartRow = 4;
-            if(hasSubQ) {
-                let headerRow2 = [""].concat(h2Arr);
-                sheetData.push(headerRow2);
-                dataStartRow = 5;
+            sheetData.push(Array(colCount).fill("")); // Blank row at top
+            
+            merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } });
+            
+            let dataRows = data.slice(1);
+            let groups = {};
+            if(dataRows.length === 0) {
+                groups["All"] = [];
+            } else {
+                dataRows.forEach(row => {
+                    let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
+                    let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
+                    let ename = nameIdx > -1 ? String(row[nameIdx] || "").trim() : mob; 
+                    if(ename === "undefined" || ename === "") ename = mob;
+                    let key = sc + "###" + ename;
+                    if(!groups[key]) groups[key] = [];
+                    groups[key].push(row);
+                });
             }
 
-            let isNil = false;
-            let totalRowIndex = -1;
+            let groupKeys = Object.keys(groups).sort();
+            let currentR = 2; // Start after main header and blank row
+            
+            let groupHeaderRows = [];
+            let headerRowIndices = [];
+            let subHeaderRowIndices = [];
+            let totalRowIndices = [];
 
-            if(data.length === 1) {
-                isNil = true;
-                let nilRow = Array(colCount).fill("");
-                nilRow[0] = "निरंक (Nil)";
-                sheetData.push(nilRow);
-            } else {
-                for(let i=1; i<data.length; i++) {
-                    let rowData = [i];
-                    showIndices.forEach(idx => rowData.push(data[i][idx] || "-"));
-                    sheetData.push(rowData);
+            groupKeys.forEach(gKey => {
+                let gRows = groups[gKey];
+                let [sc, ename] = gKey.split("###");
+                
+                if(villageIdx > -1) {
+                    gRows.sort((a, b) => {
+                        let vilA = String(a[villageIdx] || "").trim();
+                        let vilB = String(b[villageIdx] || "").trim();
+                        return vilA.localeCompare(vilB);
+                    });
+                }
+
+                // 🌟 Group Header in Excel 🌟
+                if(dataRows.length > 0) {
+                    let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
+                    for(let x=1; x<colCount; x++) gHeaderArr.push("");
+                    sheetData.push(gHeaderArr);
+                    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
+                    groupHeaderRows.push(currentR);
+                    currentR++;
+                }
+
+                let headerRow1 = ["अ.क्र."].concat(h1Arr);
+                sheetData.push(headerRow1);
+                headerRowIndices.push(currentR);
+                currentR++;
+
+                let dataStartRow = currentR;
+                if(hasSubQ) {
+                    let headerRow2 = [""].concat(h2Arr);
+                    sheetData.push(headerRow2);
+                    subHeaderRowIndices.push(currentR);
+                    dataStartRow = currentR + 1;
+                    
+                    merges.push({ s: { r: currentR - 1, c: 0 }, e: { r: currentR, c: 0 } }); // Sr No merge
+                    let c = 0;
+                    while(c < h1Arr.length) {
+                        let end = c;
+                        while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
+                        if(end > c) { merges.push({ s: { r: currentR - 1, c: c + 1 }, e: { r: currentR - 1, c: end + 1 } }); } 
+                        else if(h2Arr[c] === "") { merges.push({ s: { r: currentR - 1, c: c + 1 }, e: { r: currentR, c: c + 1 } }); }
+                        c = end + 1;
+                    }
+                    currentR++;
+                }
+
+                if(gRows.length === 0) {
+                    let nilRow = Array(colCount).fill("");
+                    nilRow[0] = "निरंक (Nil)";
+                    sheetData.push(nilRow);
+                    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
+                    currentR++;
+                } else {
+                    gRows.forEach((row, i) => {
+                        let rowData = [i+1];
+                        showIndices.forEach(idx => rowData.push(row[idx] || "-"));
+                        sheetData.push(rowData);
+                        currentR++;
+                    });
+
+                    // 🌟 Separate Total Row in Excel 🌟
+                    if(isStats) {
+                        let pseudoData = [headers].concat(gRows);
+                        let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+                        let totalRow = ["एकूण"];
+                        showIndices.forEach(idx => {
+                            if(isNumericCol[idx]) totalRow.push(totals[idx]);
+                            else totalRow.push("-");
+                        });
+                        sheetData.push(totalRow);
+                        totalRowIndices.push(currentR);
+                        currentR++;
+                    }
                 }
                 
-                if(isStats && data.length > 1) {
-                    let { totals, isNumericCol } = getTotalsRow(data, headers, showIndices);
-                    let totalRow = ["एकूण"];
-                    showIndices.forEach(idx => {
-                        if(isNumericCol[idx]) totalRow.push(totals[idx]);
-                        else totalRow.push("-");
-                    });
-                    sheetData.push(totalRow);
-                    totalRowIndex = sheetData.length - 1; 
-                }
-            }
+                // 🌟 एक रिकामी ओळ सोडणे (Blank Row) 🌟
+                sheetData.push(Array(colCount).fill("")); 
+                currentR++;
+            });
 
             let ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-            ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }];
-            if(hasSubQ) {
-                ws["!merges"].push({ s: { r: 3, c: 0 }, e: { r: 4, c: 0 } });
-                let c = 0;
-                while(c < h1Arr.length) {
-                    let end = c;
-                    while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
-                    if(end > c) { ws["!merges"].push({ s: { r: 3, c: c + 1 }, e: { r: 3, c: end + 1 } }); } 
-                    else if(h2Arr[c] === "") { ws["!merges"].push({ s: { r: 3, c: c + 1 }, e: { r: 4, c: c + 1 } }); }
-                    c = end + 1;
-                }
-            }
-            if(isNil) { ws["!merges"].push({ s: { r: dataStartRow, c: 0 }, e: { r: dataStartRow, c: colCount - 1 } }); }
+            ws["!merges"] = merges;
 
             for(let R=0; R<sheetData.length; R++) {
                 for(let C=0; C<colCount; C++) {
@@ -1031,24 +1125,30 @@
                     if(R === 0) {
                         cellStyle.fill = { fgColor: { rgb: "00705A" } };
                         cellStyle.font = { name: "Arial", sz: 16, bold: true, color: { rgb: "FFFFFF" } };
-                    } else if(R === 1) {
-                        cellStyle.fill = { fgColor: { rgb: "E9ECEF" } };
-                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "000000" } };
-                    } else if(R >= 3 && R < dataStartRow) {
-                        cellStyle.fill = { fgColor: { rgb: R === 3 ? "F4B400" : "FFE082" } }; 
-                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "000000" } };
+                    } else if(groupHeaderRows.includes(R)) { // Group Header Design
+                        cellStyle.fill = { fgColor: { rgb: "CDE4EC" } };
+                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "0056B3" } };
+                        cellStyle.alignment = { vertical: "center", horizontal: "left", wrapText: true };
+                        cellStyle.border = { top: { style: "medium", color: { rgb: "0056B3" } }, bottom: { style: "medium", color: { rgb: "0056B3" } } };
+                    } else if(headerRowIndices.includes(R) || subHeaderRowIndices.includes(R)) {
+                        cellStyle.fill = { fgColor: { rgb: headerRowIndices.includes(R) ? "F4B400" : "FFE082" } }; 
+                        cellStyle.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "000000" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-                    } else if(R === totalRowIndex) { 
+                    } else if(totalRowIndices.includes(R)) { // Totals Row Design
                         cellStyle.fill = { fgColor: { rgb: "D4EDDA" } };
-                        cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "155724" } };
+                        cellStyle.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "155724" } };
                         cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-                    } else if(R >= dataStartRow) {
-                        if(isNil) { cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "FF0000" } }; } 
-                        else { cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } }; }
+                    } else if(sheetData[R][0] !== "") { 
+                        if(sheetData[R][0] === "निरंक (Nil)") {
+                            cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "FF0000" } };
+                        } else {
+                            cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+                        }
                     }
                     ws[cellRef].s = cellStyle; 
                 }
             }
+            
             let wscols = [{ wch: 8 }]; 
             for(let c=1; c<colCount; c++) wscols.push({ wch: 20 }); 
             ws["!cols"] = wscols;
