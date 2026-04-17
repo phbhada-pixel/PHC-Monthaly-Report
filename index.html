@@ -42,6 +42,12 @@
         .nav-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 20px; background: #eee; padding: 5px; border-radius: 8px; }
         .nav-tab { flex: 1 1 20%; text-align: center; padding: 10px; background: transparent; border: none; font-weight: bold; color: #555; border-radius: 6px; cursor: pointer; font-size: 14px; }
         .nav-tab.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+
+        /* Bulk Data Entry Table Styles */
+        .report-table input, .report-table select { padding: 6px; margin: 0; width: 100px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
+        .report-table td { padding: 6px; vertical-align: middle; }
+        .sticky-col { position: sticky; left: 0; background: #f4f7f6 !important; border-right: 2px solid #ccc; z-index: 1; font-weight: bold; min-width: 120px;}
+        .sticky-header-col { position: sticky; left: 0; top: 0; z-index: 3 !important; }
     </style>
 </head>
 <body>
@@ -110,7 +116,7 @@
                         🔄 गावे रीसेट करा
                     </button>
                 </div>
-                <select id="selVillage"></select>
+                <select id="selVillage" onchange="loadDynamicFields()"></select>
 
                 <div id="dynamicFormArea"></div>
                 
@@ -269,6 +275,115 @@
         return html;
     }
 
+    function generateFormHTML(f, prefix, areaId) {
+        let html = "";
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            let exactLabel = field.label;
+            if (field.type === 'group') {
+                html += `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
+                            <h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
+                field.subFields.forEach((sf, j) => {
+                    if(sf.type === 'group') {
+                        html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
+                                 <h5 style="margin:0 0 5px 0; color:#00838f;">${sf.label}</h5>`;
+                        sf.subFields.forEach((ssf, k) => {
+                            let exactSubSubLabel = `${field.label} - ${sf.label} - ${ssf.label}`;
+                            html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${ssf.label}:</b></label>`;
+                            html += generateInputHTML(ssf, `${prefix}_inp_${i}_${j}_${k}`, exactSubSubLabel, areaId, "");
+                            html += `</div>`;
+                        });
+                        html += `</div>`;
+                    } else {
+                        let exactSubLabel = `${field.label} - ${sf.label}`;
+                        html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
+                        html += generateInputHTML(sf, `${prefix}_inp_${i}_${j}`, exactSubLabel, areaId, "");
+                        html += `</div>`;
+                    }
+                });
+                html += `</div>`;
+            } else {
+                let exactLabel = field.label;
+                html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
+                html += generateInputHTML(field, `${prefix}_inp_${i}`, exactLabel, areaId, "");
+                html += `</div>`;
+            }
+        });
+        return html;
+    }
+
+    function generateBulkTableHTML(f, availableVillages, formPrefix) {
+        let fields = [];
+        let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white;">गाव (Village)</th>`;
+
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            if (field.type === 'group') {
+                field.subFields.forEach((sf, j) => {
+                    if (sf.type === 'group') {
+                        sf.subFields.forEach((ssf, k) => {
+                            let label = `${field.label} - ${sf.label} - ${ssf.label}`;
+                            fields.push({ label, idSuffix: `${i}_${j}_${k}`, orig: ssf });
+                            headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
+                        });
+                    } else {
+                        let label = `${field.label} - ${sf.label}`;
+                        fields.push({ label, idSuffix: `${i}_${j}`, orig: sf });
+                        headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
+                    }
+                });
+            } else {
+                fields.push({ label: field.label, idSuffix: `${i}`, orig: field });
+                headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
+            }
+        });
+        headersHtml += `</tr>`;
+
+        let rowsHtml = "";
+        availableVillages.forEach(vName => {
+            let safeVName = vName.replace(/\s+/g, '_');
+            let rowId = `bulkrow_${formPrefix}_${safeVName}`;
+            let inputPrefix = `bulk_${formPrefix}_${safeVName}`;
+            
+            rowsHtml += `<tr id="${rowId}">`;
+            rowsHtml += `<td class="sticky-col">${vName}</td>`;
+
+            fields.forEach(fld => {
+                let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
+                rowsHtml += `<td>${cellHtml}</td>`;
+            });
+            rowsHtml += `</tr>`;
+        });
+
+        return `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd;">
+                    <table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
+                        <thead>${headersHtml}</thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>`;
+    }
+
+    function extractFormData(f, prefix) {
+        let formData = {};
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            if (field.type === 'group') {
+                field.subFields.forEach((sf, j) => {
+                    if(sf.type === 'group') {
+                        sf.subFields.forEach((ssf, k) => {
+                            let el = document.getElementById(`${prefix}_inp_${i}_${j}_${k}`);
+                            if(el) formData[`${field.label} - ${sf.label} - ${ssf.label}`] = el.value;
+                        });
+                    } else {
+                        let el = document.getElementById(`${prefix}_inp_${i}_${j}`);
+                        if(el) formData[`${field.label} - ${sf.label}`] = el.value;
+                    }
+                });
+            } else {
+                let el = document.getElementById(`${prefix}_inp_${i}`);
+                if(el) formData[field.label] = el.value;
+            }
+        });
+        return formData;
+    }
+
     // --- Core Logic ---
     async function unlockApp() {
         if(document.getElementById('sitePass').value === "1234") {
@@ -365,6 +480,8 @@
         const repForm = document.getElementById('reportFormSelect');
         
         selForm.innerHTML = '<option value="">-- निवडा --</option>';
+        selForm.innerHTML += '<option value="ALL_STATS" style="font-weight:bold; color:#d35400;">📝 सर्व आकडेवारी अहवाल एकत्रित भरा (All Stats)</option>';
+        
         editForm.innerHTML = '<option value="">-- निवडा --</option>';
         repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
         
@@ -386,14 +503,16 @@
         const fId = document.getElementById('selForm').value;
         const month = document.getElementById('selMonth').value;
         const year = document.getElementById('selYear').value;
-        vSel.innerHTML = '<option value="">-- गाव निवडा --</option>';
-        if(!user || !fId) return;
-
-        const selectedForm = masterData.forms.find(f => f.FormID === fId);
-        const isStatsForm = selectedForm && selectedForm.FormType === 'Stats';
-        let allowedRoles = selectedForm && selectedForm.AllowedRoles ? selectedForm.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
-        let isAll = allowedRoles.includes("ALL");
         
+        vSel.innerHTML = '<option value="">-- गाव निवडा --</option>';
+        
+        if(!user || !fId) {
+            document.getElementById('dynamicFormArea').innerHTML = "";
+            return;
+        }
+
+        vSel.innerHTML += '<option value="ALL_VILLAGES" style="font-weight:bold; color:#0056b3;">🏢 सर्व गावे एकत्रित भरा (Bulk Entry)</option>';
+
         const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
         const serverHistory = masterData.filledStats || [];
 
@@ -401,64 +520,86 @@
             const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
             if(!belongsToSubCenter) return false;
             
-            if(isStatsForm) {
-                const isLocalFilled = localHistory.some(h => 
-                    h.formID === fId && h.village === v.VillageName && 
-                    h.month === month && h.year == year && 
-                    h.mobile === String(user.mobile).trim()
-                );
+            if (fId === "ALL_STATS") {
+                return true; 
+            } else {
+                const selectedForm = masterData.forms.find(f => f.FormID === fId);
+                const isStatsForm = selectedForm && selectedForm.FormType === 'Stats';
+                let allowedRoles = selectedForm && selectedForm.AllowedRoles ? selectedForm.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+                let isAll = allowedRoles.includes("ALL");
                 
-                const isServerFilled = serverHistory.some(h => {
-                    if(h.formID !== fId || h.village !== v.VillageName || h.month !== month || h.year != year) return false;
-                    if(h.isAllForm || isAll) return true;
-                    return h.mobile === String(user.mobile).trim();
-                });
-                if(isLocalFilled || isServerFilled) return false;
+                if(isStatsForm) {
+                    const isLocalFilled = localHistory.some(h => 
+                        h.formID === fId && h.village === v.VillageName && 
+                        h.month === month && h.year == year && 
+                        h.mobile === String(user.mobile).trim()
+                    );
+                    
+                    const isServerFilled = serverHistory.some(h => {
+                        if(h.formID !== fId || h.village !== v.VillageName || h.month !== month || h.year != year) return false;
+                        if(h.isAllForm || isAll) return true;
+                        return h.mobile === String(user.mobile).trim();
+                    });
+                    if(isLocalFilled || isServerFilled) return false;
+                }
             }
             return true;
         }).forEach(v => { vSel.innerHTML += `<option value="${v.VillageName}">${v.VillageName}</option>`; });
+
+        loadDynamicFields(); 
     }
 
     function loadDynamicFields() {
         const fId = document.getElementById('selForm').value;
+        const vId = document.getElementById('selVillage').value;
         const area = document.getElementById('dynamicFormArea');
         area.innerHTML = "";
-        const f = masterData.forms.find(x => x.FormID === fId);
-        if(!f) return;
         
-        let html = "";
-        JSON.parse(f.StructureJSON).forEach((field, i) => {
-            let exactLabel = field.label;
-            if (field.type === 'group') {
-                html += `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
-                            <h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
-                field.subFields.forEach((sf, j) => {
-                    if(sf.type === 'group') {
-                        html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
-                                 <h5 style="margin:0 0 5px 0; color:#00838f;">${sf.label}</h5>`;
-                        sf.subFields.forEach((ssf, k) => {
-                            let exactSubSubLabel = `${field.label} - ${sf.label} - ${ssf.label}`;
-                            html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${ssf.label}:</b></label>`;
-                            html += generateInputHTML(ssf, `inp_${i}_${j}_${k}`, exactSubSubLabel, 'dynamicFormArea', "");
-                            html += `</div>`;
-                        });
-                        html += `</div>`;
+        if(!fId || !vId) return;
+
+        let isBulk = (vId === "ALL_VILLAGES");
+        
+        let availableVillages = Array.from(document.getElementById('selVillage').options)
+                                     .map(o => o.value)
+                                     .filter(v => v !== "" && v !== "ALL_VILLAGES");
+
+        if (availableVillages.length === 0 && isBulk) {
+            area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी सर्व गावांचा डेटा आधीच भरून पूर्ण झाला आहे!</p>";
+            return;
+        }
+
+        if (fId === "ALL_STATS") {
+            let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+            let allHtml = "";
+            let userRole = user ? String(user.role).trim().toUpperCase() : "";
+            
+            statsForms.forEach(f => {
+                let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+                if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
+                    let formContainerId = `form_area_${f.FormID}`;
+                    allHtml += `<div id="${formContainerId}" style="margin-bottom: 30px; border: 2px solid #00705a; padding: 0; border-radius: 8px; background: #fdfdfd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow:hidden;">`;
+                    allHtml += `<h3 style="background: #00705a; color: white; padding: 10px; margin: 0;">📌 ${f.FormName}</h3>`;
+                    
+                    if(isBulk) {
+                        allHtml += generateBulkTableHTML(f, availableVillages, f.FormID);
                     } else {
-                        let exactSubLabel = `${field.label} - ${sf.label}`;
-                        html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
-                        html += generateInputHTML(sf, `inp_${i}_${j}`, exactSubLabel, 'dynamicFormArea', "");
-                        html += `</div>`;
+                        allHtml += `<div style="padding:15px;">` + generateFormHTML(f, f.FormID, formContainerId) + `</div>`;
                     }
-                });
-                html += `</div>`;
+                    allHtml += `</div>`;
+                }
+            });
+            area.innerHTML = allHtml;
+        } else {
+            const f = masterData.forms.find(x => x.FormID === fId);
+            if(!f) return;
+            let formContainerId = `form_area_${f.FormID}`;
+            
+            if(isBulk) {
+                area.innerHTML = `<div id="${formContainerId}">` + generateBulkTableHTML(f, availableVillages, f.FormID) + `</div>`;
             } else {
-                let exactLabel = field.label;
-                html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
-                html += generateInputHTML(field, `inp_${i}`, exactLabel, 'dynamicFormArea', "");
-                html += `</div>`;
+                area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single", formContainerId) + `</div>`;
             }
-        });
-        area.innerHTML = html;
+        }
     }
 
     async function saveDataLocal() {
@@ -467,48 +608,70 @@
         if(saveBtn) saveBtn.disabled = true; 
         isSaving = true;
 
-        calculateAutoSums('dynamicFormArea'); 
-        
         const fId = document.getElementById('selForm').value;
         const vName = document.getElementById('selVillage').value;
         const month = document.getElementById('selMonth').value;
         const year = document.getElementById('selYear').value;
 
         if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); isSaving = false; if(saveBtn) saveBtn.disabled = false; return; }
-        
-        let formData = {};
-        formData["महिना"] = month;
-        formData["वर्ष"] = year;
 
-        const f = masterData.forms.find(x => x.FormID === fId);
-        JSON.parse(f.StructureJSON).forEach((field, i) => {
-            if (field.type === 'group') {
-                field.subFields.forEach((sf, j) => { 
-                    if(sf.type === 'group') {
-                        sf.subFields.forEach((ssf, k) => {
-                            formData[`${field.label} - ${sf.label} - ${ssf.label}`] = document.getElementById(`inp_${i}_${j}_${k}`).value;
-                        });
-                    } else {
-                        formData[`${field.label} - ${sf.label}`] = document.getElementById(`inp_${i}_${j}`).value;
-                    }
-                });
-            } else { 
-                formData[field.label] = document.getElementById(`inp_${i}`).value; 
-            }
-        });
-        
-        const entry = { entryID: Date.now(), mobileNo: user.mobile, subCenter: user.subcenter, village: vName, formID: fId, formData: formData };
+        let isBulk = (vName === "ALL_VILLAGES");
+        let availableVillages = isBulk ? Array.from(document.getElementById('selVillage').options).map(o => o.value).filter(v => v !== "" && v !== "ALL_VILLAGES") : [vName];
+
+        let formsToProcess = [];
+        let prefixMap = {};
+
+        if (fId === "ALL_STATS") {
+            let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+            let userRole = user ? String(user.role).trim().toUpperCase() : "";
+            statsForms.forEach(f => {
+                let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+                if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
+                    formsToProcess.push(f);
+                    prefixMap[f.FormID] = f.FormID;
+                }
+            });
+        } else {
+            const f = masterData.forms.find(x => x.FormID === fId);
+            formsToProcess.push(f);
+            prefixMap[f.FormID] = isBulk ? f.FormID : "single";
+        }
+
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-        q.push(entry);
-        localStorage.setItem("syncQueue", JSON.stringify(q));
-
         let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-        history.push({formID: fId, village: vName, month: month, year: year, mobile: String(user.mobile).trim()});
+
+        formsToProcess.forEach(f => {
+            let formPrefix = prefixMap[f.FormID];
+
+            availableVillages.forEach(village => {
+                let safeVName = village.replace(/\s+/g, '_');
+                
+                let prefix = isBulk ? `bulk_${formPrefix}_${safeVName}` : formPrefix;
+                let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
+                
+                calculateAutoSums(containerId);
+
+                let formData = extractFormData(f, prefix);
+                
+                formData["महिना"] = month;
+                formData["वर्ष"] = year;
+
+                const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+                q.push(entry);
+
+                history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+            });
+        });
+
+        localStorage.setItem("syncQueue", JSON.stringify(q));
         localStorage.setItem("submissionHistory", JSON.stringify(history));
 
         await syncDataToServer("syncStatus", "mainSaveBtn");
+        
+        document.getElementById('selVillage').value = "";
+        document.getElementById('dynamicFormArea').innerHTML = "";
         updateVillageDropdown(); 
-        loadDynamicFields(); 
+        
         isSaving = false; 
     }
 
@@ -725,65 +888,59 @@
         }
     }
 
-    // 🌟 सुधारित: स्मार्ट मॅचिंगसह ऑटो-सम फंक्शन 🌟
-function calculateAutoSums(containerId) {
-    let container = document.getElementById(containerId);
-    if(!container) return;
-    
-    let sumInputs = container.querySelectorAll('input[data-sum-targets]');
-    
-    // लूप दोनदा चालवतोय जेणेकरून 'बेरजेची बेरीज' (Sum of Sums) असेल तर ती पण अचूक येईल
-    for(let loop = 0; loop < 2; loop++) {
-        sumInputs.forEach(sumInput => {
-            let targets = sumInput.getAttribute('data-sum-targets').split(',');
-            let total = 0;
-            let hasValue = false; // किमान एक तरी आकडा आहे का हे तपासण्यासाठी
-            
-            targets.forEach(targetLabel => {
-                let tLabel = targetLabel.trim();
-                if(!tLabel) return;
-
-                let targetElement = container.querySelector(`[data-label="${tLabel}"]`);
+    function calculateAutoSums(containerId) {
+        let container = document.getElementById(containerId);
+        if(!container) return;
+        
+        let sumInputs = container.querySelectorAll('input[data-sum-targets]');
+        
+        for(let loop = 0; loop < 2; loop++) {
+            sumInputs.forEach(sumInput => {
+                let targets = sumInput.getAttribute('data-sum-targets').split(',');
+                let total = 0;
+                let hasValue = false; 
                 
-                // 🌟 स्मार्ट सर्च: जर तंतोतंत नाव नाही सापडले, तर मिळत्याजुळत्या नावाने शोधणे 🌟
-                if(!targetElement) {
-                    let allInputs = container.querySelectorAll('[data-label]');
-                    let cleanTarget = tLabel.replace(/\s+/g, '').toLowerCase(); // स्पेस काढून टाकणे
-                    
-                    for(let inp of allInputs) {
-                        let currentLabel = inp.getAttribute('data-label').replace(/\s+/g, '').toLowerCase();
-                        
-                        // १. जर स्पेसशिवाय पूर्ण नाव मॅच झाले
-                        if(currentLabel === cleanTarget) {
-                            targetElement = inp;
-                            break;
-                        }
-                        // २. जर नावाचा शेवटचा भाग मॅच झाला (उदा. 'उपगट-प्रश्न' किंवा फक्त 'प्रश्न')
-                        if(currentLabel.endsWith(cleanTarget) || currentLabel.endsWith("-" + cleanTarget)) {
-                            targetElement = inp;
-                            break;
-                        }
-                    }
-                }
+                targets.forEach(targetLabel => {
+                    let tLabel = targetLabel.trim();
+                    if(!tLabel) return;
 
-                if(targetElement && targetElement.value !== "") {
-                    let val = parseFloat(targetElement.value);
-                    if(!isNaN(val)) {
-                        total += val;
-                        hasValue = true;
+                    let targetElement = container.querySelector(`[data-label="${tLabel}"]`);
+                    
+                    if(!targetElement) {
+                        let allInputs = container.querySelectorAll('[data-label]');
+                        let cleanTarget = tLabel.replace(/\s+/g, '').toLowerCase(); 
+                        
+                        for(let inp of allInputs) {
+                            let currentLabel = inp.getAttribute('data-label').replace(/\s+/g, '').toLowerCase();
+                            
+                            if(currentLabel === cleanTarget) {
+                                targetElement = inp;
+                                break;
+                            }
+                            if(currentLabel.endsWith(cleanTarget) || currentLabel.endsWith("-" + cleanTarget)) {
+                                targetElement = inp;
+                                break;
+                            }
+                        }
                     }
+
+                    if(targetElement && targetElement.value !== "") {
+                        let val = parseFloat(targetElement.value);
+                        if(!isNaN(val)) {
+                            total += val;
+                            hasValue = true;
+                        }
+                    }
+                });
+                
+                if(hasValue) {
+                    sumInput.value = total;
+                } else {
+                    sumInput.value = "";
                 }
             });
-            
-            // जर आकडा असेल तरच बेरीज दाखवा, अन्यथा रिकामा बॉक्स ठेवा
-            if(hasValue) {
-                sumInput.value = total;
-            } else {
-                sumInput.value = "";
-            }
-        });
+        }
     }
-}
 
     function clearLocalHistory() {
         if(confirm("जर तुम्ही गुगल शीटमधील जुना डेटा डिलीट केला असेल, तरच हे बटण दाबा. यामुळे लपलेली सर्व गावे पुन्हा दिसू लागतील. तुम्हाला गावे रीसेट करायची आहेत का?")) {
