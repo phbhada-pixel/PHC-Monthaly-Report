@@ -242,7 +242,7 @@
 <script>
     // 🌟 Configuration 🌟
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyoSgJMFnMlzFf0WoX1SSXB9kxiqvMjtiHW_T8MoVRCO9fZJFAYsPp6o1mP2rDI4eJP/exec";
-        
+    
     const CONFIG = {
         hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)", "कर्मचाऱ्याचे नाव"]
     };
@@ -255,8 +255,10 @@
     // --- Helper Functions ---
     function generateInputHTML(f, id, label, areaId, val="") {
         let html = "";
+        let depAttr = f.dependency ? `data-dependency="${f.dependency}"` : "";
+
         if (f.type === 'dropdown') {
-            html += `<select id="${id}" data-label="${label}" onchange="calculateAutoSums('${areaId}')"><option value="">-- निवडा --</option>`;
+            html += `<select id="${id}" data-label="${label}" ${depAttr} onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')"><option value="">-- निवडा --</option>`;
             if(f.options) { f.options.split(',').forEach(opt => { 
                 let o = opt.trim(); 
                 let sel = (o === val) ? "selected" : "";
@@ -266,13 +268,72 @@
         } else if(f.type === 'sum') {
             html += `<input type="number" id="${id}" data-label="${label}" data-sum-targets="${f.options}" value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
         } else if(f.type === 'number') {
-            html += `<input type="number" id="${id}" data-label="${label}" value="${val}" oninput="calculateAutoSums('${areaId}')">`;
+            html += `<input type="number" id="${id}" data-label="${label}" ${depAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
         } else if(f.type === 'date') {
-            html += `<input type="date" id="${id}" data-label="${label}" value="${val}" onchange="calculateAutoSums('${areaId}')">`;
+            html += `<input type="date" id="${id}" data-label="${label}" ${depAttr} value="${val}" onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
         } else { 
-            html += `<input type="text" id="${id}" data-label="${label}" value="${val}" oninput="calculateAutoSums('${areaId}')">`; 
+            html += `<input type="text" id="${id}" data-label="${label}" ${depAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`; 
         }
         return html;
+    }
+
+    // 🌟 नवीन: Conditional Logic (Auto-Fill) हाताळणारे फंक्शन 🌟
+    function handleDependencies(containerId) {
+        let container = document.getElementById(containerId);
+        if(!container) return;
+
+        let dependentInputs = container.querySelectorAll('[data-dependency]');
+
+        dependentInputs.forEach(depInput => {
+            let rule = depInput.getAttribute('data-dependency');
+            if(!rule) return;
+
+            let parts = rule.split('=');
+            if(parts.length === 2) {
+                let parentTargetLabel = parts[0].trim();
+                let subParts = parts[1].split(':');
+
+                if(subParts.length === 2) {
+                    let conditionVal = subParts[0].trim().toLowerCase();
+                    let targetVal = subParts[1].trim();
+
+                    let parentElement = container.querySelector(`[data-label="${parentTargetLabel}"]`);
+
+                    // स्मार्ट मॅचिंग जर अचूक नाव नसेल
+                    if(!parentElement) {
+                        let allInputs = container.querySelectorAll('[data-label]');
+                        let cleanTarget = parentTargetLabel.replace(/\s+/g, '').toLowerCase();
+                        for(let inp of allInputs) {
+                            let currentLabel = inp.getAttribute('data-label').replace(/\s+/g, '').toLowerCase();
+                            if(currentLabel === cleanTarget || currentLabel.endsWith(cleanTarget) || currentLabel.endsWith("-" + cleanTarget)) {
+                                parentElement = inp;
+                                break;
+                            }
+                        }
+                    }
+
+                    if(parentElement) {
+                        let currentParentVal = parentElement.value.trim().toLowerCase();
+                        
+                        // जर कंडिशन मॅच झाली तर
+                        if(currentParentVal === conditionVal && conditionVal !== "") {
+                            depInput.value = targetVal;
+                            depInput.style.pointerEvents = "none";
+                            depInput.style.backgroundColor = "#e9ecef";
+                            depInput.tabIndex = -1;
+                        } else {
+                            // जर कंडिशन मॅच होत नसेल आणि बॉक्स आधी लॉक झाला असेल, तर तो अनलॉक करा
+                            if(depInput.style.pointerEvents === "none") {
+                                depInput.value = "";
+                                depInput.style.pointerEvents = "auto";
+                                depInput.style.backgroundColor = "";
+                                depInput.removeAttribute("tabIndex");
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     function generateFormHTML(f, prefix, areaId) {
@@ -600,6 +661,14 @@
                 area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single", formContainerId) + `</div>`;
             }
         }
+
+        // HTML लोड झाल्यावर Dependencies आणि AutoSum कॅल्क्युलेट करा
+        setTimeout(() => {
+            document.querySelectorAll('[id^="form_area_"], [id^="bulkrow_"]').forEach(el => {
+                calculateAutoSums(el.id);
+                handleDependencies(el.id);
+            });
+        }, 100);
     }
 
     async function saveDataLocal() {
@@ -650,6 +719,7 @@
                 let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
                 
                 calculateAutoSums(containerId);
+                handleDependencies(containerId);
 
                 let formData = extractFormData(f, prefix);
                 
@@ -819,7 +889,11 @@
         
         area.classList.remove('hidden');
         document.getElementById('editSaveBtn').classList.remove('hidden');
-        calculateAutoSums('editDynamicFormArea'); 
+        
+        setTimeout(() => {
+            calculateAutoSums('editDynamicFormArea'); 
+            handleDependencies('editDynamicFormArea');
+        }, 100);
     }
 
     async function saveEditedData() {
@@ -829,6 +903,7 @@
         isSaving = true;
 
         calculateAutoSums('editDynamicFormArea');
+        handleDependencies('editDynamicFormArea');
         
         const fId = document.getElementById('editFormSelect').value;
         const month = document.getElementById('editMonth').value;
@@ -1432,7 +1507,10 @@
 
     function toggleFieldOptions(id, val) {
         document.getElementById('opts_' + id).style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        let depEl = document.getElementById('dep_' + id);
+        if(depEl) depEl.style.display = (val === 'dropdown' || val === 'number' || val === 'text') ? 'block' : 'none';
         document.getElementById('group_' + id).style.display = (val === 'group') ? 'block' : 'none';
+        
         let labelEl = document.querySelector(`#opts_${id} label`);
         let inputEl = document.querySelector(`#opts_${id} .foptions`);
         if(labelEl && inputEl) {
@@ -1448,11 +1526,13 @@
 
     function toggleSubFieldOptions(sfId, val) {
         let container = document.getElementById(`sfopts_container_${sfId}`);
+        let depContainer = document.getElementById(`sfdep_container_${sfId}`);
         let groupContainer = document.getElementById(`ssf_group_${sfId}`);
         let labelEl = document.getElementById(`sflabel_${sfId}`);
         let inputEl = document.getElementById(`sfopts_${sfId}`);
         
         container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text') ? 'block' : 'none';
         if(groupContainer) groupContainer.style.display = (val === 'group') ? 'block' : 'none';
 
         if(val === 'sum') {
@@ -1466,8 +1546,12 @@
 
     function toggleSubSubFieldOptions(ssfId, val) {
         let container = document.getElementById(`ssfopts_container_${ssfId}`);
+        let depContainer = document.getElementById(`ssfdep_container_${ssfId}`);
         let inputEl = document.getElementById(`ssfopts_${ssfId}`);
+        
         container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
+        if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text') ? 'block' : 'none';
+        
         if(val === 'sum') inputEl.placeholder = "बेरीज सूत्र (उदा. गट - उपगट - प्रश्न)...";
         else if(val === 'dropdown') inputEl.placeholder = "पर्याय लिहा (उदा. होय, नाही)...";
     }
@@ -1495,6 +1579,12 @@
                     </label>
                     <input type="text" placeholder="${data && data.type==='sum' ? 'उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली' : 'उदा. होय, नाही'}" class="foptions" value="${data ? (data.options || '') : ''}">
                 </div>
+                
+                <div id="dep_${id}" style="display:${data && (data.type==='dropdown' || data.type==='number' || data.type==='text') ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
+                    <label style="font-size:12px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट (Conditional Auto-Fill):<br><span style="font-weight:normal; font-size:11px;">उदा. जर 'ब्लिचिंग पावडर उपलब्ध आहे का' चे उत्तर 'No' असेल, तर इथे 'Not aplicable' यावे.</span><br>फॉर्मॅट: <b>प्रश्नाचे नाव=उत्तर:व्हॅल्यू</b></label>
+                    <input type="text" placeholder="उदा. ब्लिचिंग पावडर उपलब्ध आहे का=No:Not aplicable" class="fdepend" style="width: 100%; margin-top: 5px; font-size:12px;" value="${data ? (data.dependency || '') : ''}">
+                </div>
+
                 <div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
                     <label style="font-size:13px; font-weight:bold; color:var(--primary);">या गटातील उप-प्रश्न जोडा:</label>
                     <div id="subfields_container_${id}"></div>
@@ -1526,6 +1616,12 @@
                     </label>
                     <input type="text" id="sfopts_${sfId}" placeholder="..." class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
                 </div>
+
+                <div id="sfdep_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='number' || sfData.type==='text') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:8px; border-radius:4px; border-left: 2px solid #00acc1;">
+                    <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट (Conditional):</label>
+                    <input type="text" placeholder="उदा. ब्लिचिंग पावडर=No:Not aplicable" class="sfdepend" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.dependency || '') : ''}">
+                </div>
+
                 <div id="ssf_group_${sfId}" style="display:${sfData && sfData.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
                     <label style="font-size:12px; font-weight:bold; color:#00838f;">या उप-गटातील प्रश्न जोडा:</label>
                     <div id="subsubfields_container_${sfId}"></div>
@@ -1558,6 +1654,11 @@
                 <div id="ssfopts_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='sum') ? 'block' : 'none'}; margin-top: 5px; background:#f3e5f5; padding:6px; border-radius:4px;">
                     <input type="text" id="ssfopts_${ssfId}" placeholder="${ssfData && ssfData.type==='sum' ? 'बेरीज सूत्र...' : 'पर्याय...'}" class="ssfopts" style="width: 100%; font-size:12px; padding:4px;" value="${ssfData ? (ssfData.options || '') : ''}">
                 </div>
+
+                <div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
+                    <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट:</label>
+                    <input type="text" placeholder="उदा. प्रश्न=No:Not aplicable" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
+                </div>
             </div>
         `;
         document.getElementById('subsubfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
@@ -1566,15 +1667,30 @@
     function getFieldsData() {
         let fields = [];
         document.querySelectorAll('.field-card').forEach(el => {
-            let fieldObj = { label: el.querySelector('.fname').value, type: el.querySelector('.ftype').value, options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "" };
+            let fieldObj = { 
+                label: el.querySelector('.fname').value, 
+                type: el.querySelector('.ftype').value, 
+                options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "",
+                dependency: el.querySelector('.fdepend') ? el.querySelector('.fdepend').value : ""
+            };
             if (fieldObj.type === 'group') {
                 fieldObj.subFields = [];
                 el.querySelectorAll('.sub-field-item').forEach(sfEl => {
-                    let sfObj = { label: sfEl.querySelector('.sfname').value, type: sfEl.querySelector('.sftype').value, options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "" };
+                    let sfObj = { 
+                        label: sfEl.querySelector('.sfname').value, 
+                        type: sfEl.querySelector('.sftype').value, 
+                        options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "",
+                        dependency: sfEl.querySelector('.sfdepend') ? sfEl.querySelector('.sfdepend').value : ""
+                    };
                     if(sfObj.type === 'group') {
                         sfObj.subFields = [];
                         sfEl.querySelectorAll('.sub-sub-field-item').forEach(ssfEl => {
-                            sfObj.subFields.push({ label: ssfEl.querySelector('.ssfname').value, type: ssfEl.querySelector('.ssftype').value, options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "" });
+                            sfObj.subFields.push({ 
+                                label: ssfEl.querySelector('.ssfname').value, 
+                                type: ssfEl.querySelector('.ssftype').value, 
+                                options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "",
+                                dependency: ssfEl.querySelector('.ssfdepend') ? ssfEl.querySelector('.ssfdepend').value : ""
+                            });
                         });
                     }
                     fieldObj.subFields.push(sfObj);
