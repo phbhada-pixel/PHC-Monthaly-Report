@@ -534,6 +534,30 @@
         }
     }
 
+    // 🌟 नवीन ग्लोबल फंक्शन: फॉर्म आधीच भरला आहे की नाही हे तपासण्यासाठी
+    function isFormFilledForVillage(formObj, vName, month, year) {
+        const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+        const serverHistory = masterData.filledStats || [];
+        
+        let allowedRoles = formObj.AllowedRoles ? formObj.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+        let isAll = allowedRoles.includes("ALL"); // जर AllowedRoles "ALL" असेल तर (उदा. State फॉर्म्स)
+        
+        const isLocalFilled = localHistory.some(h => 
+            h.formID === formObj.FormID && h.village === vName && 
+            h.month === month && h.year == year && 
+            h.mobile === String(user.mobile).trim()
+        );
+        
+        const isServerFilled = serverHistory.some(h => {
+            if(h.formID !== formObj.FormID || h.village !== vName || h.month !== month || h.year != year) return false;
+            // 🌟 मुख्य अट: जर 'ALL' रोल असेल, तर कोणीही भरलेला असला तरी तो भरला आहे असे समजावे
+            if(h.isAllForm || isAll) return true;
+            return h.mobile === String(user.mobile).trim();
+        });
+        
+        return isLocalFilled || isServerFilled;
+    }
+
     // --- Entry Section Logic ---
     function updateFormDropdowns() {
         const selForm = document.getElementById('selForm');
@@ -566,42 +590,33 @@
         const year = document.getElementById('selYear').value;
         
         vSel.innerHTML = '<option value="">-- गाव निवडा --</option>';
-        
-        if(!user || !fId) {
-            document.getElementById('dynamicFormArea').innerHTML = "";
-            return;
-        }
+        if(!user || !fId) { document.getElementById('dynamicFormArea').innerHTML = ""; return; }
 
         vSel.innerHTML += '<option value="ALL_VILLAGES" style="font-weight:bold; color:#0056b3;">🏢 सर्व गावे एकत्रित भरा (Bulk Entry)</option>';
-
-        const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-        const serverHistory = masterData.filledStats || [];
 
         masterData.villages.filter(v => {
             const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
             if(!belongsToSubCenter) return false;
             
             if (fId === "ALL_STATS") {
-                return true; 
+                let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+                let userRole = user ? String(user.role).trim().toUpperCase() : "";
+                
+                let isFullyFilled = true;
+                for (let f of statsForms) {
+                    let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+                    if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
+                        if (!isFormFilledForVillage(f, v.VillageName, month, year)) {
+                            isFullyFilled = false;
+                            break;
+                        }
+                    }
+                }
+                return !isFullyFilled;
             } else {
                 const selectedForm = masterData.forms.find(f => f.FormID === fId);
-                const isStatsForm = selectedForm && selectedForm.FormType === 'Stats';
-                let allowedRoles = selectedForm && selectedForm.AllowedRoles ? selectedForm.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
-                let isAll = allowedRoles.includes("ALL");
-                
-                if(isStatsForm) {
-                    const isLocalFilled = localHistory.some(h => 
-                        h.formID === fId && h.village === v.VillageName && 
-                        h.month === month && h.year == year && 
-                        h.mobile === String(user.mobile).trim()
-                    );
-                    
-                    const isServerFilled = serverHistory.some(h => {
-                        if(h.formID !== fId || h.village !== v.VillageName || h.month !== month || h.year != year) return false;
-                        if(h.isAllForm || isAll) return true;
-                        return h.mobile === String(user.mobile).trim();
-                    });
-                    if(isLocalFilled || isServerFilled) return false;
+                if(selectedForm && selectedForm.FormType === 'Stats') {
+                    if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
                 }
             }
             return true;
@@ -614,55 +629,86 @@
         const fId = document.getElementById('selForm').value;
         const vId = document.getElementById('selVillage').value;
         const area = document.getElementById('dynamicFormArea');
-        area.innerHTML = "";
+        const month = document.getElementById('selMonth').value;
+        const year = document.getElementById('selYear').value;
         
+        area.innerHTML = "";
         if(!fId || !vId) return;
 
         let isBulk = (vId === "ALL_VILLAGES");
         
-        let availableVillages = Array.from(document.getElementById('selVillage').options)
-                                     .map(o => o.value)
-                                     .filter(v => v !== "" && v !== "ALL_VILLAGES");
-
-        if (availableVillages.length === 0 && isBulk) {
-            area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी सर्व गावांचा डेटा आधीच भरून पूर्ण झाला आहे!</p>";
-            return;
-        }
+        let baseVillages = [];
+        masterData.villages.forEach(v => {
+            if(v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all") {
+                baseVillages.push(v.VillageName);
+            }
+        });
 
         if (fId === "ALL_STATS") {
             let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
             let allHtml = "";
             let userRole = user ? String(user.role).trim().toUpperCase() : "";
+            let renderedFormsCount = 0;
             
             statsForms.forEach(f => {
                 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
                 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
-                    let formContainerId = `form_area_${f.FormID}`;
-                    allHtml += `<div id="${formContainerId}" style="margin-bottom: 30px; border: 2px solid #00705a; padding: 0; border-radius: 8px; background: #fdfdfd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow:hidden;">`;
-                    allHtml += `<h3 style="background: #00705a; color: white; padding: 10px; margin: 0;">📌 ${f.FormName}</h3>`;
                     
+                    // 🌟 इथे चेक होतेय की फॉर्म कोणत्या गावांचा भरायचा बाकी आहे
+                    let formSpecificVillages = [];
                     if(isBulk) {
-                        allHtml += generateBulkTableHTML(f, availableVillages, f.FormID);
+                        formSpecificVillages = baseVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
                     } else {
-                        allHtml += `<div style="padding:15px;">` + generateFormHTML(f, f.FormID, formContainerId) + `</div>`;
+                        if(!isFormFilledForVillage(f, vId, month, year)) formSpecificVillages.push(vId);
                     }
-                    allHtml += `</div>`;
+
+                    // जर फॉर्म गावासाठी भरायचा बाकी असेल, तरच तो स्क्रीनवर दिसेल!
+                    if (formSpecificVillages.length > 0) {
+                        let formContainerId = `form_area_${f.FormID}`;
+                        allHtml += `<div id="${formContainerId}" style="margin-bottom: 30px; border: 2px solid #00705a; padding: 0; border-radius: 8px; background: #fdfdfd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow:hidden;">`;
+                        allHtml += `<h3 style="background: #00705a; color: white; padding: 10px; margin: 0;">📌 ${f.FormName}</h3>`;
+                        
+                        if(isBulk) {
+                            allHtml += generateBulkTableHTML(f, formSpecificVillages, f.FormID);
+                        } else {
+                            allHtml += `<div style="padding:15px;">` + generateFormHTML(f, f.FormID, formContainerId) + `</div>`;
+                        }
+                        allHtml += `</div>`;
+                        renderedFormsCount++;
+                    }
                 }
             });
-            area.innerHTML = allHtml;
+
+            if (renderedFormsCount === 0) {
+                area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी सर्व आकडेवारी फॉर्म्स आधीच भरून पूर्ण झाले आहेत!</p>";
+            } else {
+                area.innerHTML = allHtml;
+            }
+            
         } else {
             const f = masterData.forms.find(x => x.FormID === fId);
             if(!f) return;
-            let formContainerId = `form_area_${f.FormID}`;
             
+            let formSpecificVillages = [];
             if(isBulk) {
-                area.innerHTML = `<div id="${formContainerId}">` + generateBulkTableHTML(f, availableVillages, f.FormID) + `</div>`;
+                formSpecificVillages = baseVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
+            } else {
+                if(!isFormFilledForVillage(f, vId, month, year)) formSpecificVillages.push(vId);
+            }
+
+            if(formSpecificVillages.length === 0) {
+                 area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी हा फॉर्म भरून पूर्ण झाला आहे!</p>";
+                 return;
+            }
+
+            let formContainerId = `form_area_${f.FormID}`;
+            if(isBulk) {
+                area.innerHTML = `<div id="${formContainerId}">` + generateBulkTableHTML(f, formSpecificVillages, f.FormID) + `</div>`;
             } else {
                 area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single", formContainerId) + `</div>`;
             }
         }
 
-        // HTML लोड झाल्यावर Dependencies आणि AutoSum कॅल्क्युलेट करा
         setTimeout(() => {
             document.querySelectorAll('[id^="form_area_"], [id^="bulkrow_"]').forEach(el => {
                 calculateAutoSums(el.id);
@@ -685,7 +731,14 @@
         if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); isSaving = false; if(saveBtn) saveBtn.disabled = false; return; }
 
         let isBulk = (vName === "ALL_VILLAGES");
-        let availableVillages = isBulk ? Array.from(document.getElementById('selVillage').options).map(o => o.value).filter(v => v !== "" && v !== "ALL_VILLAGES") : [vName];
+        
+        let baseVillages = [];
+        masterData.villages.forEach(v => {
+            if(v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all") {
+                baseVillages.push(v.VillageName);
+            }
+        });
+        let availableVillages = isBulk ? baseVillages : [vName];
 
         let formsToProcess = [];
         let prefixMap = {};
@@ -717,6 +770,10 @@
                 
                 let prefix = isBulk ? `bulk_${formPrefix}_${safeVName}` : formPrefix;
                 let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
+                
+                // 🌟 जर हा फॉर्म या गावासाठी आधीच भरलेला असेल आणि स्क्रीनवर रेंडर झाला नसेल, तर त्याला Skip करा!
+                let containerEl = document.getElementById(containerId);
+                if (!containerEl) return;
                 
                 calculateAutoSums(containerId);
                 handleDependencies(containerId);
@@ -1588,7 +1645,7 @@
                 <div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
                     <label style="font-size:13px; font-weight:bold; color:var(--primary);">या गटातील उप-प्रश्न जोडा:</label>
                     <div id="subfields_container_${id}"></div>
-                    <button type="button" onclick="addSubFieldUI('${id}')" style="margin-top:10px; font-size:13px; background:#fff; border:1px solid #ccc; padding:6px; cursor:pointer; width:100%;">+ उप-प्रश्न जोडा</button>
+                    <button type="button" onclick="addSubFieldUI('${id}')" style="margin-top:10px; font-size:13px; background:#fff; border:1px solid #ccc; padding:6px; cursor:pointer; width:100%;">+ उप-प्रश्न جوडा</button>
                 </div>
             </div>`;
         document.getElementById('fieldsList').insertAdjacentHTML('beforeend', html);
