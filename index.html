@@ -258,7 +258,7 @@
         let depAttr = f.dependency ? `data-dependency="${f.dependency}"` : "";
         let rangeAttr = "";
         
-        // 🌟 नवीन: Number Range Validation 🌟
+        // 🌟 Number Range Validation 🌟
         if (f.type === 'number' && f.range) {
             let parts = f.range.split('-');
             if(parts.length === 2) {
@@ -281,7 +281,7 @@
         } else if(f.type === 'number') {
             html += `<input type="number" id="${id}" data-label="${label}" ${depAttr} ${rangeAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
         } else if(f.type === 'mobile') {
-            // 🌟 नवीन: Mobile Number Validation (10 Digits Only) 🌟
+            // 🌟 Mobile Number Validation (10 Digits Only) 🌟
             html += `<input type="tel" id="${id}" data-label="${label}" ${depAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length>10) this.value=this.value.slice(0,10); calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
         } else if(f.type === 'date') {
             html += `<input type="date" id="${id}" data-label="${label}" ${depAttr} value="${val}" onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
@@ -715,7 +715,6 @@
                 return !isFullyFilled;
             } else {
                 const selectedForm = masterData.forms.find(f => f.FormID === fId);
-                // फक्त 'Stats' (आकडेवारी) फॉर्म्सच गायब करा. 'List' फॉर्म्स गायब करू नका.
                 if(selectedForm && selectedForm.FormType === 'Stats') {
                     if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
                 }
@@ -811,7 +810,6 @@
                     area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single", formContainerId) + `</div>`;
                 }
             } else {
-                // 🌟 जर फॉर्म 'List' (यादी) प्रकारचा असेल तर 🌟
                 if(isBulk) {
                     area.innerHTML = "<p style='color:red; text-align:center; font-weight:bold; padding:15px;'>⚠️ यादी (List) प्रकारच्या फॉर्मसाठी 'सर्व गावे' निवडता येत नाहीत. कृपया ड्रॉपडाऊनमधून एक विशिष्ट गाव निवडा.</p>";
                     return;
@@ -837,125 +835,137 @@
         if(saveBtn) saveBtn.disabled = true; 
         isSaving = true;
 
-        const fId = document.getElementById('selForm').value;
-        const vName = document.getElementById('selVillage').value;
-        const month = document.getElementById('selMonth').value;
-        const year = document.getElementById('selYear').value;
+        try {
+            const fId = document.getElementById('selForm').value;
+            const vName = document.getElementById('selVillage').value;
+            const month = document.getElementById('selMonth').value;
+            const year = document.getElementById('selYear').value;
 
-        if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); isSaving = false; if(saveBtn) saveBtn.disabled = false; return; }
-
-        let isBulk = (vName === "ALL_VILLAGES");
-        
-        let baseVillages = [];
-        masterData.villages.forEach(v => {
-            if(v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all") {
-                baseVillages.push(v.VillageName);
+            if(!fId || !vName) { 
+                alert("कृपया फॉर्म आणि गाव निवडा!"); 
+                return;
             }
-        });
-        let availableVillages = isBulk ? baseVillages : [vName];
 
-        let formsToProcess = [];
-        let prefixMap = {};
-
-        if (fId === "ALL_STATS") {
-            let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
-            let userRole = user ? String(user.role).trim().toUpperCase() : "";
-            statsForms.forEach(f => {
-                let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
-                if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
-                    formsToProcess.push(f);
-                    prefixMap[f.FormID] = f.FormID;
+            let isBulk = (vName === "ALL_VILLAGES");
+            
+            let baseVillages = [];
+            masterData.villages.forEach(v => {
+                if(v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all") {
+                    baseVillages.push(v.VillageName);
                 }
             });
-        } else {
-            const f = masterData.forms.find(x => x.FormID === fId);
-            formsToProcess.push(f);
-            prefixMap[f.FormID] = isBulk ? f.FormID : "single";
-        }
+            let availableVillages = isBulk ? baseVillages : [vName];
 
-        let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-        let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+            let formsToProcess = [];
+            let prefixMap = {};
 
-        formsToProcess.forEach(f => {
-            let formPrefix = prefixMap[f.FormID];
+            if (fId === "ALL_STATS") {
+                let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+                let userRole = user ? String(user.role).trim().toUpperCase() : "";
+                statsForms.forEach(f => {
+                    let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+                    if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
+                        formsToProcess.push(f);
+                        prefixMap[f.FormID] = f.FormID;
+                    }
+                });
+            } else {
+                const f = masterData.forms.find(x => x.FormID === fId);
+                if(f) {
+                    formsToProcess.push(f);
+                    prefixMap[f.FormID] = isBulk ? f.FormID : "single";
+                }
+            }
 
-            availableVillages.forEach(village => {
-                if (f.FormType === 'List') {
-                    // 🌟 List (यादी) फॉर्म सेव्ह करण्याची पद्धत (अनेक नोंदी एकत्र)
-                    let tbody = document.getElementById(`list_tbody_${f.FormID}`);
-                    if(tbody) {
-                        Array.from(tbody.children).forEach(tr => {
-                            let rowIdParts = tr.id.split('_'); 
-                            let rIdx = rowIdParts[rowIdParts.length - 1];
-                            let prefix = `list_${formPrefix}_${rIdx}`;
-                            
-                            calculateAutoSums(tr.id);
-                            handleDependencies(tr.id);
-                            
-                            let formData = extractFormData(f, prefix);
-                            
-                            // तपासा की ओळ पूर्ण रिकामी आहे का?
-                            let isEmpty = true;
-                            for(let key in formData) {
-                                if(formData[key] !== undefined && String(formData[key]).trim() !== "") {
-                                    isEmpty = false;
-                                    break;
+            let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
+            let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+
+            formsToProcess.forEach(f => {
+                let formPrefix = prefixMap[f.FormID];
+
+                availableVillages.forEach(village => {
+                    if (f.FormType === 'List') {
+                        let tbody = document.getElementById(`list_tbody_${f.FormID}`);
+                        if(tbody) {
+                            Array.from(tbody.children).forEach(tr => {
+                                let rowIdParts = tr.id.split('_'); 
+                                let rIdx = rowIdParts[rowIdParts.length - 1];
+                                let prefix = `list_${formPrefix}_${rIdx}`;
+                                
+                                calculateAutoSums(tr.id);
+                                handleDependencies(tr.id);
+                                
+                                let formData = extractFormData(f, prefix);
+                                
+                                let isEmpty = true;
+                                for(let key in formData) {
+                                    if(formData[key] !== undefined && String(formData[key]).trim() !== "") {
+                                        isEmpty = false;
+                                        break;
+                                    }
                                 }
-                            }
-                            
-                            if(!isEmpty) {
-                                formData["महिना"] = month;
-                                formData["वर्ष"] = year;
-                                const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
-                                q.push(entry);
-                            }
-                        });
+                                
+                                if(!isEmpty) {
+                                    formData["महिना"] = month;
+                                    formData["वर्ष"] = year;
+                                    const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+                                    q.push(entry);
+                                }
+                            });
+                            history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+                        }
+                    } else {
+                        let safeVName = village.replace(/\s+/g, '_');
+                        let prefix = isBulk ? `bulk_${formPrefix}_${safeVName}` : formPrefix;
+                        let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
+                        
+                        let containerEl = document.getElementById(containerId);
+                        if (!containerEl) return;
+                        
+                        calculateAutoSums(containerId);
+                        handleDependencies(containerId);
+
+                        let formData = extractFormData(f, prefix);
+                        
+                        formData["महिना"] = month;
+                        formData["वर्ष"] = year;
+
+                        const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+                        q.push(entry);
+
                         history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
                     }
-                } else {
-                    // 🌟 Stats (आकडेवारी) फॉर्म सेव्ह करण्याची पद्धत
-                    let safeVName = village.replace(/\s+/g, '_');
-                    let prefix = isBulk ? `bulk_${formPrefix}_${safeVName}` : formPrefix;
-                    let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
-                    
-                    let containerEl = document.getElementById(containerId);
-                    if (!containerEl) return;
-                    
-                    calculateAutoSums(containerId);
-                    handleDependencies(containerId);
-
-                    let formData = extractFormData(f, prefix);
-                    
-                    formData["महिना"] = month;
-                    formData["वर्ष"] = year;
-
-                    const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
-                    q.push(entry);
-
-                    history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
-                }
+                });
             });
-        });
 
-        localStorage.setItem("syncQueue", JSON.stringify(q));
-        localStorage.setItem("submissionHistory", JSON.stringify(history));
+            localStorage.setItem("syncQueue", JSON.stringify(q));
+            localStorage.setItem("submissionHistory", JSON.stringify(history));
 
-        await syncDataToServer("syncStatus", "mainSaveBtn");
-        
-        document.getElementById('selVillage').value = "";
-        document.getElementById('dynamicFormArea').innerHTML = "";
-        updateVillageDropdown(); 
-        
-        isSaving = false; 
+            await syncDataToServer("syncStatus", "mainSaveBtn");
+            
+            document.getElementById('selVillage').value = "";
+            document.getElementById('dynamicFormArea').innerHTML = "";
+            updateVillageDropdown(); 
+            
+        } catch (error) {
+            console.error("Save Error:", error);
+            alert("माहिती जतन करताना तांत्रिक अडचण आली. कृपया पुन्हा प्रयत्न करा.");
+        } finally {
+            isSaving = false; 
+            if(saveBtn) saveBtn.disabled = false;
+        }
     }
 
     async function syncDataToServer(statusId, btnId) {
         let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-        if(q.length === 0) return;
-        
-        const statusText = document.getElementById(statusId);
         const saveBtn = document.getElementById(btnId);
 
+        if(q.length === 0) {
+            if(saveBtn) saveBtn.disabled = false;
+            return;
+        }
+        
+        const statusText = document.getElementById(statusId);
         statusText.style.color = "orange";
         statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
 
@@ -1106,42 +1116,42 @@
         saveBtn.disabled = true;
         isSaving = true;
 
-        calculateAutoSums('editDynamicFormArea');
-        handleDependencies('editDynamicFormArea');
-        
-        const fId = document.getElementById('editFormSelect').value;
-        const month = document.getElementById('editMonth').value;
-        const year = document.getElementById('editYear').value;
-        const vName = document.getElementById('editVillageSelect').value;
-        const statusText = document.getElementById('editSyncStatus');
-
-        let updatedFormData = {};
-        updatedFormData["महिना"] = month;
-        updatedFormData["वर्ष"] = year;
-
-        const f = masterData.forms.find(x => x.FormID === fId);
-        JSON.parse(f.StructureJSON).forEach((field, i) => {
-            if (field.type === 'group') {
-                field.subFields.forEach((sf, j) => { 
-                    if(sf.type === 'group') {
-                        sf.subFields.forEach((ssf, k) => {
-                            updatedFormData[`${field.label} - ${sf.label} - ${ssf.label}`] = document.getElementById(`edit_inp_${i}_${j}_${k}`).value;
-                        });
-                    } else {
-                        updatedFormData[`${field.label} - ${sf.label}`] = document.getElementById(`edit_inp_${i}_${j}`).value;
-                    }
-                });
-            } else { 
-                updatedFormData[field.label] = document.getElementById(`edit_inp_${i}`).value; 
-            }
-        });
-
-        const payload = { formID: fId, village: vName, month: month, year: year, mobileNo: user.mobile, subCenter: user.subcenter, role: user.role, formData: updatedFormData };
-
-        statusText.style.color = "orange";
-        statusText.innerText = "☁️ नवीन बदल गुगल शीटवर सेव्ह होत आहेत...";
-
         try {
+            calculateAutoSums('editDynamicFormArea');
+            handleDependencies('editDynamicFormArea');
+            
+            const fId = document.getElementById('editFormSelect').value;
+            const month = document.getElementById('editMonth').value;
+            const year = document.getElementById('editYear').value;
+            const vName = document.getElementById('editVillageSelect').value;
+            const statusText = document.getElementById('editSyncStatus');
+
+            let updatedFormData = {};
+            updatedFormData["महिना"] = month;
+            updatedFormData["वर्ष"] = year;
+
+            const f = masterData.forms.find(x => x.FormID === fId);
+            JSON.parse(f.StructureJSON).forEach((field, i) => {
+                if (field.type === 'group') {
+                    field.subFields.forEach((sf, j) => { 
+                        if(sf.type === 'group') {
+                            sf.subFields.forEach((ssf, k) => {
+                                updatedFormData[`${field.label} - ${sf.label} - ${ssf.label}`] = document.getElementById(`edit_inp_${i}_${j}_${k}`).value;
+                            });
+                        } else {
+                            updatedFormData[`${field.label} - ${sf.label}`] = document.getElementById(`edit_inp_${i}_${j}`).value;
+                        }
+                    });
+                } else { 
+                    updatedFormData[field.label] = document.getElementById(`edit_inp_${i}`).value; 
+                }
+            });
+
+            const payload = { formID: fId, village: vName, month: month, year: year, mobileNo: user.mobile, subCenter: user.subcenter, role: user.role, formData: updatedFormData };
+
+            statusText.style.color = "orange";
+            statusText.innerText = "☁️ नवीन बदल गुगल शीटवर सेव्ह होत आहेत...";
+
             const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateRecord", payload: payload}) });
             const textResponse = await r.text();
             
@@ -1159,6 +1169,7 @@
                 await fetchData(); 
             } else { throw new Error(d.message); }
         } catch(e) { 
+            const statusText = document.getElementById('editSyncStatus');
             statusText.style.color = "red";
             statusText.innerText = "⚠️ बदल सेव्ह करताना एरर आला. कृपया पुन्हा प्रयत्न करा.";
         } finally {
