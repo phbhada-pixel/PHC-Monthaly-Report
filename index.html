@@ -46,7 +46,7 @@
         /* Bulk Data Entry Table Styles */
         .report-table input, .report-table select { padding: 6px; margin: 0; width: 100px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
         .report-table td { padding: 6px; vertical-align: middle; }
-        .sticky-col { position: sticky; left: 0; background: #f4f7f6 !important; border-right: 2px solid #ccc; z-index: 1; font-weight: bold; min-width: 120px;}
+        .sticky-col { position: sticky; left: 0; background: #f4f7f6 !important; border-right: 2px solid #ccc; z-index: 1; font-weight: bold; min-width: 100px; text-align:center;}
         .sticky-header-col { position: sticky; left: 0; top: 0; z-index: 3 !important; }
     </style>
 </head>
@@ -277,7 +277,6 @@
         return html;
     }
 
-    // 🌟 नवीन: Conditional Logic (Auto-Fill) हाताळणारे फंक्शन 🌟
     function handleDependencies(containerId) {
         let container = document.getElementById(containerId);
         if(!container) return;
@@ -299,7 +298,6 @@
 
                     let parentElement = container.querySelector(`[data-label="${parentTargetLabel}"]`);
 
-                    // स्मार्ट मॅचिंग जर अचूक नाव नसेल
                     if(!parentElement) {
                         let allInputs = container.querySelectorAll('[data-label]');
                         let cleanTarget = parentTargetLabel.replace(/\s+/g, '').toLowerCase();
@@ -315,14 +313,12 @@
                     if(parentElement) {
                         let currentParentVal = parentElement.value.trim().toLowerCase();
                         
-                        // जर कंडिशन मॅच झाली तर
                         if(currentParentVal === conditionVal && conditionVal !== "") {
                             depInput.value = targetVal;
                             depInput.style.pointerEvents = "none";
                             depInput.style.backgroundColor = "#e9ecef";
                             depInput.tabIndex = -1;
                         } else {
-                            // जर कंडिशन मॅच होत नसेल आणि बॉक्स आधी लॉक झाला असेल, तर तो अनलॉक करा
                             if(depInput.style.pointerEvents === "none") {
                                 depInput.value = "";
                                 depInput.style.pointerEvents = "auto";
@@ -333,6 +329,104 @@
                     }
                 }
             }
+        });
+    }
+
+    function extractFieldsFromForm(f) {
+        let fields = [];
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            if (field.type === 'group') {
+                field.subFields.forEach((sf, j) => {
+                    if (sf.type === 'group') {
+                        sf.subFields.forEach((ssf, k) => {
+                            let label = `${field.label} - ${sf.label} - ${ssf.label}`;
+                            fields.push({ label, idSuffix: `${i}_${j}_${k}`, orig: ssf });
+                        });
+                    } else {
+                        let label = `${field.label} - ${sf.label}`;
+                        fields.push({ label, idSuffix: `${i}_${j}`, orig: sf });
+                    }
+                });
+            } else {
+                fields.push({ label: field.label, idSuffix: `${i}`, orig: field });
+            }
+        });
+        return fields;
+    }
+
+    // 🌟 नवीन: List (यादी) फॉर्मसाठी एकापेक्षा जास्त नोंदींचे टेबल जनरेट करणे 🌟
+    function generateListTableHTML(f, formPrefix) {
+        let fields = extractFieldsFromForm(f);
+        let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white; min-width:60px;">अ.क्र.</th>`;
+        
+        JSON.parse(f.StructureJSON).forEach((field, i) => {
+            if (field.type === 'group') {
+                field.subFields.forEach((sf, j) => {
+                    if (sf.type === 'group') {
+                        sf.subFields.forEach((ssf, k) => {
+                            headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
+                        });
+                    } else {
+                        headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
+                    }
+                });
+            } else {
+                headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
+            }
+        });
+        headersHtml += `</tr>`;
+        
+        let html = `<h3 style="background: #00705a; color: white; padding: 10px; margin: 0;">📌 ${f.FormName} (रुग्ण/लाभार्थी यादी)</h3>`;
+        html += `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd; margin-top:0;">
+                    <table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
+                        <thead>${headersHtml}</thead>
+                        <tbody id="list_tbody_${f.FormID}">`;
+        
+        let initialRowIdx = Date.now();
+        html += generateSingleListRow(f, fields, formPrefix, initialRowIdx);
+        
+        html += `   </tbody>
+                    </table>
+                </div>`;
+        html += `<button type="button" onclick="addListRow('${f.FormID}')" style="margin-top:15px; background:#17a2b8; color:white; font-weight:bold; border:none; padding:10px; border-radius:5px; cursor:pointer; width:100%; font-size:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">➕ आणखी एक रुग्ण/लाभार्थी जोडा (Add Row)</button>`;
+        
+        setTimeout(() => updateListRowNumbers(f.FormID), 50);
+        return html;
+    }
+
+    function generateSingleListRow(f, fields, formPrefix, uniqueIdx) {
+        let rowId = `listrow_${formPrefix}_${uniqueIdx}`;
+        let inputPrefix = `list_${formPrefix}_${uniqueIdx}`;
+        let trHtml = `<tr id="${rowId}">`;
+        
+        trHtml += `<td class="sticky-col" style="text-align:center;">- <br><button tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${f.FormID}');" style="color:red; background:none; border:none; cursor:pointer; font-size:16px; margin-top:5px;" title="ओळ काढून टाका">✖</button></td>`;
+        
+        fields.forEach(fld => {
+            let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
+            trHtml += `<td>${cellHtml}</td>`;
+        });
+        trHtml += `</tr>`;
+        return trHtml;
+    }
+
+    function addListRow(fId) {
+        const f = masterData.forms.find(x => x.FormID === fId);
+        if(!f) return;
+        let tbody = document.getElementById(`list_tbody_${fId}`);
+        let rowIdx = Date.now() + Math.floor(Math.random() * 100); 
+        let fields = extractFieldsFromForm(f);
+        
+        let trHtml = generateSingleListRow(f, fields, fId, rowIdx);
+        tbody.insertAdjacentHTML('beforeend', trHtml);
+        
+        updateListRowNumbers(fId);
+    }
+    
+    function updateListRowNumbers(fId) {
+        let tbody = document.getElementById(`list_tbody_${fId}`);
+        if(!tbody) return;
+        Array.from(tbody.children).forEach((tr, index) => {
+            tr.children[0].innerHTML = `<b>${index + 1}</b> <br><button tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${fId}');" style="color:red; background:none; border:none; cursor:pointer; font-size:16px; margin-top:5px;" title="काढून टाका">✖</button>`;
         });
     }
 
@@ -373,7 +467,7 @@
     }
 
     function generateBulkTableHTML(f, availableVillages, formPrefix) {
-        let fields = [];
+        let fields = extractFieldsFromForm(f);
         let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white;">गाव (Village)</th>`;
 
         JSON.parse(f.StructureJSON).forEach((field, i) => {
@@ -381,18 +475,13 @@
                 field.subFields.forEach((sf, j) => {
                     if (sf.type === 'group') {
                         sf.subFields.forEach((ssf, k) => {
-                            let label = `${field.label} - ${sf.label} - ${ssf.label}`;
-                            fields.push({ label, idSuffix: `${i}_${j}_${k}`, orig: ssf });
                             headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
                         });
                     } else {
-                        let label = `${field.label} - ${sf.label}`;
-                        fields.push({ label, idSuffix: `${i}_${j}`, orig: sf });
                         headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
                     }
                 });
             } else {
-                fields.push({ label: field.label, idSuffix: `${i}`, orig: field });
                 headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
             }
         });
@@ -414,7 +503,7 @@
             rowsHtml += `</tr>`;
         });
 
-        return `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd;">
+        return `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd; margin-top:0;">
                     <table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
                         <thead>${headersHtml}</thead>
                         <tbody>${rowsHtml}</tbody>
@@ -534,13 +623,12 @@
         }
     }
 
-    // 🌟 नवीन ग्लोबल फंक्शन: फॉर्म आधीच भरला आहे की नाही हे तपासण्यासाठी
     function isFormFilledForVillage(formObj, vName, month, year) {
         const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
         const serverHistory = masterData.filledStats || [];
         
         let allowedRoles = formObj.AllowedRoles ? formObj.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
-        let isAll = allowedRoles.includes("ALL"); // जर AllowedRoles "ALL" असेल तर (उदा. State फॉर्म्स)
+        let isAll = allowedRoles.includes("ALL");
         
         const isLocalFilled = localHistory.some(h => 
             h.formID === formObj.FormID && h.village === vName && 
@@ -550,7 +638,6 @@
         
         const isServerFilled = serverHistory.some(h => {
             if(h.formID !== formObj.FormID || h.village !== vName || h.month !== month || h.year != year) return false;
-            // 🌟 मुख्य अट: जर 'ALL' रोल असेल, तर कोणीही भरलेला असला तरी तो भरला आहे असे समजावे
             if(h.isAllForm || isAll) return true;
             return h.mobile === String(user.mobile).trim();
         });
@@ -615,6 +702,7 @@
                 return !isFullyFilled;
             } else {
                 const selectedForm = masterData.forms.find(f => f.FormID === fId);
+                // फक्त 'Stats' (आकडेवारी) फॉर्म्सच गायब करा. 'List' फॉर्म्स गायब करू नका.
                 if(selectedForm && selectedForm.FormType === 'Stats') {
                     if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
                 }
@@ -637,12 +725,14 @@
 
         let isBulk = (vId === "ALL_VILLAGES");
         
-        let baseVillages = [];
-        masterData.villages.forEach(v => {
-            if(v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all") {
-                baseVillages.push(v.VillageName);
-            }
-        });
+        let availableVillages = Array.from(document.getElementById('selVillage').options)
+                                     .map(o => o.value)
+                                     .filter(v => v !== "" && v !== "ALL_VILLAGES");
+
+        if (availableVillages.length === 0 && isBulk) {
+            area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी सर्व गावांचा डेटा आधीच भरून पूर्ण झाला आहे!</p>";
+            return;
+        }
 
         if (fId === "ALL_STATS") {
             let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
@@ -654,15 +744,13 @@
                 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
                 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
                     
-                    // 🌟 इथे चेक होतेय की फॉर्म कोणत्या गावांचा भरायचा बाकी आहे
                     let formSpecificVillages = [];
                     if(isBulk) {
-                        formSpecificVillages = baseVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
+                        formSpecificVillages = availableVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
                     } else {
                         if(!isFormFilledForVillage(f, vId, month, year)) formSpecificVillages.push(vId);
                     }
 
-                    // जर फॉर्म गावासाठी भरायचा बाकी असेल, तरच तो स्क्रीनवर दिसेल!
                     if (formSpecificVillages.length > 0) {
                         let formContainerId = `form_area_${f.FormID}`;
                         allHtml += `<div id="${formContainerId}" style="margin-bottom: 30px; border: 2px solid #00705a; padding: 0; border-radius: 8px; background: #fdfdfd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow:hidden;">`;
@@ -689,28 +777,41 @@
             const f = masterData.forms.find(x => x.FormID === fId);
             if(!f) return;
             
-            let formSpecificVillages = [];
-            if(isBulk) {
-                formSpecificVillages = baseVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
-            } else {
-                if(!isFormFilledForVillage(f, vId, month, year)) formSpecificVillages.push(vId);
-            }
-
-            if(formSpecificVillages.length === 0) {
-                 area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी हा फॉर्म भरून पूर्ण झाला आहे!</p>";
-                 return;
-            }
-
             let formContainerId = `form_area_${f.FormID}`;
-            if(isBulk) {
-                area.innerHTML = `<div id="${formContainerId}">` + generateBulkTableHTML(f, formSpecificVillages, f.FormID) + `</div>`;
+            
+            if (f.FormType === 'Stats') {
+                let formSpecificVillages = [];
+                if(isBulk) {
+                    formSpecificVillages = availableVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
+                } else {
+                    if(!isFormFilledForVillage(f, vId, month, year)) formSpecificVillages.push(vId);
+                }
+
+                if(formSpecificVillages.length === 0) {
+                     area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी हा फॉर्म भरून पूर्ण झाला आहे!</p>";
+                     return;
+                }
+
+                if(isBulk) {
+                    area.innerHTML = `<div id="${formContainerId}">` + generateBulkTableHTML(f, formSpecificVillages, f.FormID) + `</div>`;
+                } else {
+                    area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single", formContainerId) + `</div>`;
+                }
             } else {
-                area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single", formContainerId) + `</div>`;
+                // 🌟 जर फॉर्म 'List' (यादी) प्रकारचा असेल तर 🌟
+                if(isBulk) {
+                    area.innerHTML = "<p style='color:red; text-align:center; font-weight:bold; padding:15px;'>⚠️ यादी (List) प्रकारच्या फॉर्मसाठी 'सर्व गावे' निवडता येत नाहीत. कृपया ड्रॉपडाऊनमधून एक विशिष्ट गाव निवडा.</p>";
+                    return;
+                }
+                
+                area.innerHTML = `<div id="${formContainerId}" style="border: 2px solid #00705a; border-radius: 8px; background: #fdfdfd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow:hidden;">` 
+                                 + generateListTableHTML(f, f.FormID) 
+                                 + `</div>`;
             }
         }
 
         setTimeout(() => {
-            document.querySelectorAll('[id^="form_area_"], [id^="bulkrow_"]').forEach(el => {
+            document.querySelectorAll('[id^="form_area_"], [id^="bulkrow_"], [id^="listrow_"]').forEach(el => {
                 calculateAutoSums(el.id);
                 handleDependencies(el.id);
             });
@@ -766,27 +867,60 @@
             let formPrefix = prefixMap[f.FormID];
 
             availableVillages.forEach(village => {
-                let safeVName = village.replace(/\s+/g, '_');
-                
-                let prefix = isBulk ? `bulk_${formPrefix}_${safeVName}` : formPrefix;
-                let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
-                
-                // 🌟 जर हा फॉर्म या गावासाठी आधीच भरलेला असेल आणि स्क्रीनवर रेंडर झाला नसेल, तर त्याला Skip करा!
-                let containerEl = document.getElementById(containerId);
-                if (!containerEl) return;
-                
-                calculateAutoSums(containerId);
-                handleDependencies(containerId);
+                if (f.FormType === 'List') {
+                    // 🌟 List (यादी) फॉर्म सेव्ह करण्याची पद्धत (अनेक नोंदी एकत्र)
+                    let tbody = document.getElementById(`list_tbody_${f.FormID}`);
+                    if(tbody) {
+                        Array.from(tbody.children).forEach(tr => {
+                            let rowIdParts = tr.id.split('_'); 
+                            let rIdx = rowIdParts[rowIdParts.length - 1];
+                            let prefix = `list_${formPrefix}_${rIdx}`;
+                            
+                            calculateAutoSums(tr.id);
+                            handleDependencies(tr.id);
+                            
+                            let formData = extractFormData(f, prefix);
+                            
+                            // तपासा की ओळ पूर्ण रिकामी आहे का?
+                            let isEmpty = true;
+                            for(let key in formData) {
+                                if(formData[key] !== undefined && String(formData[key]).trim() !== "") {
+                                    isEmpty = false;
+                                    break;
+                                }
+                            }
+                            
+                            if(!isEmpty) {
+                                formData["महिना"] = month;
+                                formData["वर्ष"] = year;
+                                const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+                                q.push(entry);
+                            }
+                        });
+                        history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+                    }
+                } else {
+                    // 🌟 Stats (आकडेवारी) फॉर्म सेव्ह करण्याची पद्धत
+                    let safeVName = village.replace(/\s+/g, '_');
+                    let prefix = isBulk ? `bulk_${formPrefix}_${safeVName}` : formPrefix;
+                    let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
+                    
+                    let containerEl = document.getElementById(containerId);
+                    if (!containerEl) return;
+                    
+                    calculateAutoSums(containerId);
+                    handleDependencies(containerId);
 
-                let formData = extractFormData(f, prefix);
-                
-                formData["महिना"] = month;
-                formData["वर्ष"] = year;
+                    let formData = extractFormData(f, prefix);
+                    
+                    formData["महिना"] = month;
+                    formData["वर्ष"] = year;
 
-                const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
-                q.push(entry);
+                    const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+                    q.push(entry);
 
-                history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+                    history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+                }
             });
         });
 
@@ -1645,7 +1779,7 @@
                 <div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
                     <label style="font-size:13px; font-weight:bold; color:var(--primary);">या गटातील उप-प्रश्न जोडा:</label>
                     <div id="subfields_container_${id}"></div>
-                    <button type="button" onclick="addSubFieldUI('${id}')" style="margin-top:10px; font-size:13px; background:#fff; border:1px solid #ccc; padding:6px; cursor:pointer; width:100%;">+ उप-प्रश्न جوडा</button>
+                    <button type="button" onclick="addSubFieldUI('${id}')" style="margin-top:10px; font-size:13px; background:#fff; border:1px solid #ccc; padding:6px; cursor:pointer; width:100%;">+ उप-प्रश्न जोडा</button>
                 </div>
             </div>`;
         document.getElementById('fieldsList').insertAdjacentHTML('beforeend', html);
