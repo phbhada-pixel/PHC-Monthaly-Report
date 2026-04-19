@@ -256,6 +256,17 @@
     function generateInputHTML(f, id, label, areaId, val="") {
         let html = "";
         let depAttr = f.dependency ? `data-dependency="${f.dependency}"` : "";
+        let rangeAttr = "";
+        
+        // 🌟 नवीन: Number Range Validation 🌟
+        if (f.type === 'number' && f.range) {
+            let parts = f.range.split('-');
+            if(parts.length === 2) {
+                let min = parts[0].trim();
+                let max = parts[1].trim();
+                rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { alert('⚠️ कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+            }
+        }
 
         if (f.type === 'dropdown') {
             html += `<select id="${id}" data-label="${label}" ${depAttr} onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')"><option value="">-- निवडा --</option>`;
@@ -268,7 +279,10 @@
         } else if(f.type === 'sum') {
             html += `<input type="number" id="${id}" data-label="${label}" data-sum-targets="${f.options}" value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
         } else if(f.type === 'number') {
-            html += `<input type="number" id="${id}" data-label="${label}" ${depAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
+            html += `<input type="number" id="${id}" data-label="${label}" ${depAttr} ${rangeAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
+        } else if(f.type === 'mobile') {
+            // 🌟 नवीन: Mobile Number Validation (10 Digits Only) 🌟
+            html += `<input type="tel" id="${id}" data-label="${label}" ${depAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length>10) this.value=this.value.slice(0,10); calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
         } else if(f.type === 'date') {
             html += `<input type="date" id="${id}" data-label="${label}" ${depAttr} value="${val}" onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
         } else { 
@@ -354,7 +368,6 @@
         return fields;
     }
 
-    // 🌟 नवीन: List (यादी) फॉर्मसाठी एकापेक्षा जास्त नोंदींचे टेबल जनरेट करणे 🌟
     function generateListTableHTML(f, formPrefix) {
         let fields = extractFieldsFromForm(f);
         let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white; min-width:60px;">अ.क्र.</th>`;
@@ -1699,7 +1712,11 @@
     function toggleFieldOptions(id, val) {
         document.getElementById('opts_' + id).style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
         let depEl = document.getElementById('dep_' + id);
-        if(depEl) depEl.style.display = (val === 'dropdown' || val === 'number' || val === 'text') ? 'block' : 'none';
+        if(depEl) depEl.style.display = (val === 'dropdown' || val === 'number' || val === 'text' || val === 'mobile') ? 'block' : 'none';
+        
+        let rngEl = document.getElementById('rng_' + id);
+        if(rngEl) rngEl.style.display = (val === 'number') ? 'block' : 'none';
+
         document.getElementById('group_' + id).style.display = (val === 'group') ? 'block' : 'none';
         
         let labelEl = document.querySelector(`#opts_${id} label`);
@@ -1718,12 +1735,14 @@
     function toggleSubFieldOptions(sfId, val) {
         let container = document.getElementById(`sfopts_container_${sfId}`);
         let depContainer = document.getElementById(`sfdep_container_${sfId}`);
+        let rngContainer = document.getElementById(`sfrng_container_${sfId}`);
         let groupContainer = document.getElementById(`ssf_group_${sfId}`);
         let labelEl = document.getElementById(`sflabel_${sfId}`);
         let inputEl = document.getElementById(`sfopts_${sfId}`);
         
         container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
-        if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text') ? 'block' : 'none';
+        if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text' || val === 'mobile') ? 'block' : 'none';
+        if(rngContainer) rngContainer.style.display = (val === 'number') ? 'block' : 'none';
         if(groupContainer) groupContainer.style.display = (val === 'group') ? 'block' : 'none';
 
         if(val === 'sum') {
@@ -1738,10 +1757,12 @@
     function toggleSubSubFieldOptions(ssfId, val) {
         let container = document.getElementById(`ssfopts_container_${ssfId}`);
         let depContainer = document.getElementById(`ssfdep_container_${ssfId}`);
+        let rngContainer = document.getElementById(`ssfrng_container_${ssfId}`);
         let inputEl = document.getElementById(`ssfopts_${ssfId}`);
         
         container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
-        if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text') ? 'block' : 'none';
+        if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text' || val === 'mobile') ? 'block' : 'none';
+        if(rngContainer) rngContainer.style.display = (val === 'number') ? 'block' : 'none';
         
         if(val === 'sum') inputEl.placeholder = "बेरीज सूत्र (उदा. गट - उपगट - प्रश्न)...";
         else if(val === 'dropdown') inputEl.placeholder = "पर्याय लिहा (उदा. होय, नाही)...";
@@ -1759,11 +1780,13 @@
                 <select class="ftype" onchange="toggleFieldOptions('${id}', this.value)" style="margin-top:10px; background:#f0f8ff;">
                     <option value="text" ${data && data.type==='text'?'selected':''}>Text (साधा मजकूर)</option>
                     <option value="number" ${data && data.type==='number'?'selected':''}>Number (आकडे)</option>
+                    <option value="mobile" ${data && data.type==='mobile'?'selected':''}>Mobile No. (मोबाईल नंबर)</option>
                     <option value="date" ${data && data.type==='date'?'selected':''}>Date (तारीख)</option>
                     <option value="dropdown" ${data && data.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
                     <option value="group" ${data && data.type==='group'?'selected':''}>Group / गट (उप-प्रश्न)</option>
                     <option value="sum" ${data && data.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
                 </select>
+                
                 <div id="opts_${id}" style="display:${data && (data.type==='dropdown' || data.type==='sum') ? 'block' : 'none'}; margin-top:10px; background:#ffe4b5; padding:10px; border-radius:5px;">
                     <label style="font-size:12px; font-weight:bold; color:#d35400;">
                         ${data && data.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची?' : 'येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):'}
@@ -1771,7 +1794,12 @@
                     <input type="text" placeholder="${data && data.type==='sum' ? 'उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली' : 'उदा. होय, नाही'}" class="foptions" value="${data ? (data.options || '') : ''}">
                 </div>
                 
-                <div id="dep_${id}" style="display:${data && (data.type==='dropdown' || data.type==='number' || data.type==='text') ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
+                <div id="rng_${id}" style="display:${data && data.type==='number' ? 'block' : 'none'}; margin-top:10px; background:#e8f5e9; padding:10px; border-radius:5px; border-left: 3px solid #2e7d32;">
+                    <label style="font-size:12px; font-weight:bold; color:#2e7d32;">🔢 संख्या मर्यादा / Range (Optional):<br><span style="font-weight:normal; font-size:11px;">उदा. जर वय 15 ते 45 च्या दरम्यान हवे असेल तर खाली 15-45 लिहा.</span></label>
+                    <input type="text" placeholder="उदा. 15-45" class="frange" style="width: 100%; margin-top: 5px; font-size:12px;" value="${data ? (data.range || '') : ''}">
+                </div>
+                
+                <div id="dep_${id}" style="display:${data && (data.type==='dropdown' || data.type==='number' || data.type==='text' || data.type==='mobile') ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
                     <label style="font-size:12px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट (Conditional Auto-Fill):<br><span style="font-weight:normal; font-size:11px;">उदा. जर 'ब्लिचिंग पावडर उपलब्ध आहे का' चे उत्तर 'No' असेल, तर इथे 'Not aplicable' यावे.</span><br>फॉर्मॅट: <b>प्रश्नाचे नाव=उत्तर:व्हॅल्यू</b></label>
                     <input type="text" placeholder="उदा. ब्लिचिंग पावडर उपलब्ध आहे का=No:Not aplicable" class="fdepend" style="width: 100%; margin-top: 5px; font-size:12px;" value="${data ? (data.dependency || '') : ''}">
                 </div>
@@ -1796,6 +1824,7 @@
                 <select class="sftype" style="width: 100%; margin-top: 5px;" onchange="toggleSubFieldOptions('${sfId}', this.value)">
                     <option value="text" ${sfData && sfData.type==='text'?'selected':''}>Text (मजकूर)</option>
                     <option value="number" ${sfData && sfData.type==='number'?'selected':''}>Number (आकडे)</option>
+                    <option value="mobile" ${sfData && sfData.type==='mobile'?'selected':''}>Mobile No. (मोबाईल नंबर)</option>
                     <option value="date" ${sfData && sfData.type==='date'?'selected':''}>Date (तारीख)</option>
                     <option value="dropdown" ${sfData && sfData.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
                     <option value="sum" ${sfData && sfData.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
@@ -1808,7 +1837,12 @@
                     <input type="text" id="sfopts_${sfId}" placeholder="..." class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
                 </div>
 
-                <div id="sfdep_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='number' || sfData.type==='text') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:8px; border-radius:4px; border-left: 2px solid #00acc1;">
+                <div id="sfrng_container_${sfId}" style="display:${sfData && sfData.type==='number' ? 'block' : 'none'}; margin-top: 5px; background:#e8f5e9; padding:8px; border-radius:4px; border-left: 2px solid #2e7d32;">
+                    <label style="font-size:11px; font-weight:bold; color:#2e7d32;">🔢 संख्या मर्यादा (उदा. 15-45):</label>
+                    <input type="text" placeholder="15-45" class="sfrange" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.range || '') : ''}">
+                </div>
+
+                <div id="sfdep_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='number' || sfData.type==='text' || sfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:8px; border-radius:4px; border-left: 2px solid #00acc1;">
                     <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट (Conditional):</label>
                     <input type="text" placeholder="उदा. ब्लिचिंग पावडर=No:Not aplicable" class="sfdepend" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.dependency || '') : ''}">
                 </div>
@@ -1838,6 +1872,7 @@
                 <select class="ssftype" style="width: 100%; font-size:13px; padding:6px; margin-top: 5px;" onchange="toggleSubSubFieldOptions('${ssfId}', this.value)">
                     <option value="text" ${ssfData && ssfData.type==='text'?'selected':''}>Text</option>
                     <option value="number" ${ssfData && ssfData.type==='number'?'selected':''}>Number</option>
+                    <option value="mobile" ${ssfData && ssfData.type==='mobile'?'selected':''}>Mobile</option>
                     <option value="date" ${ssfData && ssfData.type==='date'?'selected':''}>Date</option>
                     <option value="dropdown" ${ssfData && ssfData.type==='dropdown'?'selected':''}>Dropdown</option>
                     <option value="sum" ${ssfData && ssfData.type==='sum'?'selected':''}>Total (Sum)</option>
@@ -1846,7 +1881,11 @@
                     <input type="text" id="ssfopts_${ssfId}" placeholder="${ssfData && ssfData.type==='sum' ? 'बेरीज सूत्र...' : 'पर्याय...'}" class="ssfopts" style="width: 100%; font-size:12px; padding:4px;" value="${ssfData ? (ssfData.options || '') : ''}">
                 </div>
 
-                <div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
+                <div id="ssfrng_container_${ssfId}" style="display:${ssfData && ssfData.type==='number' ? 'block' : 'none'}; margin-top: 5px; background:#e8f5e9; padding:6px; border-radius:4px; border-left: 2px solid #2e7d32;">
+                    <input type="text" placeholder="संख्या मर्यादा (उदा. 15-45)" class="ssfrange" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.range || '') : ''}">
+                </div>
+
+                <div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
                     <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट:</label>
                     <input type="text" placeholder="उदा. प्रश्न=No:Not aplicable" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
                 </div>
@@ -1862,6 +1901,7 @@
                 label: el.querySelector('.fname').value, 
                 type: el.querySelector('.ftype').value, 
                 options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "",
+                range: el.querySelector('.frange') ? el.querySelector('.frange').value : "",
                 dependency: el.querySelector('.fdepend') ? el.querySelector('.fdepend').value : ""
             };
             if (fieldObj.type === 'group') {
@@ -1871,6 +1911,7 @@
                         label: sfEl.querySelector('.sfname').value, 
                         type: sfEl.querySelector('.sftype').value, 
                         options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "",
+                        range: sfEl.querySelector('.sfrange') ? sfEl.querySelector('.sfrange').value : "",
                         dependency: sfEl.querySelector('.sfdepend') ? sfEl.querySelector('.sfdepend').value : ""
                     };
                     if(sfObj.type === 'group') {
@@ -1880,6 +1921,7 @@
                                 label: ssfEl.querySelector('.ssfname').value, 
                                 type: ssfEl.querySelector('.ssftype').value, 
                                 options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "",
+                                range: ssfEl.querySelector('.ssfrange') ? ssfEl.querySelector('.ssfrange').value : "",
                                 dependency: ssfEl.querySelector('.ssfdepend') ? ssfEl.querySelector('.ssfdepend').value : ""
                             });
                         });
