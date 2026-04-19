@@ -829,6 +829,7 @@
         }, 100);
     }
 
+    // 🌟 दुरुस्ती: Button Inactive होण्याचा बग फिक्स केला (try-catch-finally वापरून) 🌟
     async function saveDataLocal() {
         if(isSaving) return; 
         const saveBtn = document.getElementById('mainSaveBtn');
@@ -879,6 +880,8 @@
 
             let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
             let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+            
+            let hasNewData = false; 
 
             formsToProcess.forEach(f => {
                 let formPrefix = prefixMap[f.FormID];
@@ -887,10 +890,11 @@
                     if (f.FormType === 'List') {
                         let tbody = document.getElementById(`list_tbody_${f.FormID}`);
                         if(tbody) {
+                            let addedCount = 0;
                             Array.from(tbody.children).forEach(tr => {
                                 let rowIdParts = tr.id.split('_'); 
                                 let rIdx = rowIdParts[rowIdParts.length - 1];
-                                let prefix = `list_${formPrefix}_${rIdx}`;
+                                let prefix = `list_${f.FormID}_${rIdx}`;
                                 
                                 calculateAutoSums(tr.id);
                                 handleDependencies(tr.id);
@@ -910,9 +914,13 @@
                                     formData["वर्ष"] = year;
                                     const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
                                     q.push(entry);
+                                    hasNewData = true;
+                                    addedCount++;
                                 }
                             });
-                            history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+                            if(addedCount > 0) {
+                                history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+                            }
                         }
                     } else {
                         let safeVName = village.replace(/\s+/g, '_');
@@ -932,11 +940,17 @@
 
                         const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
                         q.push(entry);
+                        hasNewData = true;
 
                         history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
                     }
                 });
             });
+
+            if(!hasNewData) {
+                alert("⚠️ तुम्ही कोणतीही नवीन माहिती भरलेली नाही! कृपया फॉर्म भरा.");
+                return;
+            }
 
             localStorage.setItem("syncQueue", JSON.stringify(q));
             localStorage.setItem("submissionHistory", JSON.stringify(history));
@@ -1484,7 +1498,7 @@
 
             let subCenterIdx = headers.indexOf("उपकेंद्र");
             let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
-            let mobIdx = headers.indexOf("मोबाईल क्र.");
+            let mobIdx = headers.indexOf("मोबाईलCr.");
             let villageIdx = headers.indexOf("गाव");
 
             let h1Arr = []; let h2Arr = [];
