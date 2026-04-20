@@ -258,13 +258,29 @@
         let depAttr = f.dependency ? `data-dependency="${f.dependency}"` : "";
         let rangeAttr = "";
         
-        // 🌟 Number Range Validation 🌟
+        // 🌟 Number Range Validation (आता <, >, <=, >= ला सपोर्ट करते) 🌟
         if (f.type === 'number' && f.range) {
-            let parts = f.range.split('-');
-            if(parts.length === 2) {
-                let min = parts[0].trim();
-                let max = parts[1].trim();
-                rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { alert('⚠️ कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+            let r = String(f.range).trim();
+            
+            if (r.startsWith('<=')) {
+                let max = Number(r.replace('<=', '').trim());
+                rangeAttr = ` max="${max}" title="कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) > ${max}) { alert('⚠️ कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+            } else if (r.startsWith('<')) {
+                let max = Number(r.replace('<', '').trim());
+                rangeAttr = ` max="${max-1}" title="कृपया ${max} पेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) >= ${max}) { alert('⚠️ कृपया ${max} पेक्षा कमी संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+            } else if (r.startsWith('>=')) {
+                let min = Number(r.replace('>=', '').trim());
+                rangeAttr = ` min="${min}" title="कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) < ${min}) { alert('⚠️ कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+            } else if (r.startsWith('>')) {
+                let min = Number(r.replace('>', '').trim());
+                rangeAttr = ` min="${min+1}" title="कृपया ${min} पेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) <= ${min}) { alert('⚠️ कृपया ${min} पेक्षा जास्त संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+            } else if (r.includes('-')) {
+                let parts = r.split('-');
+                if(parts.length === 2) {
+                    let min = parts[0].trim();
+                    let max = parts[1].trim();
+                    rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { alert('⚠️ कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+                }
             }
         }
 
@@ -879,7 +895,6 @@
         }, 100);
     }
 
-    // 🌟 दुरुस्ती: Button Inactive होण्याचा बग फिक्स केला 🌟
     async function saveDataLocal() {
         if(isSaving) return; 
         const saveBtn = document.getElementById('mainSaveBtn');
@@ -944,7 +959,7 @@
                             Array.from(tbody.children).forEach(tr => {
                                 let rowIdParts = tr.id.split('_'); 
                                 let rIdx = rowIdParts[rowIdParts.length - 1];
-                                let prefix = `list_${f.FormID}_${rIdx}`; // 🌟 Fix applied here
+                                let prefix = `list_${f.FormID}_${rIdx}`;
                                 
                                 calculateAutoSums(tr.id);
                                 handleDependencies(tr.id);
