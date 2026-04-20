@@ -368,51 +368,66 @@
         return fields;
     }
 
-    function generateListTableHTML(f, formPrefix) {
+    // 🌟 नवीन: मोबाईल आहे की कम्प्युटर हे ओळखणारे फंक्शन 🌟
+    function isMobile() {
+        return window.innerWidth <= 768; // 768px पेक्षा कमी स्क्रीन असेल तर मोबाईल समजा
+    }
+
+    // 🌟 सुधारित: डिव्हाईसनुसार टेबल किंवा उभे बॉक्स बनवणारे फंक्शन 🌟
+    function generateListHTML(f, formPrefix) {
         let fields = extractFieldsFromForm(f);
-        let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white; min-width:60px;">अ.क्र.</th>`;
-        
-        JSON.parse(f.StructureJSON).forEach((field, i) => {
-            if (field.type === 'group') {
-                field.subFields.forEach((sf, j) => {
-                    if (sf.type === 'group') {
-                        sf.subFields.forEach((ssf, k) => {
-                            headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
-                        });
-                    } else {
-                        headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
-                    }
-                });
-            } else {
-                headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
-            }
-        });
-        headersHtml += `</tr>`;
-        
         let html = `<h3 style="background: #00705a; color: white; padding: 10px; margin: 0;">📌 ${f.FormName} (रुग्ण/लाभार्थी यादी)</h3>`;
-        html += `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd; margin-top:0;">
-                    <table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
-                        <thead>${headersHtml}</thead>
-                        <tbody id="list_tbody_${f.FormID}">`;
         
         let initialRowIdx = Date.now();
-        html += generateSingleListRow(f, fields, formPrefix, initialRowIdx);
-        
-        html += `   </tbody>
-                    </table>
-                </div>`;
-        html += `<button type="button" onclick="addListRow('${f.FormID}')" style="margin-top:15px; background:#17a2b8; color:white; font-weight:bold; border:none; padding:10px; border-radius:5px; cursor:pointer; width:100%; font-size:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">➕ आणखी एक रुग्ण/लाभार्थी जोडा (Add Row)</button>`;
+
+        if (isMobile()) {
+            // 📱 मोबाईल व्ह्यू (Vertical Cards - एकाखाली एक)
+            html += `<div id="list_tbody_${f.FormID}" style="background:#f4f7f6; padding:10px; border-bottom:1px solid #ddd;">`;
+            html += generateSingleListRowMobile(f, fields, formPrefix, initialRowIdx);
+            html += `</div>`;
+        } else {
+            // 💻 कम्प्युटर व्ह्यू (Horizontal Table - एक्सेल सारखे)
+            let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white; min-width:60px;">अ.क्र.</th>`;
+            JSON.parse(f.StructureJSON).forEach((field, i) => {
+                if (field.type === 'group') {
+                    field.subFields.forEach((sf, j) => {
+                        if (sf.type === 'group') {
+                            sf.subFields.forEach((ssf, k) => {
+                                headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
+                            });
+                        } else {
+                            headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
+                        }
+                    });
+                } else {
+                    headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
+                }
+            });
+            headersHtml += `</tr>`;
+
+            html += `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd; margin-top:0;">
+                        <table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
+                            <thead>${headersHtml}</thead>
+                            <tbody id="list_tbody_${f.FormID}">`;
+            html += generateSingleListRowDesktop(f, fields, formPrefix, initialRowIdx);
+            html += `   </tbody>
+                        </table>
+                    </div>`;
+        }
+
+        html += `<button type="button" onclick="addListRow('${f.FormID}')" style="margin-top:15px; background:#17a2b8; color:white; font-weight:bold; border:none; padding:12px; border-radius:6px; cursor:pointer; width:100%; font-size:16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">➕ आणखी एक नोंद/रुग्ण जोडा (Add Row)</button>`;
         
         setTimeout(() => updateListRowNumbers(f.FormID), 50);
         return html;
     }
 
-    function generateSingleListRow(f, fields, formPrefix, uniqueIdx) {
+    // 💻 कम्प्युटरसाठी टेबलची ओळ
+    function generateSingleListRowDesktop(f, fields, formPrefix, uniqueIdx) {
         let rowId = `listrow_${formPrefix}_${uniqueIdx}`;
         let inputPrefix = `list_${formPrefix}_${uniqueIdx}`;
         let trHtml = `<tr id="${rowId}">`;
         
-        trHtml += `<td class="sticky-col" style="text-align:center;">- <br><button tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${f.FormID}');" style="color:red; background:none; border:none; cursor:pointer; font-size:16px; margin-top:5px;" title="ओळ काढून टाका">✖</button></td>`;
+        trHtml += `<td class="sticky-col" style="text-align:center; vertical-align:top; padding-top:15px;">- <br><button type="button" tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${f.FormID}');" style="color:red; background:none; border:none; cursor:pointer; font-size:18px; margin-top:5px;" title="ओळ काढून टाका">✖</button></td>`;
         
         fields.forEach(fld => {
             let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
@@ -422,6 +437,32 @@
         return trHtml;
     }
 
+    // 📱 मोबाईलसाठी उभ्या बॉक्सची ओळ (Card)
+    function generateSingleListRowMobile(f, fields, formPrefix, uniqueIdx) {
+        let rowId = `listrow_${formPrefix}_${uniqueIdx}`;
+        let inputPrefix = `list_${formPrefix}_${uniqueIdx}`;
+        
+        let html = `<div class="mobile-list-card" id="${rowId}" style="background:white; padding:15px; margin-bottom:20px; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1); border:1px solid #bce8f1; position:relative;">`;
+        
+        // Header and Delete Button
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #eee; padding-bottom:8px; margin-bottom:15px;">
+                    <span class="row-number" style="color:#00705a; font-weight:bold; font-size:18px;">रुग्ण १</span>
+                    <button type="button" tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${f.FormID}');" style="color:white; background:#dc3545; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; width:auto; font-weight:bold;">काढून टाका ✖</button>
+                 </div>`;
+        
+        // Vertical Inputs
+        fields.forEach(fld => {
+            html += `<div style="margin-bottom:12px;">`;
+            html += `<label style="font-size:14px; font-weight:bold; color:#444; display:block; margin-bottom:5px;">${fld.label}</label>`;
+            let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
+            html += cellHtml;
+            html += `</div>`;
+        });
+        
+        html += `</div>`;
+        return html;
+    }
+
     function addListRow(fId) {
         const f = masterData.forms.find(x => x.FormID === fId);
         if(!f) return;
@@ -429,18 +470,26 @@
         let rowIdx = Date.now() + Math.floor(Math.random() * 100); 
         let fields = extractFieldsFromForm(f);
         
-        let trHtml = generateSingleListRow(f, fields, fId, rowIdx);
-        tbody.insertAdjacentHTML('beforeend', trHtml);
+        let newHtml = isMobile() ? generateSingleListRowMobile(f, fields, fId, rowIdx) : generateSingleListRowDesktop(f, fields, fId, rowIdx);
         
+        tbody.insertAdjacentHTML('beforeend', newHtml);
         updateListRowNumbers(fId);
     }
     
     function updateListRowNumbers(fId) {
-        let tbody = document.getElementById(`list_tbody_${fId}`);
-        if(!tbody) return;
-        Array.from(tbody.children).forEach((tr, index) => {
-            tr.children[0].innerHTML = `<b>${index + 1}</b> <br><button tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${fId}');" style="color:red; background:none; border:none; cursor:pointer; font-size:16px; margin-top:5px;" title="काढून टाका">✖</button>`;
-        });
+        let container = document.getElementById(`list_tbody_${fId}`);
+        if(!container) return;
+        
+        if (isMobile()) {
+            Array.from(container.children).forEach((card, index) => {
+                let header = card.querySelector('.row-number');
+                if(header) header.innerText = `नोंद / रुग्ण ${index + 1}`;
+            });
+        } else {
+            Array.from(container.children).forEach((tr, index) => {
+                tr.children[0].innerHTML = `<b>${index + 1}</b> <br><button type="button" tabindex="-1" onclick="this.parentElement.parentElement.remove(); updateListRowNumbers('${fId}');" style="color:red; background:none; border:none; cursor:pointer; font-size:18px; margin-top:5px;" title="काढून टाका">✖</button>`;
+            });
+        }
     }
 
     function generateFormHTML(f, prefix, areaId) {
@@ -715,6 +764,7 @@
                 return !isFullyFilled;
             } else {
                 const selectedForm = masterData.forms.find(f => f.FormID === fId);
+                // फक्त 'Stats' फॉर्म्सच गायब करा. 'List' फॉर्म्स गायब करू नका.
                 if(selectedForm && selectedForm.FormType === 'Stats') {
                     if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
                 }
@@ -816,7 +866,7 @@
                 }
                 
                 area.innerHTML = `<div id="${formContainerId}" style="border: 2px solid #00705a; border-radius: 8px; background: #fdfdfd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow:hidden;">` 
-                                 + generateListTableHTML(f, f.FormID) 
+                                 + generateListHTML(f, f.FormID) 
                                  + `</div>`;
             }
         }
@@ -829,7 +879,7 @@
         }, 100);
     }
 
-    // 🌟 दुरुस्ती: Button Inactive होण्याचा बग फिक्स केला (try-catch-finally वापरून) 🌟
+    // 🌟 दुरुस्ती: Button Inactive होण्याचा बग फिक्स केला 🌟
     async function saveDataLocal() {
         if(isSaving) return; 
         const saveBtn = document.getElementById('mainSaveBtn');
@@ -894,7 +944,7 @@
                             Array.from(tbody.children).forEach(tr => {
                                 let rowIdParts = tr.id.split('_'); 
                                 let rIdx = rowIdParts[rowIdParts.length - 1];
-                                let prefix = `list_${f.FormID}_${rIdx}`;
+                                let prefix = `list_${f.FormID}_${rIdx}`; // 🌟 Fix applied here
                                 
                                 calculateAutoSums(tr.id);
                                 handleDependencies(tr.id);
@@ -1498,7 +1548,7 @@
 
             let subCenterIdx = headers.indexOf("उपकेंद्र");
             let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
-            let mobIdx = headers.indexOf("मोबाईलCr.");
+            let mobIdx = headers.indexOf("मोबाईल क्र.");
             let villageIdx = headers.indexOf("गाव");
 
             let h1Arr = []; let h2Arr = [];
