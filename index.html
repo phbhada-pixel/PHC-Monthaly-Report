@@ -93,7 +93,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 <div class="row-flex" style="margin-top: 10px;">
 <div>
 <label>महिना:</label>
-<select id="selMonth" onchange="updateVillageDropdown()">
+<select id="selMonth" onchange="updateFormDropdowns(); updateVillageDropdown();">
 <option value="जानेवारी">जानेवारी</option><option value="फेब्रुवारी">फेब्रुवारी</option>
 <option value="मार्च">मार्च</option><option value="एप्रिल" selected>एप्रिल</option>
 <option value="मे">मे</option><option value="जून">जून</option>
@@ -104,7 +104,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 </div>
 <div>
 <label>वर्ष:</label>
-<select id="selYear" onchange="updateVillageDropdown()">
+<select id="selYear" onchange="updateFormDropdowns(); updateVillageDropdown();">
 <option value="2025">2025</option><option value="2026" selected>2026</option>
 </select>
 </div>
@@ -699,6 +699,8 @@ document.getElementById('adminSection').classList.add('hidden');
 if(tab === 'entry') {
 document.getElementById('tabEntry').classList.add('active');
 document.getElementById('entrySection').classList.remove('hidden');
+updateFormDropdowns(); // Tab switch केल्यावर यादी पुन्हा रिफ्रेश होईल
+updateVillageDropdown();
 } else if(tab === 'edit') {
 document.getElementById('tabEdit').classList.add('active');
 document.getElementById('editSection').classList.remove('hidden');
@@ -721,12 +723,12 @@ let isAll = allowedRoles.includes("ALL");
 
 const isLocalFilled = localHistory.some(h =>
 h.formID === formObj.FormID && h.village === vName &&
-h.month === month && h.year == year &&
+h.month === month && String(h.year) === String(year) &&
 h.mobile === String(user.mobile).trim()
 );
 
 const isServerFilled = serverHistory.some(h => {
-if(h.formID !== formObj.FormID || h.village !== vName || h.month !== month || h.year != year) return false;
+if(h.formID !== formObj.FormID || h.village !== vName || h.month !== month || String(h.year) !== String(year)) return false;
 if(h.isAllForm || isAll) return true;
 return h.mobile === String(user.mobile).trim();
 });
@@ -734,33 +736,77 @@ return h.mobile === String(user.mobile).trim();
 return isLocalFilled || isServerFilled;
 }
 
-// --- Entry Section Logic ---
+// 🟢 NEW FEATURE: संपूर्ण भरलेला फॉर्म लिस्ट मधून लपवण्यासाठी स्मार्ट अपडेट
 function updateFormDropdowns() {
-const selForm = document.getElementById('selForm');
-const editForm = document.getElementById('editFormSelect');
-const repForm = document.getElementById('reportFormSelect');
+    const selForm = document.getElementById('selForm');
+    const editForm = document.getElementById('editFormSelect');
+    const repForm = document.getElementById('reportFormSelect');
 
-selForm.innerHTML = '<option value="">-- निवडा --</option>';
-selForm.innerHTML += '<option value="ALL_STATS" style="font-weight:bold; color:#d35400;">📝 सर्व आकडेवारी अहवाल एकत्रित भरा (All Stats)</option>';
+    const entryMonth = document.getElementById('selMonth') ? document.getElementById('selMonth').value : "";
+    const entryYear = document.getElementById('selYear') ? document.getElementById('selYear').value : "";
 
-editForm.innerHTML = '<option value="">-- निवडा --</option>';
-repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
+    let currentSel = selForm ? selForm.value : "";
+    let currentEdit = editForm ? editForm.value : "";
+    let currentRep = repForm ? repForm.value : "";
 
-masterData.forms.forEach(f => {
-let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
-let userRole = user ? String(user.role).trim().toUpperCase() : "";
-let isInactive = isFormInactive(f);
+    if(selForm) {
+        selForm.innerHTML = '<option value="">-- निवडा --</option>';
+        selForm.innerHTML += '<option value="ALL_STATS" style="font-weight:bold; color:#d35400;">📝 सर्व आकडेवारी अहवाल एकत्रित भरा (All Stats)</option>';
+    }
+    if(editForm) editForm.innerHTML = '<option value="">-- निवडा --</option>';
+    if(repForm) repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
 
-if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
-    if (isInactive && userRole !== "ADMIN") return;
+    if (!masterData || !masterData.forms) return;
 
-    let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
+    masterData.forms.forEach(f => {
+        let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+        let userRole = user ? String(user.role).trim().toUpperCase() : "";
+        let isInactive = isFormInactive(f);
 
-    selForm.innerHTML += opt;
-    editForm.innerHTML += opt;
-    repForm.innerHTML += opt; 
-}
-});
+        if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
+            if (isInactive && userRole !== "ADMIN") return;
+
+            // जर सर्व गावांचा डेटा भरला असेल, तर फॉर्मला 'Entry' च्या लिस्ट मधून लपवा
+            let isFullyFilled = true;
+            if (user && entryMonth && entryYear && (f.FormType === 'Stats' || f.FormType === 'ProgressiveStats')) {
+                let hasVillages = false;
+                masterData.villages.forEach(v => {
+                    const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
+                    if(belongsToSubCenter) {
+                        hasVillages = true;
+                        if (!isFormFilledForVillage(f, v.VillageName, entryMonth, entryYear)) {
+                            isFullyFilled = false;
+                        }
+                    }
+                });
+                if (!hasVillages) isFullyFilled = false;
+            } else {
+                isFullyFilled = false;
+            }
+
+            let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
+
+            // फक्त तेच फॉर्म दाखवा जे भरायचे बाकी आहेत
+            if(selForm && !isFullyFilled) {
+                selForm.innerHTML += opt;
+            }
+            
+            // Edit आणि Reports मध्ये मात्र सर्व फॉर्म्स दिसतील
+            if(editForm) editForm.innerHTML += opt;
+            if(repForm) repForm.innerHTML += opt; 
+        }
+    });
+
+    if(selForm) {
+        if(selForm.querySelector(`option[value="${currentSel}"]`)) {
+            selForm.value = currentSel;
+        } else { 
+            selForm.value = ""; 
+            if(document.getElementById('dynamicFormArea')) document.getElementById('dynamicFormArea').innerHTML = ""; 
+        }
+    }
+    if(editForm && editForm.querySelector(`option[value="${currentEdit}"]`)) editForm.value = currentEdit;
+    if(repForm && repForm.querySelector(`option[value="${currentRep}"]`)) repForm.value = currentRep;
 }
 
 function updateVillageDropdown() {
@@ -1047,6 +1093,7 @@ await syncDataToServer("syncStatus", "mainSaveBtn");
 
 document.getElementById('selVillage').value = "";
 document.getElementById('dynamicFormArea').innerHTML = "";
+updateFormDropdowns(); // 🟢 फॉर्म पूर्ण भरला असल्यास तो मुख्य यादीतून गायब होईल
 updateVillageDropdown();
 
 } catch (error) {
@@ -1363,6 +1410,7 @@ function clearLocalHistory() {
 if(confirm("जर तुम्ही गुगल शीटमधील जुना डेटा डिलीट केला असेल, तरच हे बटण दाबा. यामुळे लपलेली सर्व गावे पुन्हा दिसू लागतील. तुम्हाला गावे रीसेट करायची आहेत का?")) {
 localStorage.removeItem("submissionHistory");
 updateVillageDropdown();
+updateFormDropdowns();
 const statusText = document.getElementById('syncStatus');
 statusText.style.color = "#ffc107";
 statusText.innerText = "✅ गावांची यादी यशस्वीरित्या रीसेट झाली आहे!";
