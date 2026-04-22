@@ -218,7 +218,12 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 <h3 id="builderTitle">नवीन फॉर्म तयार करा</h3>
 <input type="hidden" id="editFormID">
 <input type="text" id="newFormName" placeholder="फॉर्मचे नाव">
-<select id="newFormType"><option value="List">गावनिहाय लिस्ट</option><option value="Stats">गावनिहाय आकडेवारी</option></select>
+
+<select id="newFormType">
+    <option value="List">गावनिहाय लिस्ट (Patient List)</option>
+    <option value="Stats">गावनिहाय आकडेवारी (फक्त मासिक / Monthly Only)</option>
+    <option value="ProgressiveStats" style="font-weight:bold; color:var(--primary);">📊 गावनिहाय आकडेवारी (मासिक + क्रमिक / Progressive)</option>
+</select>
 
 <div style="margin-top:10px;">
     <input type="checkbox" id="formIsActive" checked> <label for="formIsActive" style="font-weight:bold; color:#d35400;">हा फॉर्म सुरू (Active) ठेवा</label>
@@ -235,7 +240,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 </div>
 
 <div id="fieldsList"></div>
-<button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ मुख्य प्रश्न जो টালি</button>
+<button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ मुख्य प्रश्न जोडा</button>
 <button id="mainActionBtn" class="btn-primary" onclick="saveFullForm()" style="margin-top:15px;">फॉर्म सेव्ह करा</button>
 </div>
 </div>
@@ -256,7 +261,6 @@ let user = null;
 let currentReports = [];
 let isSaving = false;
 
-// 🟢 NEW FIX: Function to reliably check if form is Inactive based on actual Sheet 'Status' column
 function isFormInactive(f) {
     if (f.Status !== undefined && f.Status !== null) {
         let s = String(f.Status).trim().toUpperCase();
@@ -745,15 +749,10 @@ repForm.innerHTML = '<option value="">-- निवडा --</option><option valu
 masterData.forms.forEach(f => {
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
-
-// Check if form is inactive based on correct Status column logic
 let isInactive = isFormInactive(f);
 
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
-    // If form is inactive, do NOT show it to non-admins
-    if (isInactive && userRole !== "ADMIN") {
-        return;
-    }
+    if (isInactive && userRole !== "ADMIN") return;
 
     let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
 
@@ -780,13 +779,14 @@ const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowe
 if(!belongsToSubCenter) return false;
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+// BOTH STATS AND PROGRESSIVE STATS ARE INCLUDED IN ALL STATS
+let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 
 let isFullyFilled = true;
 for (let f of statsForms) {
 let isInactive = isFormInactive(f);
-if (isInactive && userRole !== "ADMIN") continue; // Skip inactive forms for non-admins
+if (isInactive && userRole !== "ADMIN") continue; 
 
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
@@ -799,7 +799,7 @@ break;
 return !isFullyFilled;
 } else {
 const selectedForm = masterData.forms.find(f => f.FormID === fId);
-if(selectedForm && selectedForm.FormType === 'Stats') {
+if(selectedForm && (selectedForm.FormType === 'Stats' || selectedForm.FormType === 'ProgressiveStats')) {
 if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
 }
 }
@@ -831,7 +831,7 @@ return;
 }
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
 let allHtml = "";
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 let renderedFormsCount = 0;
@@ -878,7 +878,7 @@ if(!f) return;
 
 let formContainerId = `form_area_${f.FormID}`;
 
-if (f.FormType === 'Stats') {
+if (f.FormType === 'Stats' || f.FormType === 'ProgressiveStats') {
 let formSpecificVillages = [];
 if(isBulk) {
 formSpecificVillages = availableVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
@@ -947,7 +947,7 @@ let formsToProcess = [];
 let prefixMap = {};
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
+let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 statsForms.forEach(f => {
 let isInactive = isFormInactive(f);
@@ -1346,7 +1346,7 @@ setTimeout(() => { statusText.innerText = ""; statusText.style.color = "green"; 
 }
 }
 
-// --- Reports Logic ---
+// --- Reports & Progressive Logic ---
 function getTotalsRow(data, headers, showIndices) {
 let totals = Array(headers.length).fill(0);
 let isNumericCol = Array(headers.length).fill(false);
@@ -1375,6 +1375,31 @@ totals[c] = colSum;
 }
 }
 return { totals, isNumericCol };
+}
+
+// Progressive Target Months Logic (April is starting of Financial Year)
+function getProgressiveTargetMonthsAndYears(selM, selY) {
+    const months = ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"];
+    const fyStartMonthIdx = 3; // "एप्रिल"
+    let selectedMonthIdx = months.indexOf(selM);
+    let sYear = parseInt(selY);
+
+    let result = [];
+    if (selectedMonthIdx >= fyStartMonthIdx) {
+        // e.g. Selected August: Need April to August of same year
+        for(let i = fyStartMonthIdx; i <= selectedMonthIdx; i++) {
+            result.push({m: months[i], y: String(sYear)});
+        }
+    } else {
+        // e.g. Selected February 2026: Need April to Dec of 2025 + Jan to Feb of 2026
+        for(let i = fyStartMonthIdx; i <= 11; i++) {
+            result.push({m: months[i], y: String(sYear - 1)});
+        }
+        for(let i = 0; i <= selectedMonthIdx; i++) {
+            result.push({m: months[i], y: String(sYear)});
+        }
+    }
+    return result;
 }
 
 async function fetchReportData() {
@@ -1407,24 +1432,116 @@ if(d.success) {
 if(d.reports && d.reports.length > 0) {
 let finalReports = [];
 d.reports.forEach(rep => {
-let headers = rep.data[0];
-if(!headers) return;
+    let headers = rep.data[0];
+    if(!headers) return;
 
-let monthIdx = headers.indexOf("महिना");
-let yearIdx = headers.indexOf("वर्ष");
+    const formObj = masterData.forms.find(x => x.FormName === rep.formName);
+    let isProgressive = formObj && formObj.FormType === 'ProgressiveStats';
 
-let fData = [headers];
-let dataRows = [];
+    let monthIdx = headers.indexOf("महिना");
+    let yearIdx = headers.indexOf("वर्ष");
+    let villageIdx = headers.indexOf("गाव");
+    if(villageIdx === -1) villageIdx = headers.indexOf("Village"); // fallback
 
-for(let i=1; i<rep.data.length; i++) {
-let row = rep.data[i];
-let matchMonth = (selMonth === "सर्व" || String(row[monthIdx]).trim() === String(selMonth).trim());
-let matchYear = (selYear === "सर्व" || String(row[yearIdx]).trim() === String(selYear).trim());
-if(matchMonth && matchYear) dataRows.push(row);
-}
+    let fData = [];
+    let dataRows = [];
 
-fData = fData.concat(dataRows);
-finalReports.push({ formName: rep.formName, data: fData });
+    // --- PROGRESSIVE STATS LOGIC ---
+    if (isProgressive && selMonth !== "सर्व" && selYear !== "सर्व") {
+        let flatFields = extractFieldsFromForm(formObj);
+        let numericLabels = flatFields.filter(f => f.orig.type === 'number' || f.orig.type === 'sum').map(f => f.label);
+
+        let newHeaders = [];
+        let numMap = {}; 
+        
+        // Header restructuring
+        headers.forEach((h, i) => {
+            if (numericLabels.includes(h)) {
+                newHeaders.push(`${h} - चालू महिना`);
+                newHeaders.push(`${h} - क्रमिक (एप्रिलपासून)`);
+                numMap[i] = true;
+            } else {
+                newHeaders.push(h);
+            }
+        });
+        fData.push(newHeaders);
+
+        let targetPeriods = getProgressiveTargetMonthsAndYears(selMonth, selYear);
+        let villageData = {};
+
+        for(let i=1; i<rep.data.length; i++) {
+            let row = rep.data[i];
+            let m = String(row[monthIdx]).trim();
+            let y = String(row[yearIdx]).trim();
+            let v = String(row[villageIdx] || "").trim();
+
+            let isMatch = targetPeriods.some(p => p.m === m && p.y === y);
+
+            if(isMatch) {
+                let sc = headers.indexOf("उपकेंद्र") > -1 ? String(row[headers.indexOf("उपकेंद्र")]).trim() : "";
+                let empName = headers.indexOf("कर्मचाऱ्याचे नाव") > -1 ? String(row[headers.indexOf("कर्मचाऱ्याचे नाव")]).trim() : "";
+                let mob = headers.indexOf("मोबाईल क्र.") > -1 ? String(row[headers.indexOf("मोबाईल क्र.")]).trim() : "";
+
+                let gKey = `${sc}_${mob}_${v}`;
+
+                if(!villageData[gKey]) {
+                    villageData[gKey] = { baseRow: Array(headers.length).fill("-"), progressive: {}, monthly: {} };
+                    headers.forEach((_, cIdx) => {
+                        if(!numMap[cIdx]) villageData[gKey].baseRow[cIdx] = row[cIdx];
+                    });
+                }
+
+                if (m === selMonth && y === selYear) {
+                    headers.forEach((_, cIdx) => {
+                        if(!numMap[cIdx]) villageData[gKey].baseRow[cIdx] = row[cIdx];
+                    });
+                }
+
+                headers.forEach((_, cIdx) => {
+                    if (numMap[cIdx]) {
+                        let val = parseFloat(row[cIdx]);
+                        if(!isNaN(val)) {
+                            villageData[gKey].progressive[cIdx] = (villageData[gKey].progressive[cIdx] || 0) + val;
+                            if (m === selMonth && y === selYear) {
+                                villageData[gKey].monthly[cIdx] = val;
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        Object.keys(villageData).forEach(k => {
+            let vData = villageData[k];
+            let newRow = [];
+            headers.forEach((h, cIdx) => {
+                if (numMap[cIdx]) {
+                    newRow.push(vData.monthly[cIdx] !== undefined ? vData.monthly[cIdx] : 0);
+                    newRow.push(vData.progressive[cIdx] !== undefined ? vData.progressive[cIdx] : 0);
+                } else {
+                    newRow.push(vData.baseRow[cIdx] !== undefined ? vData.baseRow[cIdx] : "-");
+                }
+            });
+            // Update month and year in row to reflect the query
+            if(monthIdx > -1) newRow[monthIdx] = selMonth;
+            if(yearIdx > -1) newRow[yearIdx] = selYear;
+            
+            dataRows.push(newRow);
+        });
+
+    } else {
+        // Normal processing for Standard Stats / Lists
+        fData.push(headers);
+        for(let i=1; i<rep.data.length; i++) {
+            let row = rep.data[i];
+            let matchMonth = (selMonth === "सर्व" || String(row[monthIdx]).trim() === String(selMonth).trim());
+            let matchYear = (selYear === "सर्व" || String(row[yearIdx]).trim() === String(selYear).trim());
+            if(matchMonth && matchYear) dataRows.push(row);
+        }
+    }
+
+    fData = fData.concat(dataRows);
+    finalReports.push({ formName: rep.formName, data: fData });
 });
 
 if(finalReports.length > 0) {
@@ -1454,7 +1571,7 @@ headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.pu
 let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-const isStats = formObj && formObj.FormType === 'Stats';
+const isStats = formObj && (formObj.FormType === 'Stats' || formObj.FormType === 'ProgressiveStats');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
@@ -1583,7 +1700,7 @@ headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.pu
 let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-const isStats = formObj && formObj.FormType === 'Stats';
+const isStats = formObj && (formObj.FormType === 'Stats' || formObj.FormType === 'ProgressiveStats');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
@@ -1810,7 +1927,6 @@ document.getElementById('editFormID').value = f.FormID;
 document.getElementById('newFormName').value = f.FormName;
 document.getElementById('newFormType').value = f.FormType;
 
-// Check properly using our new function
 document.getElementById('formIsActive').checked = !isFormInactive(f);
 
 let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
@@ -2063,7 +2179,6 @@ fields.push(fieldObj);
 return fields;
 }
 
-// 🟢 NEW FIX: Send BOTH 'isActive' and 'status' so backend apps script works flawlessly
 async function saveFullForm() {
 const name = document.getElementById('newFormName').value;
 const type = document.getElementById('newFormType').value;
