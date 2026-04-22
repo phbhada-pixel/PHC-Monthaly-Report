@@ -46,8 +46,11 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 /* Bulk Data Entry Table Styles */
 .report-table input, .report-table select { padding: 6px; margin: 0; width: 100px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
 .report-table td { padding: 6px; vertical-align: middle; }
-.sticky-col { position: sticky; left: 0; background: #f4f7f6 !important; border-right: 2px solid #ccc; z-index: 1; font-weight: bold; min-width: 100px; text-align:center;}
-.sticky-header-col { position: sticky; left: 0; top: 0; z-index: 3 !important; }
+.sticky-col { position: sticky; left: 0; background: #f4f7f6 !important; border-right: 2px solid #ccc; z-index: 5; font-weight: bold; min-width: 100px; text-align:center;}
+
+@media (max-width: 768px) {
+  .mobile-hide { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -261,6 +264,10 @@ let user = null;
 let currentReports = [];
 let isSaving = false;
 
+function isMobile() {
+    return window.innerWidth <= 768; 
+}
+
 function isFormInactive(f) {
     if (f.Status !== undefined && f.Status !== null) {
         let s = String(f.Status).trim().toUpperCase();
@@ -400,10 +407,6 @@ fields.push({ label: field.label, idSuffix: `${i}`, orig: field });
 }
 });
 return fields;
-}
-
-function isMobile() {
-return window.innerWidth <= 768; 
 }
 
 function generateListHTML(f, formPrefix) {
@@ -555,49 +558,96 @@ html += `</div>`;
 return html;
 }
 
+// 🟢 NEW FEATURE: PC View साठी ३-लेयर डायनॅमिक टेबल हेडर्स 
+function generateTableHeaders(f) {
+    let maxDepth = 1;
+    let struct = JSON.parse(f.StructureJSON);
+    struct.forEach(field => {
+        if (field.type === 'group') {
+            maxDepth = Math.max(maxDepth, 2);
+            field.subFields.forEach(sf => {
+                if (sf.type === 'group') maxDepth = 3;
+            });
+        }
+    });
+
+    let r1 = "", r2 = "", r3 = "";
+    r1 += `<th rowspan="${maxDepth}" class="sticky-header-col" style="background:#00705a; color:white; z-index:4; position:sticky; top:0; left:0; border:1px solid #ddd; padding:10px; text-align:center;">गाव (Village)</th>`;
+
+    struct.forEach(field => {
+        if (field.type === 'group') {
+            let colSpan1 = 0;
+            let fieldHtml2 = "", fieldHtml3 = "";
+            field.subFields.forEach(sf => {
+                if (sf.type === 'group') {
+                    let colSpan2 = sf.subFields.length;
+                    colSpan1 += colSpan2;
+                    fieldHtml2 += `<th colspan="${colSpan2}" style="background:#00705a; color:white; border:1px solid #ddd; padding:8px; text-align:center;">${sf.label}</th>`;
+                    sf.subFields.forEach(ssf => {
+                        fieldHtml3 += `<th style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:6px; text-align:center;">${ssf.label}</th>`;
+                    });
+                } else {
+                    colSpan1 += 1;
+                    let rs2 = maxDepth === 3 ? 2 : 1;
+                    fieldHtml2 += `<th rowspan="${rs2}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:8px; text-align:center;">${sf.label}</th>`;
+                }
+            });
+            r1 += `<th colspan="${colSpan1}" style="background:#00705a; color:white; border:1px solid #ddd; padding:10px; text-align:center;">${field.label}</th>`;
+            r2 += fieldHtml2;
+            r3 += fieldHtml3;
+        } else {
+            r1 += `<th rowspan="${maxDepth}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:10px; text-align:center;">${field.label}</th>`;
+        }
+    });
+
+    let thead = `<tr>${r1}</tr>`;
+    if (maxDepth >= 2) thead += `<tr>${r2}</tr>`;
+    if (maxDepth === 3) thead += `<tr>${r3}</tr>`;
+    return thead;
+}
+
+// 🟢 NEW FEATURE: 'सर्व गावे एकत्रित भरा' (Bulk) साठी मोबाईल व्ह्यू (Vertical Cards) आणि PC व्ह्यू (3 Level Sheet)
 function generateBulkTableHTML(f, availableVillages, formPrefix) {
-let fields = extractFieldsFromForm(f);
-let headersHtml = `<tr><th class="sticky-header-col" style="background:#00705a; color:white;">गाव (Village)</th>`;
+    if (isMobile()) {
+        let html = "";
+        availableVillages.forEach(vName => {
+            let safeVName = vName.replace(/\s+/g, '_');
+            let rowId = `bulkrow_${formPrefix}_${safeVName}`;
+            let inputPrefix = `bulk_${formPrefix}_${safeVName}`;
 
-JSON.parse(f.StructureJSON).forEach((field, i) => {
-if (field.type === 'group') {
-field.subFields.forEach((sf, j) => {
-if (sf.type === 'group') {
-sf.subFields.forEach((ssf, k) => {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
-});
-} else {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
-}
-});
-} else {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
-}
-});
-headersHtml += `</tr>`;
+            html += `<div id="${rowId}" style="background:white; padding:15px; margin-bottom:20px; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1); border:2px solid var(--primary);">`;
+            html += `<h3 style="color:var(--primary); text-align:left; border-bottom:2px solid var(--primary); padding-bottom:5px; margin-top:0; font-size:18px;">🏢 गाव: ${vName}</h3>`;
+            html += generateFormHTML(f, inputPrefix, rowId);
+            html += `</div>`;
+        });
+        return html;
+    }
 
-let rowsHtml = "";
-availableVillages.forEach(vName => {
-let safeVName = vName.replace(/\s+/g, '_');
-let rowId = `bulkrow_${formPrefix}_${safeVName}`;
-let inputPrefix = `bulk_${formPrefix}_${safeVName}`;
+    let fields = extractFieldsFromForm(f);
+    let headersHtml = generateTableHeaders(f);
 
-rowsHtml += `<tr id="${rowId}">`;
-rowsHtml += `<td class="sticky-col">${vName}</td>`;
+    let rowsHtml = "";
+    availableVillages.forEach(vName => {
+        let safeVName = vName.replace(/\s+/g, '_');
+        let rowId = `bulkrow_${formPrefix}_${safeVName}`;
+        let inputPrefix = `bulk_${formPrefix}_${safeVName}`;
 
-fields.forEach(fld => {
-let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
-rowsHtml += `<td>${cellHtml}</td>`;
-});
-rowsHtml += `</tr>`;
-});
+        rowsHtml += `<tr id="${rowId}">`;
+        rowsHtml += `<td class="sticky-col" style="background:#fdfdfd;">${vName}</td>`;
 
-return `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd; margin-top:0;">
-<table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
-<thead>${headersHtml}</thead>
-<tbody>${rowsHtml}</tbody>
-</table>
-</div>`;
+        fields.forEach(fld => {
+            let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
+            rowsHtml += `<td>${cellHtml}</td>`;
+        });
+        rowsHtml += `</tr>`;
+    });
+
+    return `<div class="table-responsive" style="max-height: 65vh; overflow: auto; border: 1px solid #ddd; margin-top:0;">
+    <table class="report-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
+    <thead style="position: sticky; top: 0; z-index: 3;">${headersHtml}</thead>
+    <tbody>${rowsHtml}</tbody>
+    </table>
+    </div>`;
 }
 
 function extractFormData(f, prefix) {
@@ -699,7 +749,7 @@ document.getElementById('adminSection').classList.add('hidden');
 if(tab === 'entry') {
 document.getElementById('tabEntry').classList.add('active');
 document.getElementById('entrySection').classList.remove('hidden');
-updateFormDropdowns(); // Tab switch केल्यावर यादी पुन्हा रिफ्रेश होईल
+updateFormDropdowns(); 
 updateVillageDropdown();
 } else if(tab === 'edit') {
 document.getElementById('tabEdit').classList.add('active');
@@ -714,29 +764,35 @@ document.getElementById('adminSection').classList.remove('hidden');
 }
 }
 
+// 🟢 FIX: .trim() वापरून फॉर्म लपवण्याचे अचूक लॉजिक
 function isFormFilledForVillage(formObj, vName, month, year) {
-const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-const serverHistory = masterData.filledStats || [];
+    const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
+    const serverHistory = masterData.filledStats || [];
 
-let allowedRoles = formObj.AllowedRoles ? formObj.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
-let isAll = allowedRoles.includes("ALL");
+    let allowedRoles = formObj.AllowedRoles ? formObj.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
+    let isAll = allowedRoles.includes("ALL");
 
-const isLocalFilled = localHistory.some(h =>
-h.formID === formObj.FormID && h.village === vName &&
-h.month === month && String(h.year) === String(year) &&
-h.mobile === String(user.mobile).trim()
-);
+    let safeVName = String(vName).trim();
+    let safeMonth = String(month).trim();
+    let safeYear = String(year).trim();
+    let safeMobile = String(user.mobile).trim();
 
-const isServerFilled = serverHistory.some(h => {
-if(h.formID !== formObj.FormID || h.village !== vName || h.month !== month || String(h.year) !== String(year)) return false;
-if(h.isAllForm || isAll) return true;
-return h.mobile === String(user.mobile).trim();
-});
+    const isLocalFilled = localHistory.some(h =>
+        h.formID === formObj.FormID && String(h.village).trim() === safeVName &&
+        String(h.month).trim() === safeMonth && String(h.year).trim() === safeYear &&
+        String(h.mobile).trim() === safeMobile
+    );
 
-return isLocalFilled || isServerFilled;
+    const isServerFilled = serverHistory.some(h => {
+        if(h.formID !== formObj.FormID || String(h.village).trim() !== safeVName || String(h.month).trim() !== safeMonth || String(h.year).trim() !== safeYear) return false;
+        if(h.isAllForm || isAll) return true;
+        return String(h.mobile).trim() === safeMobile;
+    });
+
+    return isLocalFilled || isServerFilled;
 }
 
-// 🟢 NEW FEATURE: संपूर्ण भरलेला फॉर्म लिस्ट मधून लपवण्यासाठी स्मार्ट अपडेट
+// 🟢 FIX: भरलेले फॉर्म्स यादीतून 100% गायब होण्यासाठी
 function updateFormDropdowns() {
     const selForm = document.getElementById('selForm');
     const editForm = document.getElementById('editFormSelect');
@@ -759,39 +815,38 @@ function updateFormDropdowns() {
     if (!masterData || !masterData.forms) return;
 
     masterData.forms.forEach(f => {
-        let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+        let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
         let userRole = user ? String(user.role).trim().toUpperCase() : "";
         let isInactive = isFormInactive(f);
+        let formType = String(f.FormType).trim();
 
         if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
             if (isInactive && userRole !== "ADMIN") return;
 
-            // जर सर्व गावांचा डेटा भरला असेल, तर फॉर्मला 'Entry' च्या लिस्ट मधून लपवा
-            let isFullyFilled = true;
-            if (user && entryMonth && entryYear && (f.FormType === 'Stats' || f.FormType === 'ProgressiveStats')) {
+            let isFullyFilled = false;
+            if (user && entryMonth && entryYear && (formType === 'Stats' || formType === 'ProgressiveStats')) {
                 let hasVillages = false;
+                let fullyFilledCheck = true;
                 masterData.villages.forEach(v => {
-                    const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
+                    const belongsToSubCenter = String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all";
                     if(belongsToSubCenter) {
                         hasVillages = true;
                         if (!isFormFilledForVillage(f, v.VillageName, entryMonth, entryYear)) {
-                            isFullyFilled = false;
+                            fullyFilledCheck = false;
                         }
                     }
                 });
-                if (!hasVillages) isFullyFilled = false;
-            } else {
-                isFullyFilled = false;
+                if (hasVillages && fullyFilledCheck) {
+                    isFullyFilled = true;
+                }
             }
 
             let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
 
-            // फक्त तेच फॉर्म दाखवा जे भरायचे बाकी आहेत
+            // जर 100% भरलेला असेल तर ड्रॉपडाऊनमधून गायब करा (फक्त Entry मध्ये)
             if(selForm && !isFullyFilled) {
                 selForm.innerHTML += opt;
             }
-            
-            // Edit आणि Reports मध्ये मात्र सर्व फॉर्म्स दिसतील
             if(editForm) editForm.innerHTML += opt;
             if(repForm) repForm.innerHTML += opt; 
         }
@@ -821,11 +876,11 @@ if(!user || !fId) { document.getElementById('dynamicFormArea').innerHTML = ""; r
 vSel.innerHTML += '<option value="ALL_VILLAGES" style="font-weight:bold; color:#0056b3;">🏢 सर्व गावे एकत्रित भरा (Bulk Entry)</option>';
 
 masterData.villages.filter(v => {
-const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all";
+const belongsToSubCenter = String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all";
 if(!belongsToSubCenter) return false;
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
+let statsForms = masterData.forms.filter(f => { let t = String(f.FormType).trim(); return t === 'Stats' || t === 'ProgressiveStats'; });
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 
 let isFullyFilled = true;
@@ -833,7 +888,7 @@ for (let f of statsForms) {
 let isInactive = isFormInactive(f);
 if (isInactive && userRole !== "ADMIN") continue; 
 
-let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
 if (!isFormFilledForVillage(f, v.VillageName, month, year)) {
 isFullyFilled = false;
@@ -844,7 +899,7 @@ break;
 return !isFullyFilled;
 } else {
 const selectedForm = masterData.forms.find(f => f.FormID === fId);
-if(selectedForm && (selectedForm.FormType === 'Stats' || selectedForm.FormType === 'ProgressiveStats')) {
+if(selectedForm && (String(selectedForm.FormType).trim() === 'Stats' || String(selectedForm.FormType).trim() === 'ProgressiveStats')) {
 if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
 }
 }
@@ -876,7 +931,7 @@ return;
 }
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
+let statsForms = masterData.forms.filter(f => { let t = String(f.FormType).trim(); return t === 'Stats' || t === 'ProgressiveStats'; });
 let allHtml = "";
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 let renderedFormsCount = 0;
@@ -885,7 +940,7 @@ statsForms.forEach(f => {
 let isInactive = isFormInactive(f);
 if (isInactive && userRole !== "ADMIN") return;
 
-let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
 
 let formSpecificVillages = [];
@@ -922,8 +977,9 @@ const f = masterData.forms.find(x => x.FormID === fId);
 if(!f) return;
 
 let formContainerId = `form_area_${f.FormID}`;
+let type = String(f.FormType).trim();
 
-if (f.FormType === 'Stats' || f.FormType === 'ProgressiveStats') {
+if (type === 'Stats' || type === 'ProgressiveStats') {
 let formSpecificVillages = [];
 if(isBulk) {
 formSpecificVillages = availableVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
@@ -982,7 +1038,7 @@ let isBulk = (vName === "ALL_VILLAGES");
 
 let baseVillages = [];
 masterData.villages.forEach(v => {
-if(v.SubCenterID.toLowerCase() === user.subcenter.toLowerCase() || v.SubCenterID.toLowerCase() === "all") {
+if(String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all") {
 baseVillages.push(v.VillageName);
 }
 });
@@ -992,13 +1048,13 @@ let formsToProcess = [];
 let prefixMap = {};
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
+let statsForms = masterData.forms.filter(f => { let t = String(f.FormType).trim(); return t === 'Stats' || t === 'ProgressiveStats'; });
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 statsForms.forEach(f => {
 let isInactive = isFormInactive(f);
 if (isInactive && userRole !== "ADMIN") return;
 
-let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
 formsToProcess.push(f);
 prefixMap[f.FormID] = f.FormID;
@@ -1021,7 +1077,7 @@ formsToProcess.forEach(f => {
 let formPrefix = prefixMap[f.FormID];
 
 availableVillages.forEach(village => {
-if (f.FormType === 'List') {
+if (String(f.FormType).trim() === 'List') {
 let tbody = document.getElementById(`list_tbody_${f.FormID}`);
 if(tbody) {
 let addedCount = 0;
@@ -1046,14 +1102,14 @@ break;
 if(!isEmpty) {
 formData["महिना"] = month;
 formData["वर्ष"] = year;
-const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+const entry = { entryID: Date.now() + Math.random(), mobileNo: String(user.mobile).trim(), subCenter: String(user.subcenter).trim(), village: String(village).trim(), formID: f.FormID, formData: formData };
 q.push(entry);
 hasNewData = true;
 addedCount++;
 }
 });
 if(addedCount > 0) {
-history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+history.push({formID: f.FormID, village: String(village).trim(), month: String(month).trim(), year: String(year).trim(), mobile: String(user.mobile).trim()});
 }
 }
 } else {
@@ -1072,11 +1128,11 @@ let formData = extractFormData(f, prefix);
 formData["महिना"] = month;
 formData["वर्ष"] = year;
 
-const entry = { entryID: Date.now() + Math.random(), mobileNo: user.mobile, subCenter: user.subcenter, village: village, formID: f.FormID, formData: formData };
+const entry = { entryID: Date.now() + Math.random(), mobileNo: String(user.mobile).trim(), subCenter: String(user.subcenter).trim(), village: String(village).trim(), formID: f.FormID, formData: formData };
 q.push(entry);
 hasNewData = true;
 
-history.push({formID: f.FormID, village: village, month: month, year: year, mobile: String(user.mobile).trim()});
+history.push({formID: f.FormID, village: String(village).trim(), month: String(month).trim(), year: String(year).trim(), mobile: String(user.mobile).trim()});
 }
 });
 });
@@ -1093,7 +1149,8 @@ await syncDataToServer("syncStatus", "mainSaveBtn");
 
 document.getElementById('selVillage').value = "";
 document.getElementById('dynamicFormArea').innerHTML = "";
-updateFormDropdowns(); // 🟢 फॉर्म पूर्ण भरला असल्यास तो मुख्य यादीतून गायब होईल
+
+updateFormDropdowns(); 
 updateVillageDropdown();
 
 } catch (error) {
@@ -1129,7 +1186,7 @@ localStorage.setItem("syncQueue", "[]");
 statusText.style.color = "green";
 statusText.innerText = "✅ माहिती यशस्वीरित्या गुगल शीटवर सेव्ह झाली!";
 setTimeout(() => { statusText.innerText = ""; }, 4000);
-await fetchData();
+await fetchData(); // This refreshes dropdowns
 } else { throw new Error("Server error"); }
 } catch(e) {
 statusText.style.color = "red";
@@ -1151,21 +1208,19 @@ vSel.innerHTML = '<option value="">-- भरलेले गाव / रेक�
 if(!user || !fId) return;
 
 const f = masterData.forms.find(x => x.FormID === fId);
-let allowedRoles = f && f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+let allowedRoles = f && f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 let isAll = allowedRoles.includes("ALL");
 
 const serverHistory = masterData.filledStats || [];
 let addedVillages = [];
 
 serverHistory.forEach(h => {
-if(h.formID === fId && h.month === month && String(h.year) === String(year)) {
+if(h.formID === fId && String(h.month).trim() === String(month).trim() && String(h.year).trim() === String(year).trim()) {
 
-// 🟢 ४८ तासांची अट (48 Hours Logic) ड्रॉपडाऊनमध्ये रेकॉर्ड लपवण्यासाठी
 if (h.timestamp) {
     let recDate = new Date(h.timestamp);
     if (!isNaN(recDate.getTime())) {
         let diffHours = (new Date() - recDate) / (1000 * 60 * 60);
-        // ॲडमिन वगळता इतरांसाठी ४८ तासांनंतर रेकॉर्ड एडिट ड्रॉपडाऊनमधून काढून टाका
         if (diffHours > 48 && user.role !== "Admin") {
             return; 
         }
@@ -1174,8 +1229,8 @@ if (h.timestamp) {
 
 let canEdit = false;
 if(user.role === "Admin") canEdit = true;
-else if(isAll && h.subcenter.toLowerCase() === user.subcenter.toLowerCase()) canEdit = true;
-else if(!isAll && h.mobile === String(user.mobile).trim()) canEdit = true;
+else if(isAll && String(h.subcenter).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase()) canEdit = true;
+else if(!isAll && String(h.mobile).trim() === String(user.mobile).trim()) canEdit = true;
 
 if(canEdit && !addedVillages.includes(h.village)) {
 vSel.innerHTML += `<option value="${h.village}">${h.village}</option>`;
@@ -1211,7 +1266,6 @@ const d = JSON.parse(textResponse);
 document.getElementById('editLoader').style.display = "none";
 
 if(d.success) {
-// 🟢 डबल सिक्युरिटी: जर ड्रॉपडाऊनमध्ये फॉर्म आलाच, तरीही सर्व्हरच्या तारखेवरून 'माहिती मिळवा' वर ४८ तासांचे ब्लॉक लावा
 let recordDateStr = d.formData["तारीख"] || d.formData["Timestamp"];
 if(recordDateStr && user.role !== "Admin") {
     let recDate = new Date(recordDateStr);
@@ -1219,7 +1273,7 @@ if(recordDateStr && user.role !== "Admin") {
         let diffHours = (new Date() - recDate) / (1000 * 60 * 60);
         if(diffHours > 48) {
             alert("⏳ क्षमस्व! हा फॉर्म भरून ४८ तासांपेक्षा जास्त वेळ (२ दिवस) झाला आहे. त्यामुळे आता यामध्ये बदल (Edit) करता येणार नाही.");
-            return; // Block editing
+            return; 
         }
     }
 }
@@ -1449,10 +1503,9 @@ totals[c] = colSum;
 return { totals, isNumericCol };
 }
 
-// Progressive Target Months Logic (April is starting of Financial Year)
 function getProgressiveTargetMonthsAndYears(selM, selY) {
     const months = ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"];
-    const fyStartMonthIdx = 3; // "एप्रिल"
+    const fyStartMonthIdx = 3; 
     let selectedMonthIdx = months.indexOf(selM);
     let sYear = parseInt(selY);
 
@@ -1506,17 +1559,16 @@ d.reports.forEach(rep => {
     if(!headers) return;
 
     const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-    let isProgressive = formObj && formObj.FormType === 'ProgressiveStats';
+    let isProgressive = formObj && String(formObj.FormType).trim() === 'ProgressiveStats';
 
     let monthIdx = headers.indexOf("महिना");
     let yearIdx = headers.indexOf("वर्ष");
     let villageIdx = headers.indexOf("गाव");
-    if(villageIdx === -1) villageIdx = headers.indexOf("Village"); // fallback
+    if(villageIdx === -1) villageIdx = headers.indexOf("Village"); 
 
     let fData = [];
     let dataRows = [];
 
-    // --- PROGRESSIVE STATS LOGIC ---
     if (isProgressive && selMonth !== "सर्व" && selYear !== "सर्व") {
         let flatFields = extractFieldsFromForm(formObj);
         let numericLabels = flatFields.filter(f => f.orig.type === 'number' || f.orig.type === 'sum').map(f => f.label);
@@ -1524,7 +1576,6 @@ d.reports.forEach(rep => {
         let newHeaders = [];
         let numMap = {}; 
         
-        // Header restructuring
         headers.forEach((h, i) => {
             if (numericLabels.includes(h)) {
                 newHeaders.push(`${h} - चालू महिना`);
@@ -1626,6 +1677,7 @@ alert("एरर: " + e.message);
 }
 }
 
+// 🟢 NEW FEATURE: ३-स्तरीय मर्च्ड हेडर्स तयार करणारे लॉजिक आणि मोबाईल कार्ड व्ह्यू
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
 let html = "";
@@ -1636,38 +1688,68 @@ let data = rep.data;
 let headers = data[0];
 let showIndices = [];
 headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
-let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-const isStats = formObj && (formObj.FormType === 'Stats' || formObj.FormType === 'ProgressiveStats');
+const isStats = formObj && (String(formObj.FormType).trim() === 'Stats' || String(formObj.FormType).trim() === 'ProgressiveStats');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
-let h1Arr = []; let h2Arr = [];
+// Build Tree Logic for 3-Level Headers
+let h1Arr = [], h2Arr = [], h3Arr = [];
 showIndices.forEach(idx => {
-let parts = headers[idx].split(" - ");
-h1Arr.push(parts[0]);
-h2Arr.push(parts.length > 1 ? parts.slice(1).join(" - ") : "");
+    let parts = headers[idx].split(" - ");
+    h1Arr.push(parts[0] ? parts[0].trim() : "");
+    if(parts.length === 2) {
+        h2Arr.push(parts[1].trim());
+        h3Arr.push("");
+    } else if(parts.length >= 3) {
+        h2Arr.push(parts[1].trim());
+        h3Arr.push(parts.slice(2).join(" - ").trim());
+    } else {
+        h2Arr.push("");
+        h3Arr.push("");
+    }
 });
-let hasSubQ = h2Arr.some(sub => sub !== "");
+
+let maxDepth = 1;
+if(h2Arr.some(h => h !== "")) maxDepth = 2;
+if(h3Arr.some(h => h !== "")) maxDepth = 3;
+
+let tree = [];
+for(let c=0; c<h1Arr.length; c++) {
+    let h1 = h1Arr[c], h2 = h2Arr[c], h3 = h3Arr[c];
+    let last1 = tree.length > 0 ? tree[tree.length-1] : null;
+    
+    if(last1 && last1.label === h1 && h1 !== "") {
+        let last2 = last1.children.length > 0 ? last1.children[last1.children.length-1] : null;
+        if(last2 && last2.label === h2 && h2 !== "") {
+            last2.children.push({label: h3, colspan: 1});
+            last2.colspan++;
+        } else {
+            last1.children.push({label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []});
+        }
+        last1.colspan++;
+    } else {
+        tree.push({label: h1, colspan: 1, children: h2 !== "" ? [{label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []}] : []});
+    }
+}
 
 let dataRows = data.slice(1);
 let groups = {};
-if(dataRows.length === 0) {
-groups["All"] = [];
-} else {
-dataRows.forEach(row => {
-let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
-let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
-let ename = nameIdx > -1 ? String(row[nameIdx] || "").trim() : mob;
-if(ename === "undefined" || ename === "") ename = mob;
-let key = sc + "###" + ename;
-if(!groups[key]) groups[key] = [];
-groups[key].push(row);
-});
+if(dataRows.length === 0) { groups["All"] = []; } 
+else {
+    dataRows.forEach(row => {
+        let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
+        let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
+        let ename = nameIdx > -1 ? String(row[nameIdx] || "").trim() : mob;
+        if(ename === "undefined" || ename === "") ename = mob;
+        let key = sc + "###" + ename;
+        if(!groups[key]) groups[key] = [];
+        groups[key].push(row);
+    });
 }
 
 let groupKeys = Object.keys(groups).sort();
@@ -1676,80 +1758,112 @@ html += `<div style="background:white; padding:15px; border-radius:8px; box-shad
 html += `<h3 style="color:var(--primary); border-bottom:2px solid var(--primary); padding-bottom:10px;">${rep.formName} अहवाल</h3>`;
 
 groupKeys.forEach((gKey) => {
-let gRows = groups[gKey];
-let [sc, ename] = gKey.split("###");
+    let gRows = groups[gKey];
+    let [sc, ename] = gKey.split("###");
 
-if(villageIdx > -1) {
-gRows.sort((a, b) => {
-let vilA = String(a[villageIdx] || "").trim();
-let vilB = String(b[villageIdx] || "").trim();
-return vilA.localeCompare(vilB);
-});
-}
+    if(villageIdx > -1) {
+        gRows.sort((a, b) => String(a[villageIdx]||"").localeCompare(String(b[villageIdx]||"")));
+    }
 
-if(dataRows.length > 0) {
-html += `<div style="background:#e8f4f8; padding:10px; border-left:5px solid var(--secondary); margin-top:20px; font-weight:bold; color:#0056b3; border-radius:4px;">
-उपकेंद्र: <span style="color:#333;">${sc}</span> &nbsp;&nbsp;|&nbsp;&nbsp; कर्मचारी: <span style="color:#333;">${ename}</span> &nbsp;&nbsp;|&nbsp;&nbsp; अहवाल महिना: <span style="color:#333;">${periodText}</span>
-</div>`;
-}
+    if(dataRows.length > 0) {
+        html += `<div style="background:#e8f4f8; padding:10px; border-left:5px solid var(--secondary); margin-top:20px; font-weight:bold; color:#0056b3; border-radius:4px;">
+        उपकेंद्र: <span style="color:#333;">${sc}</span> &nbsp;&nbsp;|&nbsp;&nbsp; कर्मचारी: <span style="color:#333;">${ename}</span> &nbsp;&nbsp;|&nbsp;&nbsp; अहवाल महिना: <span style="color:#333;">${periodText}</span>
+        </div>`;
+    }
 
-html += `<table class="report-table" style="margin-top:0; border-top:none;"><thead>`;
+    // 🟢 Mobile View (Vertical Cards per Row)
+    if(isMobile()) {
+        if(gRows.length === 0) {
+            html += `<p style="color:red; font-weight:bold; text-align:center; padding:15px;">निरंक (Nil)</p>`;
+        } else {
+            gRows.forEach((row, i) => {
+                html += `<div style="border:1px solid #ccc; border-radius:8px; padding:12px; margin-top:15px; background:#fafafa;">`;
+                html += `<h4 style="margin:0 0 10px 0; color:#d35400; border-bottom:1px solid #ddd; padding-bottom:5px;">अ.क्र. ${i+1}</h4>`;
+                
+                showIndices.forEach(idx => {
+                    html += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #eee; padding:6px 0;">`;
+                    html += `<span style="font-size:13px; color:#555; flex:1; padding-right:10px;">${headers[idx]}</span>`;
+                    html += `<strong style="font-size:14px; color:#000; flex:1; text-align:right;">${row[idx] || "-"}</strong>`;
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            });
+            
+            // Totals for Mobile
+            if(isStats && gRows.length > 0) {
+                let pseudoData = [headers].concat(gRows);
+                let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+                html += `<div style="border:2px solid #28a745; border-radius:8px; padding:12px; margin-top:15px; background:#d4edda;">`;
+                html += `<h4 style="margin:0 0 10px 0; color:#155724; border-bottom:1px solid #c3e6cb; padding-bottom:5px;">📊 एकूण (Total)</h4>`;
+                showIndices.forEach((idx) => {
+                    if(isNumericCol[idx]) {
+                        html += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #c3e6cb; padding:6px 0;">`;
+                        html += `<span style="font-size:13px; color:#155724; flex:1; padding-right:10px;">${headers[idx]}</span>`;
+                        html += `<strong style="font-size:14px; color:#155724; flex:1; text-align:right;">${totals[idx]}</strong>`;
+                        html += `</div>`;
+                    }
+                });
+                html += `</div>`;
+            }
+        }
+    } 
+    // 🟢 PC View (3-Level Data Sheet)
+    else {
+        let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
+        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center;">अ.क्र.</th>`;
 
-if(hasSubQ) {
-let row1HTML = `<tr><th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">अ.क्र.</th>`;
-let row2HTML = `<tr>`;
-let c = 0;
-while(c < h1Arr.length) {
-let end = c;
-while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
-let colspan = end - c + 1;
-if(colspan > 1) {
-row1HTML += `<th colspan="${colspan}" style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
-for(let k=c; k<=end; k++) { row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[k]}</th>`; }
-} else {
-if(h2Arr[c] === "") { row1HTML += `<th rowspan="2" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle;">${h1Arr[c]}</th>`; }
-else {
-row1HTML += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h1Arr[c]}</th>`;
-row2HTML += `<th style="background:#ffe082; color:#000; border:1px solid #ddd; font-size: 13px;">${h2Arr[c]}</th>`;
-}
-}
-c = end + 1;
-}
-html += row1HTML + `</tr>` + row2HTML + `</tr>`;
-} else {
-html += `<tr><th style="background:#f4b400; color:#000; border:1px solid #ddd;">अ.क्र.</th>`;
-h1Arr.forEach(h => { html += `<th style="background:#f4b400; color:#000; border:1px solid #ddd;">${h}</th>`; });
-html += `</tr>`;
-}
-html += `</thead><tbody>`;
+        tree.forEach(n1 => {
+            let rs1 = n1.children.length === 0 ? maxDepth : 1;
+            r1Html += `<th colspan="${n1.colspan}" rowspan="${rs1}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; padding:8px;">${n1.label}</th>`;
+            if (n1.children.length > 0) {
+                n1.children.forEach(n2 => {
+                    let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
+                    r2Html += `<th colspan="${n2.colspan}" rowspan="${rs2}" style="background:#ffe082; color:#000; border:1px solid #ddd; font-size:13px; text-align:center; padding:6px;">${n2.label}</th>`;
+                    if(n2.children.length > 0) {
+                        n2.children.forEach(n3 => {
+                            r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; font-size:12px; text-align:center; padding:6px;">${n3.label}</th>`;
+                        });
+                    }
+                });
+            }
+        });
+        r1Html += "</tr>"; r2Html += "</tr>"; r3Html += "</tr>";
 
-if(gRows.length === 0) {
-html += `<tr><td colspan="${colCount}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
-} else {
-gRows.forEach((row, i) => {
-html += `<tr><td>${i+1}</td>`;
-showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
-html += `</tr>`;
-});
+        let theadHtml = r1Html;
+        if(maxDepth >= 2) theadHtml += r2Html;
+        if(maxDepth === 3) theadHtml += r3Html;
+        
+        html += `<table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>`;
 
-if(isStats && gRows.length > 0) {
-let pseudoData = [headers].concat(gRows);
-let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
-showIndices.forEach(idx => {
-if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
-else html += `<td>-</td>`;
-});
-html += `</tr>`;
-}
-}
-html += `</tbody></table>`;
+        if(gRows.length === 0) {
+            html += `<tr><td colspan="${showIndices.length+1}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
+        } else {
+            gRows.forEach((row, i) => {
+                html += `<tr><td>${i+1}</td>`;
+                showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
+                html += `</tr>`;
+            });
+
+            if(isStats && gRows.length > 0) {
+                let pseudoData = [headers].concat(gRows);
+                let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
+                showIndices.forEach(idx => {
+                    if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
+                    else html += `<td>-</td>`;
+                });
+                html += `</tr>`;
+            }
+        }
+        html += `</tbody></table>`;
+    }
 });
 html += `</div>`;
 });
 container.innerHTML = html;
 }
 
+// 🟢 NEW FEATURE: ३-स्तरीय हेडर्स Excel मध्ये अचूक डाउनलोड होण्यासाठी 
 function downloadConsolidatedExcel() {
 if(currentReports.length === 0) return;
 let month = document.getElementById('reportMonth').value;
@@ -1768,19 +1882,49 @@ headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.pu
 let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-const isStats = formObj && (formObj.FormType === 'Stats' || formObj.FormType === 'ProgressiveStats');
+const isStats = formObj && (String(formObj.FormType).trim() === 'Stats' || String(formObj.FormType).trim() === 'ProgressiveStats');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
-let h1Arr = []; let h2Arr = [];
+// 3-Level Excel Header Tree Builder
+let h1Arr = [], h2Arr = [], h3Arr = [];
 showIndices.forEach(idx => {
-let parts = headers[idx].split(" - ");
-h1Arr.push(parts[0]); h2Arr.push(parts.length > 1 ? parts.slice(1).join(" - ") : "");
+    let parts = headers[idx].split(" - ");
+    h1Arr.push(parts[0] ? parts[0].trim() : "");
+    if(parts.length === 2) {
+        h2Arr.push(parts[1].trim());
+        h3Arr.push("");
+    } else if(parts.length >= 3) {
+        h2Arr.push(parts[1].trim());
+        h3Arr.push(parts.slice(2).join(" - ").trim());
+    } else {
+        h2Arr.push(""); h3Arr.push("");
+    }
 });
-let hasSubQ = h2Arr.some(sub => sub !== "");
+
+let maxDepth = 1;
+if(h2Arr.some(h => h !== "")) maxDepth = 2;
+if(h3Arr.some(h => h !== "")) maxDepth = 3;
+
+let tree = [];
+for(let c=0; c<h1Arr.length; c++) {
+    let h1 = h1Arr[c], h2 = h2Arr[c], h3 = h3Arr[c];
+    let last1 = tree.length > 0 ? tree[tree.length-1] : null;
+    if(last1 && last1.label === h1 && h1 !== "") {
+        let last2 = last1.children.length > 0 ? last1.children[last1.children.length-1] : null;
+        if(last2 && last2.label === h2 && h2 !== "") {
+            last2.children.push({label: h3, colspan: 1}); last2.colspan++;
+        } else {
+            last1.children.push({label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []});
+        }
+        last1.colspan++;
+    } else {
+        tree.push({label: h1, colspan: 1, children: h2 !== "" ? [{label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []}] : []});
+    }
+}
 
 let sheetData = [];
 let merges = [];
@@ -1791,18 +1935,17 @@ merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } });
 
 let dataRows = data.slice(1);
 let groups = {};
-if(dataRows.length === 0) {
-groups["All"] = [];
-} else {
-dataRows.forEach(row => {
-let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
-let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
-let ename = nameIdx > -1 ? String(row[nameIdx] || "").trim() : mob;
-if(ename === "undefined" || ename === "") ename = mob;
-let key = sc + "###" + ename;
-if(!groups[key]) groups[key] = [];
-groups[key].push(row);
-});
+if(dataRows.length === 0) { groups["All"] = []; } 
+else {
+    dataRows.forEach(row => {
+        let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
+        let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
+        let ename = nameIdx > -1 ? String(row[nameIdx] || "").trim() : mob;
+        if(ename === "undefined" || ename === "") ename = mob;
+        let key = sc + "###" + ename;
+        if(!groups[key]) groups[key] = [];
+        groups[key].push(row);
+    });
 }
 
 let groupKeys = Object.keys(groups).sort();
@@ -1810,86 +1953,86 @@ let currentR = 2;
 
 let groupHeaderRows = [];
 let headerRowIndices = [];
-let subHeaderRowIndices = [];
-let totalRowIndices = [];
 
 groupKeys.forEach(gKey => {
-let gRows = groups[gKey];
-let [sc, ename] = gKey.split("###");
+    let gRows = groups[gKey];
+    let [sc, ename] = gKey.split("###");
 
-if(villageIdx > -1) {
-gRows.sort((a, b) => {
-let vilA = String(a[villageIdx] || "").trim();
-let vilB = String(b[villageIdx] || "").trim();
-return vilA.localeCompare(vilB);
-});
-}
+    if(villageIdx > -1) {
+        gRows.sort((a, b) => String(a[villageIdx]||"").localeCompare(String(b[villageIdx]||"")));
+    }
 
-if(dataRows.length > 0) {
-let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
-for(let x=1; x<colCount; x++) gHeaderArr.push("");
-sheetData.push(gHeaderArr);
-merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
-groupHeaderRows.push(currentR);
-currentR++;
-}
+    if(dataRows.length > 0) {
+        let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
+        for(let x=1; x<colCount; x++) gHeaderArr.push("");
+        sheetData.push(gHeaderArr);
+        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
+        groupHeaderRows.push(currentR);
+        currentR++;
+    }
 
-let headerRow1 = ["अ.क्र."].concat(h1Arr);
-sheetData.push(headerRow1);
-headerRowIndices.push(currentR);
-currentR++;
+    // 🟢 Excel Header Merges
+    let headerRow1 = Array(colCount).fill("");
+    let headerRow2 = Array(colCount).fill("");
+    let headerRow3 = Array(colCount).fill("");
+    headerRow1[0] = "अ.क्र.";
+    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
+    
+    let cOffset = 1;
+    tree.forEach(n1 => {
+        headerRow1[cOffset] = n1.label;
+        let rs1 = n1.children.length === 0 ? maxDepth : 1;
+        if(n1.colspan > 1 || rs1 > 1) merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + rs1 - 1, c: cOffset + n1.colspan - 1 } });
+        
+        let cOffset2 = cOffset;
+        n1.children.forEach(n2 => {
+            headerRow2[cOffset2] = n2.label;
+            let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
+            if(n2.colspan > 1 || rs2 > 1) merges.push({ s: { r: currentR + 1, c: cOffset2 }, e: { r: currentR + 1 + rs2 - 1, c: cOffset2 + n2.colspan - 1 } });
+            
+            let cOffset3 = cOffset2;
+            n2.children.forEach(n3 => {
+                headerRow3[cOffset3] = n3.label;
+                cOffset3++;
+            });
+            cOffset2 += n2.colspan;
+        });
+        cOffset += n1.colspan;
+    });
 
-let dataStartRow = currentR;
-if(hasSubQ) {
-let headerRow2 = [""].concat(h2Arr);
-sheetData.push(headerRow2);
-subHeaderRowIndices.push(currentR);
-dataStartRow = currentR + 1;
+    sheetData.push(headerRow1); headerRowIndices.push(currentR);
+    if(maxDepth >= 2) { sheetData.push(headerRow2); headerRowIndices.push(currentR+1); }
+    if(maxDepth === 3) { sheetData.push(headerRow3); headerRowIndices.push(currentR+2); }
+    currentR += maxDepth;
 
-merges.push({ s: { r: currentR - 1, c: 0 }, e: { r: currentR, c: 0 } });
-let c = 0;
-while(c < h1Arr.length) {
-let end = c;
-while(end + 1 < h1Arr.length && h1Arr[end+1] === h1Arr[c] && h2Arr[end+1] !== "") { end++; }
-if(end > c) { merges.push({ s: { r: currentR - 1, c: c + 1 }, e: { r: currentR - 1, c: end + 1 } });
-}
-else if(h2Arr[c] === "") { merges.push({ s: { r: currentR - 1, c: c + 1 }, e: { r: currentR, c: c + 1 } });
-}
-c = end + 1;
-}
-currentR++;
-}
+    if(gRows.length === 0) {
+        let nilRow = Array(colCount).fill(""); nilRow[0] = "निरंक (Nil)";
+        sheetData.push(nilRow);
+        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
+        currentR++;
+    } else {
+        gRows.forEach((row, i) => {
+            let rowData = [i+1];
+            showIndices.forEach(idx => rowData.push(row[idx] || "-"));
+            sheetData.push(rowData);
+            currentR++;
+        });
 
-if(gRows.length === 0) {
-let nilRow = Array(colCount).fill("");
-nilRow[0] = "निरंक (Nil)";
-sheetData.push(nilRow);
-merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
-currentR++;
-} else {
-gRows.forEach((row, i) => {
-let rowData = [i+1];
-showIndices.forEach(idx => rowData.push(row[idx] || "-"));
-sheetData.push(rowData);
-currentR++;
-});
-
-if(isStats) {
-let pseudoData = [headers].concat(gRows);
-let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-let totalRow = ["एकूण"];
-showIndices.forEach(idx => {
-if(isNumericCol[idx]) totalRow.push(totals[idx]);
-else totalRow.push("-");
-});
-sheetData.push(totalRow);
-totalRowIndices.push(currentR);
-currentR++;
-}
-}
-
-sheetData.push(Array(colCount).fill(""));
-currentR++;
+        if(isStats) {
+            let pseudoData = [headers].concat(gRows);
+            let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+            let totalRow = ["एकूण"];
+            showIndices.forEach(idx => {
+                if(isNumericCol[idx]) totalRow.push(totals[idx]);
+                else totalRow.push("-");
+            });
+            sheetData.push(totalRow);
+            headerRowIndices.push(currentR); // Styling total row similar to header
+            currentR++;
+        }
+    }
+    sheetData.push(Array(colCount).fill(""));
+    currentR++;
 });
 
 let ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -1909,13 +2052,9 @@ cellStyle.fill = { fgColor: { rgb: "CDE4EC" } };
 cellStyle.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "0056B3" } };
 cellStyle.alignment = { vertical: "center", horizontal: "left", wrapText: true };
 cellStyle.border = { top: { style: "medium", color: { rgb: "0056B3" } }, bottom: { style: "medium", color: { rgb: "0056B3" } } };
-} else if(headerRowIndices.includes(R) || subHeaderRowIndices.includes(R)) {
-cellStyle.fill = { fgColor: { rgb: headerRowIndices.includes(R) ? "F4B400" : "FFE082" } };
+} else if(headerRowIndices.includes(R)) {
+cellStyle.fill = { fgColor: { rgb: "F4B400" } };
 cellStyle.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "000000" } };
-cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-} else if(totalRowIndices.includes(R)) {
-cellStyle.fill = { fgColor: { rgb: "D4EDDA" } };
-cellStyle.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "155724" } };
 cellStyle.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
 } else if(sheetData[R][0] !== "") {
 if(sheetData[R][0] === "निरंक (Nil)") {
@@ -1997,7 +2136,7 @@ document.getElementById('newFormType').value = f.FormType;
 
 document.getElementById('formIsActive').checked = !isFormInactive(f);
 
-let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
+let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 if(roles.includes("ALL")) {
 document.getElementById('roleAll').checked = true;
 toggleRoles(document.getElementById('roleAll'));
