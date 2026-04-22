@@ -150,7 +150,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 </div>
 </div>
 
-<label>भरलेले गाव / रेकॉर्ड निवडा:</label>
+<label>भरलेले गाव / रेकॉर्ड निवडा (फक्त मागील ४८ तासांतील):</label>
 <select id="editVillageSelect"></select>
 
 <button class="btn-edit-tab" onclick="fetchRecordForEdit()" style="margin-top:15px; padding:12px;">माहिती मिळवा 🔍</button>
@@ -779,7 +779,6 @@ const belongsToSubCenter = v.SubCenterID.toLowerCase() === user.subcenter.toLowe
 if(!belongsToSubCenter) return false;
 
 if (fId === "ALL_STATS") {
-// BOTH STATS AND PROGRESSIVE STATS ARE INCLUDED IN ALL STATS
 let statsForms = masterData.forms.filter(f => f.FormType === 'Stats' || f.FormType === 'ProgressiveStats');
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 
@@ -1113,6 +1112,19 @@ let addedVillages = [];
 
 serverHistory.forEach(h => {
 if(h.formID === fId && h.month === month && String(h.year) === String(year)) {
+
+// 🟢 ४८ तासांची अट (48 Hours Logic) ड्रॉपडाऊनमध्ये रेकॉर्ड लपवण्यासाठी
+if (h.timestamp) {
+    let recDate = new Date(h.timestamp);
+    if (!isNaN(recDate.getTime())) {
+        let diffHours = (new Date() - recDate) / (1000 * 60 * 60);
+        // ॲडमिन वगळता इतरांसाठी ४८ तासांनंतर रेकॉर्ड एडिट ड्रॉपडाऊनमधून काढून टाका
+        if (diffHours > 48 && user.role !== "Admin") {
+            return; 
+        }
+    }
+}
+
 let canEdit = false;
 if(user.role === "Admin") canEdit = true;
 else if(isAll && h.subcenter.toLowerCase() === user.subcenter.toLowerCase()) canEdit = true;
@@ -1152,6 +1164,18 @@ const d = JSON.parse(textResponse);
 document.getElementById('editLoader').style.display = "none";
 
 if(d.success) {
+// 🟢 डबल सिक्युरिटी: जर ड्रॉपडाऊनमध्ये फॉर्म आलाच, तरीही सर्व्हरच्या तारखेवरून 'माहिती मिळवा' वर ४८ तासांचे ब्लॉक लावा
+let recordDateStr = d.formData["तारीख"] || d.formData["Timestamp"];
+if(recordDateStr && user.role !== "Admin") {
+    let recDate = new Date(recordDateStr);
+    if(!isNaN(recDate.getTime())) {
+        let diffHours = (new Date() - recDate) / (1000 * 60 * 60);
+        if(diffHours > 48) {
+            alert("⏳ क्षमस्व! हा फॉर्म भरून ४८ तासांपेक्षा जास्त वेळ (२ दिवस) झाला आहे. त्यामुळे आता यामध्ये बदल (Edit) करता येणार नाही.");
+            return; // Block editing
+        }
+    }
+}
 renderEditForm(formID, d.formData);
 } else {
 alert("रेकॉर्ड सापडला नाही! कदाचित तो डिलीट झाला असेल.");
@@ -1386,12 +1410,10 @@ function getProgressiveTargetMonthsAndYears(selM, selY) {
 
     let result = [];
     if (selectedMonthIdx >= fyStartMonthIdx) {
-        // e.g. Selected August: Need April to August of same year
         for(let i = fyStartMonthIdx; i <= selectedMonthIdx; i++) {
             result.push({m: months[i], y: String(sYear)});
         }
     } else {
-        // e.g. Selected February 2026: Need April to Dec of 2025 + Jan to Feb of 2026
         for(let i = fyStartMonthIdx; i <= 11; i++) {
             result.push({m: months[i], y: String(sYear - 1)});
         }
@@ -1522,7 +1544,6 @@ d.reports.forEach(rep => {
                     newRow.push(vData.baseRow[cIdx] !== undefined ? vData.baseRow[cIdx] : "-");
                 }
             });
-            // Update month and year in row to reflect the query
             if(monthIdx > -1) newRow[monthIdx] = selMonth;
             if(yearIdx > -1) newRow[yearIdx] = selYear;
             
@@ -1530,7 +1551,6 @@ d.reports.forEach(rep => {
         });
 
     } else {
-        // Normal processing for Standard Stats / Lists
         fData.push(headers);
         for(let i=1; i<rep.data.length; i++) {
             let row = rep.data[i];
