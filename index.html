@@ -235,7 +235,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 </div>
 
 <div id="fieldsList"></div>
-<button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ मुख्य प्रश्न जोडा</button>
+<button onclick="addField()" style="background:#e9ecef; color:#333; font-weight:bold; border:1px solid #ccc;">+ मुख्य प्रश्न जो টালি</button>
 <button id="mainActionBtn" class="btn-primary" onclick="saveFullForm()" style="margin-top:15px;">फॉर्म सेव्ह करा</button>
 </div>
 </div>
@@ -255,6 +255,19 @@ let masterData = { forms: [], villages: [], filledStats: [] };
 let user = null;
 let currentReports = [];
 let isSaving = false;
+
+// 🟢 NEW FIX: Function to reliably check if form is Inactive based on actual Sheet 'Status' column
+function isFormInactive(f) {
+    if (f.Status !== undefined && f.Status !== null) {
+        let s = String(f.Status).trim().toUpperCase();
+        return (s === "INACTIVE" || s === "FALSE");
+    }
+    if (f.isActive !== undefined && f.isActive !== null) {
+        let s = String(f.isActive).trim().toUpperCase();
+        return (s === "FALSE" || s === "INACTIVE");
+    }
+    return false;
+}
 
 // --- Helper Functions ---
 function generateInputHTML(f, id, label, areaId, val="") {
@@ -733,19 +746,20 @@ masterData.forms.forEach(f => {
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 
-// Check if form is inactive
-let isInactive = f.isActive === false || f.isActive === "FALSE";
+// Check if form is inactive based on correct Status column logic
+let isInactive = isFormInactive(f);
 
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
-let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
+    // If form is inactive, do NOT show it to non-admins
+    if (isInactive && userRole !== "ADMIN") {
+        return;
+    }
 
-// Only show active forms in Entry and Edit for non-admins
-if (!isInactive || userRole === "ADMIN") {
-selForm.innerHTML += opt;
-editForm.innerHTML += opt;
-}
-// All forms (active and inactive) are available for Reports
-repForm.innerHTML += opt; 
+    let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
+
+    selForm.innerHTML += opt;
+    editForm.innerHTML += opt;
+    repForm.innerHTML += opt; 
 }
 });
 }
@@ -771,8 +785,8 @@ let userRole = user ? String(user.role).trim().toUpperCase() : "";
 
 let isFullyFilled = true;
 for (let f of statsForms) {
-let isInactive = f.isActive === false || f.isActive === "FALSE";
-if (isInactive && userRole !== "ADMIN") continue; // Skip inactive forms for non-admins in ALL_STATS
+let isInactive = isFormInactive(f);
+if (isInactive && userRole !== "ADMIN") continue; // Skip inactive forms for non-admins
 
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
@@ -823,7 +837,7 @@ let userRole = user ? String(user.role).trim().toUpperCase() : "";
 let renderedFormsCount = 0;
 
 statsForms.forEach(f => {
-let isInactive = f.isActive === false || f.isActive === "FALSE";
+let isInactive = isFormInactive(f);
 if (isInactive && userRole !== "ADMIN") return;
 
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
@@ -936,7 +950,7 @@ if (fId === "ALL_STATS") {
 let statsForms = masterData.forms.filter(f => f.FormType === 'Stats');
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 statsForms.forEach(f => {
-let isInactive = f.isActive === false || f.isActive === "FALSE";
+let isInactive = isFormInactive(f);
 if (isInactive && userRole !== "ADMIN") return;
 
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
@@ -1777,7 +1791,7 @@ function renderFormsListForEdit() {
 const listDiv = document.getElementById('formsEditList');
 listDiv.innerHTML = "";
 masterData.forms.forEach(f => {
-let isInactive = f.isActive === false || f.isActive === "FALSE";
+let isInactive = isFormInactive(f);
 let nameDisplay = f.FormName + (isInactive ? ' <span style="color:red; font-size:14px;">(Inactive)</span>' : '');
 listDiv.innerHTML += `<div class="edit-row" style="background:white; padding:10px; margin-bottom:5px; border-radius:5px; border:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
 <span><b>${nameDisplay}</b></span>
@@ -1795,7 +1809,9 @@ document.getElementById('builderTitle').innerText = "फॉर्म एडि�
 document.getElementById('editFormID').value = f.FormID;
 document.getElementById('newFormName').value = f.FormName;
 document.getElementById('newFormType').value = f.FormType;
-document.getElementById('formIsActive').checked = (f.isActive !== false && f.isActive !== "FALSE");
+
+// Check properly using our new function
+document.getElementById('formIsActive').checked = !isFormInactive(f);
 
 let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>r.trim().toUpperCase()) : ["ALL"];
 if(roles.includes("ALL")) {
@@ -2047,16 +2063,18 @@ fields.push(fieldObj);
 return fields;
 }
 
+// 🟢 NEW FIX: Send BOTH 'isActive' and 'status' so backend apps script works flawlessly
 async function saveFullForm() {
 const name = document.getElementById('newFormName').value;
 const type = document.getElementById('newFormType').value;
 const isActive = document.getElementById('formIsActive').checked;
+const statusText = isActive ? "Active" : "Inactive";
 const allowedRoles = getSelectedRoles();
 
 if(!name) { alert("फॉर्मचे नाव टाका"); return; }
 if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
 
-const payload = { name, type, allowedRoles, isActive, fields: getFieldsData(), adminMobile: user.mobile };
+const payload = { name, type, allowedRoles, isActive, status: statusText, fields: getFieldsData(), adminMobile: user.mobile };
 const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"createForm", payload}) });
 const d = await r.json();
 if(d.success) { alert(d.message); location.reload(); }
@@ -2067,11 +2085,12 @@ const formID = document.getElementById('editFormID').value;
 const name = document.getElementById('newFormName').value;
 const type = document.getElementById('newFormType').value;
 const isActive = document.getElementById('formIsActive').checked;
+const statusText = isActive ? "Active" : "Inactive";
 const allowedRoles = getSelectedRoles();
 
 if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
 
-const payload = { formID, name, type, allowedRoles, isActive, fields: getFieldsData() };
+const payload = { formID, name, type, allowedRoles, isActive, status: statusText, fields: getFieldsData() };
 const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateForm", payload}) });
 const d = await r.json();
 if(d.success) { alert(d.message); location.reload(); }
