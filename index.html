@@ -46,7 +46,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 /* Bulk Data Entry Table Styles */
 .report-table input, .report-table select { padding: 6px; margin: 0; width: 100px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
 .report-table td { padding: 6px; vertical-align: middle; }
-.sticky-col { position: sticky; left: 0; background: #f4f7f6 !important; border-right: 2px solid #ccc; z-index: 5; font-weight: bold; min-width: 100px; text-align:center;}
+.sticky-col { position: sticky; left: 0; background: #fdfdfd !important; border-right: 2px solid #ccc; z-index: 5; font-weight: bold; min-width: 100px; text-align:center;}
 
 @media (max-width: 768px) {
   .mobile-hide { display: none !important; }
@@ -558,7 +558,7 @@ html += `</div>`;
 return html;
 }
 
-// 🟢 NEW FEATURE: PC View साठी ३-लेयर डायनॅमिक टेबल हेडर्स 
+// 🟢 PC View साठी ३-लेयर डायनॅमिक टेबल हेडर्स 
 function generateTableHeaders(f) {
     let maxDepth = 1;
     let struct = JSON.parse(f.StructureJSON);
@@ -606,7 +606,7 @@ function generateTableHeaders(f) {
     return thead;
 }
 
-// 🟢 NEW FEATURE: 'सर्व गावे एकत्रित भरा' (Bulk) साठी मोबाईल व्ह्यू (Vertical Cards) आणि PC व्ह्यू (3 Level Sheet)
+// 🟢 Bulk Entry साठी मोबाईल व्ह्यू (Vertical Cards) आणि PC व्ह्यू (3 Level Sheet)
 function generateBulkTableHTML(f, availableVillages, formPrefix) {
     if (isMobile()) {
         let html = "";
@@ -764,7 +764,6 @@ document.getElementById('adminSection').classList.remove('hidden');
 }
 }
 
-// 🟢 FIX: .trim() वापरून फॉर्म लपवण्याचे अचूक लॉजिक
 function isFormFilledForVillage(formObj, vName, month, year) {
     const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
     const serverHistory = masterData.filledStats || [];
@@ -792,7 +791,6 @@ function isFormFilledForVillage(formObj, vName, month, year) {
     return isLocalFilled || isServerFilled;
 }
 
-// 🟢 FIX: भरलेले फॉर्म्स यादीतून 100% गायब होण्यासाठी
 function updateFormDropdowns() {
     const selForm = document.getElementById('selForm');
     const editForm = document.getElementById('editFormSelect');
@@ -843,7 +841,6 @@ function updateFormDropdowns() {
 
             let opt = `<option value="${f.FormID}">${f.FormName} ${isInactive ? '(Inactive)' : ''}</option>`;
 
-            // जर 100% भरलेला असेल तर ड्रॉपडाऊनमधून गायब करा (फक्त Entry मध्ये)
             if(selForm && !isFullyFilled) {
                 selForm.innerHTML += opt;
             }
@@ -1186,7 +1183,7 @@ localStorage.setItem("syncQueue", "[]");
 statusText.style.color = "green";
 statusText.innerText = "✅ माहिती यशस्वीरित्या गुगल शीटवर सेव्ह झाली!";
 setTimeout(() => { statusText.innerText = ""; }, 4000);
-await fetchData(); // This refreshes dropdowns
+await fetchData(); 
 } else { throw new Error("Server error"); }
 } catch(e) {
 statusText.style.color = "red";
@@ -1677,7 +1674,7 @@ alert("एरर: " + e.message);
 }
 }
 
-// 🟢 NEW FEATURE: ३-स्तरीय मर्च्ड हेडर्स तयार करणारे लॉजिक आणि मोबाईल कार्ड व्ह्यू
+// 🟢 Reports नेहमी 3-Level Data Sheet मध्ये दिसण्यासाठी (मोबाईल आणि पीसी दोन्हीवर)
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
 let html = "";
@@ -1771,99 +1768,60 @@ groupKeys.forEach((gKey) => {
         </div>`;
     }
 
-    // 🟢 Mobile View (Vertical Cards per Row)
-    if(isMobile()) {
-        if(gRows.length === 0) {
-            html += `<p style="color:red; font-weight:bold; text-align:center; padding:15px;">निरंक (Nil)</p>`;
-        } else {
-            gRows.forEach((row, i) => {
-                html += `<div style="border:1px solid #ccc; border-radius:8px; padding:12px; margin-top:15px; background:#fafafa;">`;
-                html += `<h4 style="margin:0 0 10px 0; color:#d35400; border-bottom:1px solid #ddd; padding-bottom:5px;">अ.क्र. ${i+1}</h4>`;
-                
-                showIndices.forEach(idx => {
-                    html += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #eee; padding:6px 0;">`;
-                    html += `<span style="font-size:13px; color:#555; flex:1; padding-right:10px;">${headers[idx]}</span>`;
-                    html += `<strong style="font-size:14px; color:#000; flex:1; text-align:right;">${row[idx] || "-"}</strong>`;
-                    html += `</div>`;
-                });
-                html += `</div>`;
-            });
-            
-            // Totals for Mobile
-            if(isStats && gRows.length > 0) {
-                let pseudoData = [headers].concat(gRows);
-                let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-                html += `<div style="border:2px solid #28a745; border-radius:8px; padding:12px; margin-top:15px; background:#d4edda;">`;
-                html += `<h4 style="margin:0 0 10px 0; color:#155724; border-bottom:1px solid #c3e6cb; padding-bottom:5px;">📊 एकूण (Total)</h4>`;
-                showIndices.forEach((idx) => {
-                    if(isNumericCol[idx]) {
-                        html += `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #c3e6cb; padding:6px 0;">`;
-                        html += `<span style="font-size:13px; color:#155724; flex:1; padding-right:10px;">${headers[idx]}</span>`;
-                        html += `<strong style="font-size:14px; color:#155724; flex:1; text-align:right;">${totals[idx]}</strong>`;
-                        html += `</div>`;
-                    }
-                });
-                html += `</div>`;
-            }
-        }
-    } 
-    // 🟢 PC View (3-Level Data Sheet)
-    else {
-        let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
-        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center;">अ.क्र.</th>`;
+    // 🟢 नेहमी Data Sheet (Table View) दिसेल
+    let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
+    r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
 
-        tree.forEach(n1 => {
-            let rs1 = n1.children.length === 0 ? maxDepth : 1;
-            r1Html += `<th colspan="${n1.colspan}" rowspan="${rs1}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; padding:8px;">${n1.label}</th>`;
-            if (n1.children.length > 0) {
-                n1.children.forEach(n2 => {
-                    let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
-                    r2Html += `<th colspan="${n2.colspan}" rowspan="${rs2}" style="background:#ffe082; color:#000; border:1px solid #ddd; font-size:13px; text-align:center; padding:6px;">${n2.label}</th>`;
-                    if(n2.children.length > 0) {
-                        n2.children.forEach(n3 => {
-                            r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; font-size:12px; text-align:center; padding:6px;">${n3.label}</th>`;
-                        });
-                    }
-                });
-            }
+    tree.forEach(n1 => {
+        let rs1 = n1.children.length === 0 ? maxDepth : 1;
+        r1Html += `<th colspan="${n1.colspan}" rowspan="${rs1}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; padding:8px;">${n1.label}</th>`;
+        if (n1.children.length > 0) {
+            n1.children.forEach(n2 => {
+                let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
+                r2Html += `<th colspan="${n2.colspan}" rowspan="${rs2}" style="background:#ffe082; color:#000; border:1px solid #ddd; font-size:13px; text-align:center; padding:6px;">${n2.label}</th>`;
+                if(n2.children.length > 0) {
+                    n2.children.forEach(n3 => {
+                        r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; font-size:12px; text-align:center; padding:6px;">${n3.label}</th>`;
+                    });
+                }
+            });
+        }
+    });
+    r1Html += "</tr>"; r2Html += "</tr>"; r3Html += "</tr>";
+
+    let theadHtml = r1Html;
+    if(maxDepth >= 2) theadHtml += r2Html;
+    if(maxDepth === 3) theadHtml += r3Html;
+    
+    html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>`;
+
+    if(gRows.length === 0) {
+        html += `<tr><td colspan="${showIndices.length+1}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
+    } else {
+        gRows.forEach((row, i) => {
+            html += `<tr><td class="sticky-col" style="background:#fdfdfd;">${i+1}</td>`;
+            showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
+            html += `</tr>`;
         });
-        r1Html += "</tr>"; r2Html += "</tr>"; r3Html += "</tr>";
 
-        let theadHtml = r1Html;
-        if(maxDepth >= 2) theadHtml += r2Html;
-        if(maxDepth === 3) theadHtml += r3Html;
-        
-        html += `<table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>`;
-
-        if(gRows.length === 0) {
-            html += `<tr><td colspan="${showIndices.length+1}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
-        } else {
-            gRows.forEach((row, i) => {
-                html += `<tr><td>${i+1}</td>`;
-                showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
-                html += `</tr>`;
+        if(isStats && gRows.length > 0) {
+            let pseudoData = [headers].concat(gRows);
+            let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+            html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td class="sticky-col" style="background:#d4edda;">एकूण</td>`;
+            showIndices.forEach(idx => {
+                if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
+                else html += `<td>-</td>`;
             });
-
-            if(isStats && gRows.length > 0) {
-                let pseudoData = [headers].concat(gRows);
-                let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td>एकूण</td>`;
-                showIndices.forEach(idx => {
-                    if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
-                    else html += `<td>-</td>`;
-                });
-                html += `</tr>`;
-            }
+            html += `</tr>`;
         }
-        html += `</tbody></table>`;
     }
+    html += `</tbody></table></div>`;
 });
 html += `</div>`;
 });
 container.innerHTML = html;
 }
 
-// 🟢 NEW FEATURE: ३-स्तरीय हेडर्स Excel मध्ये अचूक डाउनलोड होण्यासाठी 
 function downloadConsolidatedExcel() {
 if(currentReports.length === 0) return;
 let month = document.getElementById('reportMonth').value;
