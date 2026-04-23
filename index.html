@@ -114,15 +114,12 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 
 <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 10px;">
 <label style="margin:0;">गाव निवडा:</label>
-<button onclick="clearLocalHistory()" style="background:#ffc107; color:#000; border:none; padding:5px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:auto;">
-🔄 गावे रीसेट करा
-</button>
 </div>
 <select id="selVillage" onchange="loadDynamicFields()"></select>
 
 <div id="dynamicFormArea"></div>
 
-<button id="mainSaveBtn" class="btn-primary" onclick="saveDataLocal()" style="margin-top:20px;">माहिती जतन करा (Save to Cloud)</button>
+<button id="mainSaveBtn" class="btn-primary" onclick="saveDataToServer()" style="margin-top:20px;">माहिती जतन करा (Save to Cloud)</button>
 <p id="syncStatus" style="text-align:center; font-size:14px; font-weight:bold; margin-top: 10px;"></p>
 </div>
 
@@ -294,8 +291,8 @@ function toggleLayoutOption() {
 
 function parseCustomDate(dateStr) {
     if(!dateStr) return NaN;
-    let recTime = new Date(dateStr).getTime();
-    if(!isNaN(recTime)) return recTime;
+    let d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d.getTime();
     
     let parts = String(dateStr).replace(/-/g, '/').replace('T', ' ').split(' ');
     let dParts = parts[0].split('/');
@@ -304,8 +301,8 @@ function parseCustomDate(dateStr) {
     if(dParts.length === 3) {
         let y = dParts[0].length === 4 ? +dParts[0] : +dParts[2];
         let m = dParts[0].length === 4 ? +dParts[1] : +dParts[1];
-        let d = dParts[0].length === 4 ? +dParts[2] : +dParts[0];
-        return new Date(y, m-1, d, +tParts[0], +tParts[1], +(tParts[2]||0)).getTime();
+        let day = dParts[0].length === 4 ? +dParts[2] : +dParts[0];
+        return new Date(y, m-1, day, +tParts[0], +tParts[1], +(tParts[2]||0)).getTime();
     }
     return NaN;
 }
@@ -783,7 +780,7 @@ updateVillageDropdown();
 } else if(tab === 'edit') {
 document.getElementById('tabEdit').classList.add('active');
 document.getElementById('editSection').classList.remove('hidden');
-updateEditVillageDropdown();
+updateEditVillageDropdown(); 
 } else if(tab === 'reports') {
 document.getElementById('tabReports').classList.add('active');
 document.getElementById('reportsSection').classList.remove('hidden');
@@ -793,8 +790,8 @@ document.getElementById('adminSection').classList.remove('hidden');
 }
 }
 
+// 🌟 FIX: फक्त सर्व्हर हिस्ट्री (गुगल शीट डेटा) वापरून तपासणी करणे 
 function isFormFilledForVillage(formObj, vName, month, year) {
-    const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
     const serverHistory = masterData.filledStats || [];
 
     let allowedRoles = formObj.AllowedRoles ? formObj.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
@@ -805,19 +802,11 @@ function isFormFilledForVillage(formObj, vName, month, year) {
     let safeYear = String(year).trim();
     let safeMobile = String(user.mobile).trim();
 
-    const isLocalFilled = localHistory.some(h =>
-        h.formID === formObj.FormID && String(h.village).trim() === safeVName &&
-        String(h.month).trim() === safeMonth && String(h.year).trim() === safeYear &&
-        String(h.mobile).trim() === safeMobile
-    );
-
-    const isServerFilled = serverHistory.some(h => {
+    return serverHistory.some(h => {
         if(h.formID !== formObj.FormID || String(h.village).trim() !== safeVName || String(h.month).trim() !== safeMonth || String(h.year).trim() !== safeYear) return false;
         if(h.isAllForm || isAll) return true;
         return String(h.mobile).trim() === safeMobile;
     });
-
-    return isLocalFilled || isServerFilled;
 }
 
 function updateFormDropdowns() {
@@ -884,7 +873,6 @@ function updateFormDropdowns() {
         }
     });
 
-    // जर कोणताच आकडेवारी फॉर्म शिल्लक नसेल तर ALL_STATS लपवा
     if(selForm && !statsFormRemaining) {
         let optAll = document.getElementById('opt_all_stats');
         if(optAll) optAll.remove();
@@ -1055,7 +1043,8 @@ handleDependencies(el.id);
 }, 100);
 }
 
-async function saveDataLocal() {
+// 🌟 FIX: थेट गुगल शीटवर सेव्ह करणे (Offline/Queue काढून टाकले)
+async function saveDataToServer() {
 if(isSaving) return;
 const saveBtn = document.getElementById('mainSaveBtn');
 if(saveBtn) saveBtn.disabled = true;
@@ -1106,9 +1095,7 @@ prefixMap[f.FormID] = isBulk ? f.FormID : "single";
 }
 }
 
-let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-let history = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
-
+let dataToSave = [];
 let hasNewData = false;
 
 formsToProcess.forEach(f => {
@@ -1118,7 +1105,6 @@ availableVillages.forEach(village => {
 if (String(f.FormType).trim() === 'List') {
 let tbody = document.getElementById(`list_tbody_${f.FormID}`);
 if(tbody) {
-let addedCount = 0;
 Array.from(tbody.children).forEach(tr => {
 let rowIdParts = tr.id.split('_');
 let rIdx = rowIdParts[rowIdParts.length - 1];
@@ -1141,14 +1127,10 @@ if(!isEmpty) {
 formData["महिना"] = month;
 formData["वर्ष"] = year;
 const entry = { entryID: Date.now() + Math.random(), mobileNo: String(user.mobile).trim(), subCenter: String(user.subcenter).trim(), village: String(village).trim(), formID: f.FormID, formData: formData };
-q.push(entry);
+dataToSave.push(entry);
 hasNewData = true;
-addedCount++;
 }
 });
-if(addedCount > 0) {
-history.push({formID: f.FormID, village: String(village).trim(), month: String(month).trim(), year: String(year).trim(), mobile: String(user.mobile).trim()});
-}
 }
 } else {
 let safeVName = village.replace(/\s+/g, '_');
@@ -1167,10 +1149,8 @@ formData["महिना"] = month;
 formData["वर्ष"] = year;
 
 const entry = { entryID: Date.now() + Math.random(), mobileNo: String(user.mobile).trim(), subCenter: String(user.subcenter).trim(), village: String(village).trim(), formID: f.FormID, formData: formData };
-q.push(entry);
+dataToSave.push(entry);
 hasNewData = true;
-
-history.push({formID: f.FormID, village: String(village).trim(), month: String(month).trim(), year: String(year).trim(), mobile: String(user.mobile).trim()});
 }
 });
 });
@@ -1180,63 +1160,48 @@ alert("⚠️ तुम्ही कोणतीही नवीन माहि
 return;
 }
 
-localStorage.setItem("syncQueue", JSON.stringify(q));
-localStorage.setItem("submissionHistory", JSON.stringify(history));
+const statusText = document.getElementById('syncStatus');
+statusText.style.color = "orange";
+statusText.innerText = "☁️ डेटा थेट गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
 
-await syncDataToServer("syncStatus", "mainSaveBtn");
+const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: dataToSave}) });
+const textResponse = await r.text();
+
+if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
+
+const d = JSON.parse(textResponse);
+if(d.success) {
+statusText.style.color = "green";
+statusText.innerText = "✅ माहिती यशस्वीरित्या गुगल शीटवर सेव्ह झाली!";
+setTimeout(() => { statusText.innerText = ""; }, 4000);
+
+document.getElementById('netStatus').innerText = "डेटा रिफ्रेश होत आहे...";
+await fetchData(); 
+document.getElementById('netStatus').innerText = "Online";
 
 document.getElementById('selVillage').value = "";
 document.getElementById('dynamicFormArea').innerHTML = "";
 
 updateFormDropdowns(); 
 updateVillageDropdown();
+updateEditVillageDropdown();
+} else { throw new Error("Server error"); }
 
 } catch (error) {
 console.error("Save Error:", error);
-alert("माहिती जतन करताना तांत्रिक अडचण आली. कृपया पुन्हा प्रयत्न करा.");
+alert("माहिती जतन करताना तांत्रिक अडचण आली. कृपया इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.");
+const statusText = document.getElementById('syncStatus');
+statusText.style.color = "red";
+statusText.innerText = "⚠️ इंटरनेट एरर! माहिती सेव्ह होऊ शकली नाही.";
+setTimeout(() => { statusText.innerText = ""; }, 5000);
 } finally {
 isSaving = false;
 if(saveBtn) saveBtn.disabled = false;
 }
 }
 
-async function syncDataToServer(statusId, btnId) {
-let q = JSON.parse(localStorage.getItem("syncQueue") || "[]");
-const saveBtn = document.getElementById(btnId);
-
-if(q.length === 0) {
-if(saveBtn) saveBtn.disabled = false;
-return;
-}
-
-const statusText = document.getElementById(statusId);
-statusText.style.color = "orange";
-statusText.innerText = "☁️ डेटा गुगल शीटवर सेव्ह होत आहे... कृपया थांबा.";
-
-try {
-const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"syncData", payload: q}) });
-const textResponse = await r.text();
-if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request");
-
-const d = JSON.parse(textResponse);
-if(d.success) {
-localStorage.setItem("syncQueue", "[]");
-statusText.style.color = "green";
-statusText.innerText = "✅ माहिती यशस्वीरित्या गुगल शीटवर सेव्ह झाली!";
-setTimeout(() => { statusText.innerText = ""; }, 4000);
-await fetchData(); 
-} else { throw new Error("Server error"); }
-} catch(e) {
-statusText.style.color = "red";
-statusText.innerText = "⚠️ इंटरनेट एरर! माहिती मोबाईलमध्ये सुरक्षित आहे, नेटवर्क आल्यावर पुन्हा जतन करा दाबा.";
-setTimeout(() => { statusText.innerText = ""; }, 5000);
-} finally {
-if(saveBtn) saveBtn.disabled = false;
-}
-}
-
 // --- Edit Section Logic ---
-// 🟢 FIX: LocalHistory + ServerHistory दोन्ही वापरून झटपट एडिट ड्रॉपडाऊन अपडेट करणे
+// 🌟 FIX: फक्त सर्व्हरचा डेटा वापरून अचूक Edit लिस्ट दाखवणे
 function updateEditVillageDropdown() {
 const vSel = document.getElementById('editVillageSelect');
 const fId = document.getElementById('editFormSelect').value;
@@ -1251,10 +1216,8 @@ let allowedRoles = f && f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String
 let isAll = allowedRoles.includes("ALL");
 
 const serverHistory = masterData.filledStats || [];
-const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
 let addedVillages = [];
 
-// १. आधी सर्व्हरचा डेटा तपासा
 serverHistory.forEach(h => {
 if(h.formID === fId && String(h.month).trim() === String(month).trim() && String(h.year).trim() === String(year).trim()) {
 
@@ -1280,16 +1243,6 @@ addedVillages.push(h.village);
 }
 });
 
-// २. मग Local History तपासा (यामुळे फॉर्म भरल्या-भरल्या लगेच एडिटला दिसेल)
-localHistory.forEach(h => {
-if(h.formID === fId && String(h.month).trim() === String(month).trim() && String(h.year).trim() === String(year).trim()) {
-    if(!addedVillages.includes(h.village) && String(h.mobile).trim() === String(user.mobile).trim()) {
-        vSel.innerHTML += `<option value="${h.village}">${h.village} (आत्ताच भरलेला)</option>`;
-        addedVillages.push(h.village);
-    }
-}
-});
-
 document.getElementById('editDynamicFormArea').classList.add('hidden');
 document.getElementById('editSaveBtn').classList.add('hidden');
 }
@@ -1298,7 +1251,7 @@ async function fetchRecordForEdit() {
 const formID = document.getElementById('editFormSelect').value;
 const month = document.getElementById('editMonth').value;
 const year = document.getElementById('editYear').value;
-const village = document.getElementById('editVillageSelect').value.replace(" (आत्ताच भरलेला)", "");
+const village = document.getElementById('editVillageSelect').value;
 
 if(!formID || !village) { alert("कृपया फॉर्म आणि गाव निवडा."); return; }
 
@@ -1402,7 +1355,7 @@ handleDependencies('editDynamicFormArea');
 const fId = document.getElementById('editFormSelect').value;
 const month = document.getElementById('editMonth').value;
 const year = document.getElementById('editYear').value;
-const vName = document.getElementById('editVillageSelect').value.replace(" (आत्ताच भरलेला)", "");
+const vName = document.getElementById('editVillageSelect').value;
 const statusText = document.getElementById('editSyncStatus');
 
 let updatedFormData = {};
@@ -1444,8 +1397,13 @@ setTimeout(() => { statusText.innerText = ""; }, 4000);
 
 document.getElementById('editDynamicFormArea').classList.add('hidden');
 saveBtn.classList.add('hidden');
+
+document.getElementById('netStatus').innerText = "डेटा रिफ्रेश होत आहे...";
+await fetchData(); 
+document.getElementById('netStatus').innerText = "Online";
+
 updateEditVillageDropdown();
-await fetchData();
+
 } else { throw new Error(d.message); }
 } catch(e) {
 const statusText = document.getElementById('editSyncStatus');
@@ -1508,18 +1466,6 @@ sumInput.value = total;
 sumInput.value = "";
 }
 });
-}
-}
-
-function clearLocalHistory() {
-if(confirm("जर तुम्ही गुगल शीटमधील जुना डेटा डिलीट केला असेल, तरच हे बटण दाबा. यामुळे लपलेली सर्व गावे पुन्हा दिसू लागतील. तुम्हाला गावे रीसेट करायची आहेत का?")) {
-localStorage.removeItem("submissionHistory");
-updateVillageDropdown();
-updateFormDropdowns();
-const statusText = document.getElementById('syncStatus');
-statusText.style.color = "#ffc107";
-statusText.innerText = "✅ गावांची यादी यशस्वीरित्या रीसेट झाली आहे!";
-setTimeout(() => { statusText.innerText = ""; statusText.style.color = "green"; }, 3000);
 }
 }
 
