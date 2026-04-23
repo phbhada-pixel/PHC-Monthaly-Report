@@ -292,7 +292,6 @@ function toggleLayoutOption() {
     document.getElementById('layoutDiv').style.display = (val === 'List') ? 'none' : 'block';
 }
 
-// 🟢 NEW FIX: Date Parser Function for 100% precision in 48-hrs check
 function parseCustomDate(dateStr) {
     if(!dateStr) return NaN;
     let recTime = new Date(dateStr).getTime();
@@ -821,7 +820,6 @@ function isFormFilledForVillage(formObj, vName, month, year) {
     return isLocalFilled || isServerFilled;
 }
 
-// 🟢 FIX: ALL_STATS ऑप्शन 100% गायब होण्यासाठी स्मार्ट लॉजिक 
 function updateFormDropdowns() {
     const selForm = document.getElementById('selForm');
     const editForm = document.getElementById('editFormSelect');
@@ -886,6 +884,7 @@ function updateFormDropdowns() {
         }
     });
 
+    // जर कोणताच आकडेवारी फॉर्म शिल्लक नसेल तर ALL_STATS लपवा
     if(selForm && !statsFormRemaining) {
         let optAll = document.getElementById('opt_all_stats');
         if(optAll) optAll.remove();
@@ -1237,7 +1236,7 @@ if(saveBtn) saveBtn.disabled = false;
 }
 
 // --- Edit Section Logic ---
-// 🟢 FIX: 48 Hours Check with precise cross-browser date parsing
+// 🟢 FIX: LocalHistory + ServerHistory दोन्ही वापरून झटपट एडिट ड्रॉपडाऊन अपडेट करणे
 function updateEditVillageDropdown() {
 const vSel = document.getElementById('editVillageSelect');
 const fId = document.getElementById('editFormSelect').value;
@@ -1252,8 +1251,10 @@ let allowedRoles = f && f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String
 let isAll = allowedRoles.includes("ALL");
 
 const serverHistory = masterData.filledStats || [];
+const localHistory = JSON.parse(localStorage.getItem("submissionHistory") || "[]");
 let addedVillages = [];
 
+// १. आधी सर्व्हरचा डेटा तपासा
 serverHistory.forEach(h => {
 if(h.formID === fId && String(h.month).trim() === String(month).trim() && String(h.year).trim() === String(year).trim()) {
 
@@ -1279,6 +1280,16 @@ addedVillages.push(h.village);
 }
 });
 
+// २. मग Local History तपासा (यामुळे फॉर्म भरल्या-भरल्या लगेच एडिटला दिसेल)
+localHistory.forEach(h => {
+if(h.formID === fId && String(h.month).trim() === String(month).trim() && String(h.year).trim() === String(year).trim()) {
+    if(!addedVillages.includes(h.village) && String(h.mobile).trim() === String(user.mobile).trim()) {
+        vSel.innerHTML += `<option value="${h.village}">${h.village} (आत्ताच भरलेला)</option>`;
+        addedVillages.push(h.village);
+    }
+}
+});
+
 document.getElementById('editDynamicFormArea').classList.add('hidden');
 document.getElementById('editSaveBtn').classList.add('hidden');
 }
@@ -1287,7 +1298,7 @@ async function fetchRecordForEdit() {
 const formID = document.getElementById('editFormSelect').value;
 const month = document.getElementById('editMonth').value;
 const year = document.getElementById('editYear').value;
-const village = document.getElementById('editVillageSelect').value;
+const village = document.getElementById('editVillageSelect').value.replace(" (आत्ताच भरलेला)", "");
 
 if(!formID || !village) { alert("कृपया फॉर्म आणि गाव निवडा."); return; }
 
@@ -1391,7 +1402,7 @@ handleDependencies('editDynamicFormArea');
 const fId = document.getElementById('editFormSelect').value;
 const month = document.getElementById('editMonth').value;
 const year = document.getElementById('editYear').value;
-const vName = document.getElementById('editVillageSelect').value;
+const vName = document.getElementById('editVillageSelect').value.replace(" (आत्ताच भरलेला)", "");
 const statusText = document.getElementById('editSyncStatus');
 
 let updatedFormData = {};
@@ -2010,6 +2021,7 @@ let showIndices = [];
 headers.forEach((h, i) => { 
     if(!CONFIG.hiddenColumns.includes(h) && h !== "गाव" && h !== "Village") showIndices.push(i); 
 });
+let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
 const formType = formObj ? String(formObj.FormType).trim() : "";
@@ -2018,7 +2030,7 @@ const isProgressive = formType.includes('ProgressiveStats');
 const isVertical = formType.includes('Vertical');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
-let nameIdx = headers.indexOf("कर्मऱ्याचे नाव");
+let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
@@ -2148,6 +2160,7 @@ groupKeys.forEach(gKey => {
         }
 
     } else {
+        // Horizontal Excel Download
         let h1Arr = [], h2Arr = [], h3Arr = [];
         showIndices.forEach(idx => {
             let parts = headers[idx].split(" - ");
@@ -2182,7 +2195,7 @@ groupKeys.forEach(gKey => {
             }
         }
 
-        let colCount = showIndices.length + 2;
+        colCount = showIndices.length + 2;
         merges[0] = { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } };
 
         if(dataRows.length > 0) {
