@@ -1579,6 +1579,7 @@ d.reports.forEach(rep => {
     let fData = [];
     let dataRows = [];
 
+    // 🟢 "मासिक" आणि "प्रगत"
     if (isProgressive && !isVertical && selMonth !== "सर्व" && selYear !== "सर्व") {
         let flatFields = extractFieldsFromForm(formObj);
         let numericLabels = flatFields.filter(f => f.orig.type === 'number' || f.orig.type === 'sum').map(f => f.label);
@@ -1658,7 +1659,7 @@ d.reports.forEach(rep => {
             dataRows.push(newRow);
         });
     } else if (isProgressive && isVertical && selMonth !== "सर्व" && selYear !== "सर्व") {
-        fData.push(headers); // Keep original headers, handle splitting in render
+        fData.push(headers); 
         let targetPeriods = getProgressiveTargetMonthsAndYears(selMonth, selYear);
         let villageData = {};
 
@@ -1755,7 +1756,10 @@ reports.forEach(rep => {
 let data = rep.data;
 let headers = data[0];
 let showIndices = [];
-headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
+headers.forEach((h, i) => { 
+    // "गाव" ला प्रश्नांच्या यादीतून वगळले
+    if(!CONFIG.hiddenColumns.includes(h) && h !== "गाव" && h !== "Village") showIndices.push(i); 
+});
 let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
@@ -1803,152 +1807,75 @@ groupKeys.forEach((gKey) => {
         </div>`;
     }
 
-    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - दोन ओळी प्रति गाव) 🟢
+    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - डेटा ट्रान्सपोझ) 🟢
     if(isVertical) {
         let baseVariables = [];
-        let h1Arr = [], h2Arr = [], h3Arr = [];
-
-        showIndices.forEach(idx => {
-            let colName = headers[idx];
-            if(typeof dataRows[0][idx] === 'object' && dataRows[0][idx] !== null) {
-                // Progressive vertical Object {M: 1, P: 1}
-                baseVariables.push({ name: colName, isProg: true, idx: idx });
-            } else {
-                baseVariables.push({ name: colName, isProg: false, idx: idx });
-            }
-        });
-
-        baseVariables.forEach(v => {
-            let parts = v.name.split(" - ");
-            h1Arr.push(parts[0] ? parts[0].trim() : "");
-            if(parts.length === 2) {
-                h2Arr.push(parts[1].trim()); h3Arr.push("");
-            } else if(parts.length >= 3) {
-                h2Arr.push(parts[1].trim()); h3Arr.push(parts.slice(2).join(" - ").trim());
-            } else {
-                h2Arr.push(""); h3Arr.push("");
-            }
-        });
-
-        let maxDepth = 1;
-        if(h2Arr.some(h => h !== "")) maxDepth = 2;
-        if(h3Arr.some(h => h !== "")) maxDepth = 3;
-
-        let tree = [];
-        for(let c=0; c<h1Arr.length; c++) {
-            let h1 = h1Arr[c], h2 = h2Arr[c], h3 = h3Arr[c];
-            let last1 = tree.length > 0 ? tree[tree.length-1] : null;
-            if(last1 && last1.label === h1 && h1 !== "") {
-                let last2 = last1.children.length > 0 ? last1.children[last1.children.length-1] : null;
-                if(last2 && last2.label === h2 && h2 !== "") {
-                    last2.children.push({label: h3, colspan: 1}); last2.colspan++;
-                } else {
-                    last1.children.push({label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []});
-                }
-                last1.colspan++;
-            } else {
-                tree.push({label: h1, colspan: 1, children: h2 !== "" ? [{label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []}] : []});
-            }
-        }
-
-        let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
-        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
-        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:45px; z-index:2;">गाव</th>`;
         if(isProgressive) {
-            r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:135px; z-index:2;">तपशील</th>`;
+            for(let i=0; i<showIndices.length; i+=2) {
+                let baseName = headers[showIndices[i]].replace(" - मासिक", "").trim();
+                baseVariables.push({ name: baseName, idxM: showIndices[i], idxP: showIndices[i+1] });
+            }
+        } else {
+            for(let i=0; i<showIndices.length; i++) {
+                baseVariables.push({ name: headers[showIndices[i]], idxM: showIndices[i], idxP: null });
+            }
         }
 
-        tree.forEach(n1 => {
-            let rs1 = n1.children.length === 0 ? maxDepth : 1;
-            r1Html += `<th colspan="${n1.colspan}" rowspan="${rs1}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; padding:8px;">${n1.label}</th>`;
-            if (n1.children.length > 0) {
-                n1.children.forEach(n2 => {
-                    let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
-                    r2Html += `<th colspan="${n2.colspan}" rowspan="${rs2}" style="background:#ffe082; color:#000; border:1px solid #ddd; font-size:13px; text-align:center; padding:6px;">${n2.label}</th>`;
-                    if(n2.children.length > 0) {
-                        n2.children.forEach(n3 => {
-                            r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; font-size:12px; text-align:center; padding:6px;">${n3.label}</th>`;
-                        });
-                    }
-                });
+        let r1Html = `<tr>`;
+        r1Html += `<th ${isProgressive ? 'rowspan="2"' : ''} style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
+        r1Html += `<th ${isProgressive ? 'rowspan="2"' : ''} style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:45px; z-index:2;">तपशील / प्रश्न</th>`;
+        
+        let r2Html = isProgressive ? `<tr>` : "";
+
+        gRows.forEach((row) => {
+            let vName = row[villageIdx] || "-";
+            r1Html += `<th ${isProgressive ? 'colspan="2"' : ''} style="background:#ffe082; color:#000; border:1px solid #ddd; text-align:center;">${vName}</th>`;
+            if (isProgressive) {
+                r2Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">मासिक</th>`;
+                r2Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">प्रगत</th>`;
             }
         });
-        r1Html += "</tr>"; r2Html += "</tr>"; r3Html += "</tr>";
+        
+        r1Html += `<th ${isProgressive ? 'colspan="2"' : ''} style="background:#81c784; color:#000; border:1px solid #ddd; text-align:center;">एकूण</th></tr>`;
+        if (isProgressive) {
+            r2Html += `<th style="background:#c8e6c9; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">मासिक</th>`;
+            r2Html += `<th style="background:#c8e6c9; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">प्रगत</th></tr>`;
+        }
 
-        let theadHtml = r1Html;
-        if(maxDepth >= 2) theadHtml += r2Html;
-        if(maxDepth === 3) theadHtml += r3Html;
-
+        let theadHtml = r1Html + r2Html;
         let tbodyHtml = "";
-        let totals = Array(headers.length).fill(null);
 
         if(gRows.length === 0) {
-            tbodyHtml += `<tr><td colspan="${baseVariables.length + (isProgressive ? 3 : 2)}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
+            tbodyHtml += `<tr><td colspan="10" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
         } else {
-            gRows.forEach((row, i) => {
+            baseVariables.forEach((v, vIndex) => {
                 tbodyHtml += `<tr>`;
-                tbodyHtml += `<td ${isProgressive ? 'rowspan="2"' : ''} class="sticky-col" style="background:#fdfdfd; left:0; z-index:1;">${i+1}</td>`;
-                tbodyHtml += `<td ${isProgressive ? 'rowspan="2"' : ''} class="sticky-col" style="background:#fdfdfd; left:45px; z-index:1;">${row[villageIdx] || "-"}</td>`;
-                if(isProgressive) {
-                    tbodyHtml += `<td class="sticky-col" style="background:#f9f9f9; left:135px; font-weight:bold; color:#0056b3; z-index:1;">मासिक</td>`;
-                }
+                tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:0; z-index:1; text-align:center;">${vIndex+1}</td>`;
+                tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:45px; z-index:1; text-align:left; font-weight:bold;">${v.name}</td>`;
                 
-                baseVariables.forEach(v => {
-                    if (v.isProg) {
-                        let mVal = row[v.idx].M;
-                        tbodyHtml += `<td style="text-align:center; border:1px solid #ddd;">${mVal !== undefined ? mVal : "-"}</td>`;
-                        if(totals[v.idx] === null) totals[v.idx] = {M:0, P:0};
-                        totals[v.idx].M += parseFloat(mVal||0);
-                        totals[v.idx].P += parseFloat(row[v.idx].P||0);
-                    } else {
-                        let val = row[v.idx];
-                        tbodyHtml += `<td ${isProgressive ? 'rowspan="2"' : ''} style="text-align:center; border:1px solid #ddd;">${val !== undefined ? val : "-"}</td>`;
-                        if(!isNaN(val) && val !== "" && val !== "-") {
-                            if(totals[v.idx] === null) totals[v.idx] = 0;
-                            totals[v.idx] += parseFloat(val);
-                        }
+                let rowTotM = 0;
+                let rowTotP = 0;
+
+                gRows.forEach(row => {
+                    let valM = row[v.idxM];
+                    let mObj = (typeof valM === 'object' && valM !== null) ? valM.M : valM;
+                    tbodyHtml += `<td style="text-align:center; border:1px solid #ddd;">${mObj !== undefined && mObj !== "" ? mObj : "-"}</td>`;
+                    if(!isNaN(parseFloat(mObj))) rowTotM += parseFloat(mObj);
+
+                    if(isProgressive) {
+                        let pObj = (typeof valM === 'object' && valM !== null) ? valM.P : row[v.idxP];
+                        tbodyHtml += `<td style="text-align:center; border:1px solid #ddd;">${pObj !== undefined && pObj !== "" ? pObj : "-"}</td>`;
+                        if(!isNaN(parseFloat(pObj))) rowTotP += parseFloat(pObj);
                     }
                 });
-                tbodyHtml += `</tr>`;
 
-                if (isProgressive) {
-                    tbodyHtml += `<tr>`;
-                    tbodyHtml += `<td class="sticky-col" style="background:#fffaf0; left:135px; font-weight:bold; color:#d35400; z-index:1;">प्रगत</td>`;
-                    baseVariables.forEach(v => {
-                        if (v.isProg) {
-                            tbodyHtml += `<td style="text-align:center; border:1px solid #ddd; background:#fffaf0;">${row[v.idx].P !== undefined ? row[v.idx].P : "-"}</td>`;
-                        }
-                    });
-                    tbodyHtml += `</tr>`;
-                }
-            });
-
-            if (isStats) {
-                tbodyHtml += `<tr>`;
-                tbodyHtml += `<td ${isProgressive ? 'rowspan="2"' : ''} colspan="2" class="sticky-col" style="background:#d4edda; left:0; z-index:1; font-weight:bold; text-align:center;">एकूण</td>`;
+                tbodyHtml += `<td style="text-align:center; font-weight:bold; background:#e8f5e9; border:1px solid #ddd;">${rowTotM}</td>`;
                 if(isProgressive) {
-                    tbodyHtml += `<td class="sticky-col" style="background:#c3e6cb; left:135px; font-weight:bold; color:#155724; z-index:1;">मासिक</td>`;
+                    tbodyHtml += `<td style="text-align:center; font-weight:bold; background:#e8f5e9; border:1px solid #ddd;">${rowTotP}</td>`;
                 }
-                baseVariables.forEach(v => {
-                    if (v.isProg) {
-                        tbodyHtml += `<td style="text-align:center; font-weight:bold; background:#d4edda; border:1px solid #ddd;">${totals[v.idx] !== null ? totals[v.idx].M : "-"}</td>`;
-                    } else {
-                        tbodyHtml += `<td ${isProgressive ? 'rowspan="2"' : ''} style="text-align:center; font-weight:bold; background:#d4edda; border:1px solid #ddd;">${totals[v.idx] !== null ? totals[v.idx] : "-"}</td>`;
-                    }
-                });
-                tbodyHtml += `</tr>`;
 
-                if (isProgressive) {
-                    tbodyHtml += `<tr>`;
-                    tbodyHtml += `<td class="sticky-col" style="background:#c3e6cb; left:135px; font-weight:bold; color:#155724; z-index:1;">प्रगत</td>`;
-                    baseVariables.forEach(v => {
-                        if (v.isProg) {
-                            tbodyHtml += `<td style="text-align:center; font-weight:bold; background:#c3e6cb; border:1px solid #ddd;">${totals[v.idx] !== null ? totals[v.idx].P : "-"}</td>`;
-                        }
-                    });
-                    tbodyHtml += `</tr>`;
-                }
-            }
+                tbodyHtml += `</tr>`;
+            });
         }
 
         html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none; white-space:nowrap;"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
@@ -1993,6 +1920,7 @@ groupKeys.forEach((gKey) => {
         
         let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
         r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
+        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:45px; z-index:2;">गाव</th>`;
 
         tree.forEach(n1 => {
             let rs1 = n1.children.length === 0 ? maxDepth : 1;
@@ -2018,10 +1946,11 @@ groupKeys.forEach((gKey) => {
         html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>`;
 
         if(gRows.length === 0) {
-            html += `<tr><td colspan="${showIndices.length+1}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
+            html += `<tr><td colspan="${showIndices.length+2}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
         } else {
             gRows.forEach((row, i) => {
-                html += `<tr><td class="sticky-col" style="background:#fdfdfd;">${i+1}</td>`;
+                html += `<tr><td class="sticky-col" style="background:#fdfdfd; left:0;">${i+1}</td>`;
+                html += `<td class="sticky-col" style="background:#fdfdfd; left:45px;">${row[villageIdx] || "-"}</td>`;
                 showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
                 html += `</tr>`;
             });
@@ -2029,7 +1958,7 @@ groupKeys.forEach((gKey) => {
             if(isStats && gRows.length > 0) {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td class="sticky-col" style="background:#d4edda;">एकूण</td>`;
+                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td colspan="2" class="sticky-col" style="background:#d4edda; left:0; text-align:center;">एकूण</td>`;
                 showIndices.forEach(idx => {
                     if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
                     else html += `<td>-</td>`;
@@ -2045,7 +1974,7 @@ html += `</div>`;
 container.innerHTML = html;
 }
 
-// 🟢 NEW FEATURE: Excel मध्ये उभा आणि आडवा अहवाल डाऊनलोड करणे
+// 🟢 NEW FEATURE: Excel मध्ये उभा आणि आडवा अहवाल अचूक डाऊनलोड करणे
 function downloadConsolidatedExcel() {
 if(currentReports.length === 0) return;
 let month = document.getElementById('reportMonth').value;
@@ -2060,8 +1989,9 @@ currentReports.forEach((rep, index) => {
 let data = rep.data;
 let headers = data[0];
 let showIndices = [];
-headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
-let colCount = showIndices.length + 1;
+headers.forEach((h, i) => { 
+    if(!CONFIG.hiddenColumns.includes(h) && h !== "गाव" && h !== "Village") showIndices.push(i); 
+});
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
 const formType = formObj ? String(formObj.FormType).trim() : "";
@@ -2091,13 +2021,12 @@ else {
 
 let groupKeys = Object.keys(groups).sort();
 let currentR = 2;
-
 let sheetData = [];
 let merges = [];
 
 sheetData.push([`${rep.formName} अहवाल`]);
-sheetData.push(Array(colCount).fill(""));
-merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } });
+sheetData.push([]);
+merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
 
 let groupHeaderRows = [];
 let headerRowIndices = [];
@@ -2112,48 +2041,18 @@ groupKeys.forEach(gKey => {
 
     if(isVertical) {
         let baseVariables = [];
-        let h1Arr = [], h2Arr = [], h3Arr = [];
-        showIndices.forEach(idx => {
-            let colName = headers[idx];
-            if(typeof dataRows[0][idx] === 'object' && dataRows[0][idx] !== null) {
-                baseVariables.push({ name: colName, isProg: true, idx: idx });
-            } else {
-                baseVariables.push({ name: colName, isProg: false, idx: idx });
+        if(isProgressive) {
+            for(let i=0; i<showIndices.length; i+=2) {
+                let baseName = headers[showIndices[i]].replace(" - मासिक", "").trim();
+                baseVariables.push({ name: baseName, idxM: showIndices[i], idxP: showIndices[i+1] });
             }
-        });
-        baseVariables.forEach(v => {
-            let parts = v.name.split(" - ");
-            h1Arr.push(parts[0] ? parts[0].trim() : "");
-            if(parts.length === 2) {
-                h2Arr.push(parts[1].trim()); h3Arr.push("");
-            } else if(parts.length >= 3) {
-                h2Arr.push(parts[1].trim()); h3Arr.push(parts.slice(2).join(" - ").trim());
-            } else {
-                h2Arr.push(""); h3Arr.push("");
-            }
-        });
-        let maxDepth = 1;
-        if(h2Arr.some(h => h !== "")) maxDepth = 2;
-        if(h3Arr.some(h => h !== "")) maxDepth = 3;
-
-        let tree = [];
-        for(let c=0; c<h1Arr.length; c++) {
-            let h1 = h1Arr[c], h2 = h2Arr[c], h3 = h3Arr[c];
-            let last1 = tree.length > 0 ? tree[tree.length-1] : null;
-            if(last1 && last1.label === h1 && h1 !== "") {
-                let last2 = last1.children.length > 0 ? last1.children[last1.children.length-1] : null;
-                if(last2 && last2.label === h2 && h2 !== "") {
-                    last2.children.push({label: h3, colspan: 1}); last2.colspan++;
-                } else {
-                    last1.children.push({label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []});
-                }
-                last1.colspan++;
-            } else {
-                tree.push({label: h1, colspan: 1, children: h2 !== "" ? [{label: h2, colspan: 1, children: h3 !== "" ? [{label: h3, colspan: 1}] : []}] : []});
+        } else {
+            for(let i=0; i<showIndices.length; i++) {
+                baseVariables.push({ name: headers[showIndices[i]], idxM: showIndices[i], idxP: null });
             }
         }
 
-        let verticalColCount = baseVariables.length + (isProgressive ? 3 : 2);
+        let verticalColCount = 2 + (gRows.length * (isProgressive ? 2 : 1)) + (isProgressive ? 2 : 1);
         
         if(dataRows.length > 0) {
             let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
@@ -2165,43 +2064,37 @@ groupKeys.forEach(gKey => {
         }
 
         let r1 = Array(verticalColCount).fill("");
-        let r2 = Array(verticalColCount).fill("");
-        let r3 = Array(verticalColCount).fill("");
+        let r2 = isProgressive ? Array(verticalColCount).fill("") : null;
 
-        r1[0] = "अ.क्र."; merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
-        r1[1] = "गाव"; merges.push({ s: { r: currentR, c: 1 }, e: { r: currentR + maxDepth - 1, c: 1 } });
-        let offset = 2;
+        r1[0] = "अ.क्र.";
+        r1[1] = "तपशील / प्रश्न";
         if(isProgressive) {
-            r1[2] = "तपशील"; merges.push({ s: { r: currentR, c: 2 }, e: { r: currentR + maxDepth - 1, c: 2 } });
-            offset = 3;
+            merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + 1, c: 0 } });
+            merges.push({ s: { r: currentR, c: 1 }, e: { r: currentR + 1, c: 1 } });
         }
 
-        let cOffset = offset;
-        tree.forEach(n1 => {
-            r1[cOffset] = n1.label;
-            let rs1 = n1.children.length === 0 ? maxDepth : 1;
-            if(n1.colspan > 1 || rs1 > 1) merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + rs1 - 1, c: cOffset + n1.colspan - 1 } });
-            
-            let cOffset2 = cOffset;
-            n1.children.forEach(n2 => {
-                r2[cOffset2] = n2.label;
-                let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
-                if(n2.colspan > 1 || rs2 > 1) merges.push({ s: { r: currentR + 1, c: cOffset2 }, e: { r: currentR + 1 + rs2 - 1, c: cOffset2 + n2.colspan - 1 } });
-                
-                let cOffset3 = cOffset2;
-                n2.children.forEach(n3 => {
-                    r3[cOffset3] = n3.label;
-                    cOffset3++;
-                });
-                cOffset2 += n2.colspan;
-            });
-            cOffset += n1.colspan;
+        let cIndex = 2;
+        gRows.forEach(row => {
+            r1[cIndex] = row[villageIdx] || "Unknown";
+            if(isProgressive) {
+                merges.push({ s: { r: currentR, c: cIndex }, e: { r: currentR, c: cIndex + 1 } });
+                r2[cIndex] = "मासिक";
+                r2[cIndex+1] = "प्रगत";
+                cIndex += 2;
+            } else {
+                cIndex += 1;
+            }
         });
 
-        sheetData.push(r1); headerRowIndices.push(currentR);
-        if(maxDepth >= 2) { sheetData.push(r2); headerRowIndices.push(currentR+1); }
-        if(maxDepth === 3) { sheetData.push(r3); headerRowIndices.push(currentR+2); }
-        currentR += maxDepth;
+        r1[cIndex] = "एकूण";
+        if(isProgressive) {
+            merges.push({ s: { r: currentR, c: cIndex }, e: { r: currentR, c: cIndex + 1 } });
+            r2[cIndex] = "मासिक";
+            r2[cIndex+1] = "प्रगत";
+        }
+
+        sheetData.push(r1); headerRowIndices.push(currentR); currentR++;
+        if(isProgressive) { sheetData.push(r2); headerRowIndices.push(currentR); currentR++; }
 
         if(gRows.length === 0) {
             let nilRow = Array(verticalColCount).fill(""); nilRow[0] = "निरंक (Nil)";
@@ -2209,81 +2102,39 @@ groupKeys.forEach(gKey => {
             merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: verticalColCount - 1 } });
             currentR++;
         } else {
-            let totals = Array(headers.length).fill(null);
-            gRows.forEach((row, i) => {
-                let rowDataM = Array(verticalColCount).fill("");
-                rowDataM[0] = i+1; 
-                rowDataM[1] = row[villageIdx] || "-";
+            baseVariables.forEach((v, vIndex) => {
+                let rowData = Array(verticalColCount).fill("");
+                rowData[0] = vIndex + 1;
+                rowData[1] = v.name;
                 
-                if (isProgressive) {
-                    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR+1, c: 0 } });
-                    merges.push({ s: { r: currentR, c: 1 }, e: { r: currentR+1, c: 1 } });
-                    rowDataM[2] = "मासिक";
-                }
+                let cc = 2;
+                let rowTotalM = 0; let rowTotalP = 0;
 
-                let rowDataP = isProgressive ? Array(verticalColCount).fill("") : null;
-                if(isProgressive) rowDataP[2] = "प्रगत";
-
-                let cc = offset;
-                baseVariables.forEach(v => {
-                    if(v.isProg) {
-                        let mVal = row[v.idx].M;
-                        let pVal = row[v.idx].P;
-                        rowDataM[cc] = mVal !== undefined ? mVal : "-";
-                        rowDataP[cc] = pVal !== undefined ? pVal : "-";
-                        
-                        if(totals[v.idx] === null) totals[v.idx] = {M:0, P:0};
-                        totals[v.idx].M += parseFloat(mVal||0);
-                        totals[v.idx].P += parseFloat(pVal||0);
-                    } else {
-                        let val = row[v.idx];
-                        rowDataM[cc] = val !== undefined ? val : "-";
-                        if(isProgressive) merges.push({ s: { r: currentR, c: cc }, e: { r: currentR+1, c: cc } });
-                        if(!isNaN(val) && val !== "" && val !== "-") {
-                            if(totals[v.idx] === null) totals[v.idx] = 0;
-                            totals[v.idx] += parseFloat(val);
-                        }
-                    }
+                gRows.forEach(row => {
+                    let valM = row[v.idxM];
+                    let mObj = (typeof valM === 'object' && valM !== null) ? valM.M : valM;
+                    rowData[cc] = mObj !== undefined && mObj !== "" ? mObj : "-";
+                    if(!isNaN(parseFloat(mObj))) rowTotalM += parseFloat(mObj);
                     cc++;
+
+                    if(isProgressive) {
+                        let pObj = (typeof valM === 'object' && valM !== null) ? valM.P : row[v.idxP];
+                        rowData[cc] = pObj !== undefined && pObj !== "" ? pObj : "-";
+                        if(!isNaN(parseFloat(pObj))) rowTotalP += parseFloat(pObj);
+                        cc++;
+                    }
                 });
 
-                sheetData.push(rowDataM); currentR++;
-                if(isProgressive) { sheetData.push(rowDataP); currentR++; }
+                rowData[cc] = rowTotalM; cc++;
+                if(isProgressive) rowData[cc] = rowTotalP;
+
+                sheetData.push(rowData);
+                currentR++;
             });
-
-            if(isStats && gRows.length > 0) {
-                let totRowM = Array(verticalColCount).fill("");
-                totRowM[0] = "एकूण"; 
-                if (isProgressive) {
-                    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR+1, c: 1 } });
-                    totRowM[2] = "मासिक";
-                } else {
-                    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: 1 } });
-                }
-
-                let totRowP = isProgressive ? Array(verticalColCount).fill("") : null;
-                if(isProgressive) { totRowP[2] = "प्रगत"; }
-
-                let cc = offset;
-                baseVariables.forEach(v => {
-                    if(v.isProg) {
-                        totRowM[cc] = totals[v.idx] !== null ? totals[v.idx].M : "-";
-                        totRowP[cc] = totals[v.idx] !== null ? totals[v.idx].P : "-";
-                    } else {
-                        totRowM[cc] = totals[v.idx] !== null ? totals[v.idx] : "-";
-                        if(isProgressive) merges.push({ s: { r: currentR, c: cc }, e: { r: currentR+1, c: cc } });
-                    }
-                    cc++;
-                });
-
-                sheetData.push(totRowM); headerRowIndices.push(currentR); currentR++; // Styling total row as header
-                if(isProgressive) { sheetData.push(totRowP); headerRowIndices.push(currentR); currentR++; }
-            }
         }
-        sheetData.push([]); currentR++;
-    } 
-    else {
-        // Horizontal Excel Download Logic remains the same
+
+    } else {
+        // Horizontal Excel Download
         let h1Arr = [], h2Arr = [], h3Arr = [];
         showIndices.forEach(idx => {
             let parts = headers[idx].split(" - ");
@@ -2318,6 +2169,8 @@ groupKeys.forEach(gKey => {
             }
         }
 
+        let colCount = showIndices.length + 2;
+
         if(dataRows.length > 0) {
             let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
             for(let x=1; x<colCount; x++) gHeaderArr.push("");
@@ -2330,10 +2183,10 @@ groupKeys.forEach(gKey => {
         let headerRow1 = Array(colCount).fill("");
         let headerRow2 = Array(colCount).fill("");
         let headerRow3 = Array(colCount).fill("");
-        headerRow1[0] = "अ.क्र.";
-        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
+        headerRow1[0] = "अ.क्र."; merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
+        headerRow1[1] = "गाव"; merges.push({ s: { r: currentR, c: 1 }, e: { r: currentR + maxDepth - 1, c: 1 } });
         
-        let cOffset = 1;
+        let cOffset = 2;
         tree.forEach(n1 => {
             headerRow1[cOffset] = n1.label;
             let rs1 = n1.children.length === 0 ? maxDepth : 1;
@@ -2367,7 +2220,7 @@ groupKeys.forEach(gKey => {
             currentR++;
         } else {
             gRows.forEach((row, i) => {
-                let rowData = [i+1];
+                let rowData = [i+1, row[villageIdx] || "-"];
                 showIndices.forEach(idx => rowData.push(row[idx] || "-"));
                 sheetData.push(rowData);
                 currentR++;
@@ -2376,7 +2229,8 @@ groupKeys.forEach(gKey => {
             if(isStats) {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-                let totalRow = ["एकूण"];
+                let totalRow = ["एकूण", ""];
+                merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: 1 } });
                 showIndices.forEach(idx => {
                     if(isNumericCol[idx]) totalRow.push(totals[idx]);
                     else totalRow.push("-");
@@ -2386,8 +2240,8 @@ groupKeys.forEach(gKey => {
                 currentR++;
             }
         }
-        sheetData.push([]); currentR++;
     }
+    sheetData.push([]); currentR++;
 });
 
 let ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -2422,8 +2276,8 @@ ws[cellRef].s = cellStyle;
 }
 }
 
-let wscols = [{ wch: 15 }, { wch: 15 }, { wch: 15 }]; 
-for(let c=3; c<50; c++) wscols.push({ wch: 12 });
+let wscols = [{ wch: 10 }, { wch: 25 }]; 
+for(let c=2; c<50; c++) wscols.push({ wch: 12 });
 ws["!cols"] = wscols;
 
 let safeSheetName = rep.formName.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 31);
