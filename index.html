@@ -802,6 +802,7 @@ function isFormFilledForVillage(formObj, vName, month, year) {
     return isLocalFilled || isServerFilled;
 }
 
+// 🟢 FIX: Forms disappearing properly when 100% of subcenter villages are filled. ALL_STATS option removal logic handled accurately.
 function updateFormDropdowns() {
     const selForm = document.getElementById('selForm');
     const editForm = document.getElementById('editFormSelect');
@@ -816,12 +817,14 @@ function updateFormDropdowns() {
 
     if(selForm) {
         selForm.innerHTML = '<option value="">-- निवडा --</option>';
-        selForm.innerHTML += '<option value="ALL_STATS" style="font-weight:bold; color:#d35400;">📝 सर्व आकडेवारी अहवाल एकत्रित भरा (All Stats)</option>';
+        selForm.innerHTML += '<option id="opt_all_stats" value="ALL_STATS" style="font-weight:bold; color:#d35400;">📝 सर्व आकडेवारी अहवाल एकत्रित भरा (All Stats)</option>';
     }
     if(editForm) editForm.innerHTML = '<option value="">-- निवडा --</option>';
     if(repForm) repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
 
     if (!masterData || !masterData.forms) return;
+
+    let statsFormRemaining = false;
 
     masterData.forms.forEach(f => {
         let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
@@ -837,7 +840,7 @@ function updateFormDropdowns() {
                 let hasVillages = false;
                 let fullyFilledCheck = true;
                 masterData.villages.forEach(v => {
-                    const belongsToSubCenter = String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all";
+                    const belongsToSubCenter = (userRole === "ADMIN") ? true : (String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all");
                     if(belongsToSubCenter) {
                         hasVillages = true;
                         if (!isFormFilledForVillage(f, v.VillageName, entryMonth, entryYear)) {
@@ -854,11 +857,19 @@ function updateFormDropdowns() {
 
             if(selForm && !isFullyFilled) {
                 selForm.innerHTML += opt;
+                if(formType.includes('Stats')) {
+                    statsFormRemaining = true;
+                }
             }
             if(editForm) editForm.innerHTML += opt;
             if(repForm) repForm.innerHTML += opt; 
         }
     });
+
+    if(selForm && !statsFormRemaining) {
+        let optAll = document.getElementById('opt_all_stats');
+        if(optAll) optAll.remove();
+    }
 
     if(selForm) {
         if(selForm.querySelector(`option[value="${currentSel}"]`)) {
@@ -1579,7 +1590,6 @@ d.reports.forEach(rep => {
     let fData = [];
     let dataRows = [];
 
-    // 🟢 "मासिक" आणि "प्रगत"
     if (isProgressive && !isVertical && selMonth !== "सर्व" && selYear !== "सर्व") {
         let flatFields = extractFieldsFromForm(formObj);
         let numericLabels = flatFields.filter(f => f.orig.type === 'number' || f.orig.type === 'sum').map(f => f.label);
@@ -1807,11 +1817,11 @@ groupKeys.forEach((gKey) => {
         </div>`;
     }
 
-    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - डेटा ट्रान्सपोझ आणि फिक्स) 🟢
+    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - डेटा ट्रान्सपोझ आणि 100% फिक्स) 🟢
     if(isVertical) {
         let baseVariables = [];
         
-        // FIX: No i+=2 loop anymore. Extract mapping safely based on type.
+        // FIX: No loop skipping. Safe extraction directly from showIndices.
         showIndices.forEach(idx => {
             baseVariables.push({ name: headers[idx], isProg: isProgressive, idxM: idx, idxP: idx });
         });
@@ -1878,7 +1888,6 @@ groupKeys.forEach((gKey) => {
     } 
     // 🟢 HORIZONTAL REPORT LOGIC (आडवा अहवाल) 🟢
     else {
-        // Build Tree Logic for 3-Layer Headers
         let h1Arr = [], h2Arr = [], h3Arr = [];
         showIndices.forEach(idx => {
             let parts = headers[idx].split(" - ");
@@ -2019,10 +2028,11 @@ let currentR = 2;
 let sheetData = [];
 let merges = [];
 
-let colCount = isVertical ? 2 : (showIndices.length + 2); // default safe val
+let colCount = isVertical ? 2 : (showIndices.length + 2);
 
 sheetData.push([`${rep.formName} अहवाल`]);
 sheetData.push([]);
+merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
 
 let groupHeaderRows = [];
 let headerRowIndices = [];
@@ -2037,7 +2047,6 @@ groupKeys.forEach(gKey => {
 
     if(isVertical) {
         let baseVariables = [];
-        // FIX: No loop skipping. Safe extraction.
         showIndices.forEach(idx => {
             baseVariables.push({ name: headers[idx], isProg: isProgressive, idxM: idx, idxP: idx });
         });
@@ -2548,7 +2557,7 @@ value="${ssfData ? (ssfData.options || '') : ''}">
 <input type="text" placeholder="संख्या मर्यादा (उदा. 15-45)" class="ssfrange" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.range || '') : ''}">
 </div>
 
-<div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
+<div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
 <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट:</label>
 <input type="text" placeholder="उदा. प्रश्न=No:Not aplicable" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
 </div>
