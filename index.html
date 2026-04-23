@@ -221,13 +221,13 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 <input type="hidden" id="editFormID">
 <input type="text" id="newFormName" placeholder="फॉर्मचे नाव">
 
-<select id="newFormType" onchange="document.getElementById('layoutDiv').style.display = this.value === 'List' ? 'none' : 'block'">
-    <option value="List">गावनिहाय लिस्ट (Patient List)</option>
+<select id="newFormType" onchange="toggleLayoutOption()">
     <option value="Stats">गावनिहाय आकडेवारी (फक्त मासिक / Monthly Only)</option>
     <option value="ProgressiveStats" style="font-weight:bold; color:var(--primary);">📊 गावनिहाय आकडेवारी (मासिक + प्रगत)</option>
+    <option value="List">गावनिहाय लिस्ट (Patient List)</option>
 </select>
 
-<div id="layoutDiv" style="display:none; margin-top:10px; background:#e1f5fe; padding:10px; border-radius:5px; border:1px solid #b3e5fc;">
+<div id="layoutDiv" style="margin-top:10px; background:#e1f5fe; padding:10px; border-radius:5px; border:1px solid #b3e5fc;">
     <label style="font-weight:bold; color:#0277bd;">अहवाल फॉरमॅट (Report Layout):</label>
     <select id="newFormLayout" style="margin-top:5px;">
         <option value="Horizontal">आडवा अहवाल (गावे उभ्या रांगेत)</option>
@@ -285,6 +285,12 @@ function isFormInactive(f) {
         return (s === "FALSE" || s === "INACTIVE");
     }
     return false;
+}
+
+// 🟢 NEW FIX: Layout toggle based on Select Option
+function toggleLayoutOption() {
+    const val = document.getElementById('newFormType').value;
+    document.getElementById('layoutDiv').style.display = (val === 'List') ? 'none' : 'block';
 }
 
 // --- Helper Functions ---
@@ -565,7 +571,6 @@ html += `</div>`;
 return html;
 }
 
-// 🟢 PC View साठी ३-लेयर डायनॅमिक टेबल हेडर्स 
 function generateTableHeaders(f) {
     let maxDepth = 1;
     let struct = JSON.parse(f.StructureJSON);
@@ -613,7 +618,6 @@ function generateTableHeaders(f) {
     return thead;
 }
 
-// 🟢 Bulk Entry साठी मोबाईल व्ह्यू (Vertical Cards) आणि PC व्ह्यू (3 Level Sheet)
 function generateBulkTableHTML(f, availableVillages, formPrefix) {
     if (isMobile()) {
         let html = "";
@@ -730,7 +734,6 @@ function showAppAfterLogin() {
 document.getElementById('loginBox').classList.add('hidden');
 document.getElementById('dashboardWrapper').classList.remove('hidden');
 
-// 🟢 FIX: नावासोबत पद (Designation) दाखवणे 
 document.getElementById('uName').innerText = user.name + " (" + user.role + ")";
 document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
 
@@ -1575,7 +1578,7 @@ d.reports.forEach(rep => {
     let fData = [];
     let dataRows = [];
 
-    // 🟢 FIX: "चालू महिना" ऐवजी "मासिक" आणि "क्रमिक" ऐवजी "प्रगत"
+    // 🟢 "मासिक" आणि "प्रगत"
     if (isProgressive && selMonth !== "सर्व" && selYear !== "सर्व") {
         let flatFields = extractFieldsFromForm(formObj);
         let numericLabels = flatFields.filter(f => f.orig.type === 'number' || f.orig.type === 'sum').map(f => f.label);
@@ -1684,7 +1687,7 @@ alert("एरर: " + e.message);
 }
 }
 
-// 🟢 NEW FEATURE: Horizontal आणि Vertical (उभा व आडवा) अहवाल रेंडर करणे
+// 🟢 Horizontal आणि Vertical (उभा व आडवा) अहवाल रेंडर करणे
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
 let html = "";
@@ -1708,7 +1711,7 @@ let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
-// Build Tree Logic for Headers
+// Build Tree Logic for 3-Layer Headers
 let h1Arr = [], h2Arr = [], h3Arr = [];
 showIndices.forEach(idx => {
     let parts = headers[idx].split(" - ");
@@ -1840,14 +1843,14 @@ groupKeys.forEach((gKey) => {
             let trHtml = `<tr>`;
             
             if (maxDepth === 1) {
-                trHtml += `<td style="font-weight:bold; background:#fdfdfd; border:1px solid #ddd;">${h1}</td>`;
+                trHtml += `<td style="font-weight:bold; background:#fdfdfd; border:1px solid #ddd; position:sticky; left:0; z-index:1;">${h1}</td>`;
             } else if (maxDepth === 2) {
-                trHtml += `<td style="font-weight:bold; background:#f9f9f9; border:1px solid #ddd;">${cell1}</td>`;
-                trHtml += `<td style="background:#fdfdfd; border:1px solid #ddd;">${cell2 || (cell1?"":h1)}</td>`; 
+                trHtml += `<td style="font-weight:bold; background:#f9f9f9; border:1px solid #ddd; position:sticky; left:0; z-index:1;">${cell1}</td>`;
+                trHtml += `<td style="background:#fdfdfd; border:1px solid #ddd; position:sticky; left:0; z-index:1;">${cell2 || (cell1?"":h1)}</td>`; 
             } else if (maxDepth === 3) {
-                trHtml += `<td style="font-weight:bold; background:#f9f9f9; border:1px solid #ddd;">${cell1}</td>`;
-                trHtml += `<td style="background:#fdfdfd; border:1px solid #ddd;">${cell2}</td>`;
-                trHtml += `<td style="border:1px solid #ddd;">${h3 || h2 || h1}</td>`;
+                trHtml += `<td style="font-weight:bold; background:#f9f9f9; border:1px solid #ddd; position:sticky; left:0; z-index:1;">${cell1}</td>`;
+                trHtml += `<td style="background:#fdfdfd; border:1px solid #ddd; position:sticky; left:0; z-index:1;">${cell2}</td>`;
+                trHtml += `<td style="border:1px solid #ddd; position:sticky; left:0; z-index:1; background:white;">${h3 || h2 || h1}</td>`;
             }
 
             prevH1 = h1; prevH2 = h2;
@@ -1857,7 +1860,7 @@ groupKeys.forEach((gKey) => {
                 trHtml += `<td style="text-align:center; border:1px solid #ddd;">${strM}</td>`;
                 if(isProgressive) {
                     let strP = r[v.idxP] !== undefined && r[v.idxP] !== "" ? r[v.idxP] : "-";
-                    trHtml += `<td style="text-align:center; border:1px solid #ddd;">${strP}</td>`;
+                    trHtml += `<td style="text-align:center; border:1px solid #ddd; background:#fafafa;">${strP}</td>`;
                 }
             });
 
@@ -1931,7 +1934,7 @@ html += `</div>`;
 container.innerHTML = html;
 }
 
-// 🟢 NEW FEATURE: Excel मध्ये उभा आणि आडवा अहवाल डाऊनलोड करणे
+// 🟢 Excel मध्ये उभा आणि आडवा अहवाल डाऊनलोड करणे
 function downloadConsolidatedExcel() {
 if(currentReports.length === 0) return;
 let month = document.getElementById('reportMonth').value;
@@ -2375,7 +2378,7 @@ if(val === 'sum') {
 labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची?";
 inputEl.placeholder = "उदा. रुग्ण - पुरुष, रुग्ण - स्त्री";
 } else if(val === 'dropdown') {
-labelEl.innerText = "पर्याय लिहा (स्वल्पविरामाने वेगळे करा):";
+labelEl.innerText = "पर्या लिहा (स्वल्पविरामाने वेगळे करा):";
 inputEl.placeholder = "उदा. होय, नाही";
 }
 }
@@ -2567,7 +2570,6 @@ return fields;
 
 async function saveFullForm() {
 const name = document.getElementById('newFormName').value;
-// 🟢 FIX: Form Type मध्ये Horizontal/Vertical जोडणे
 let type = document.getElementById('newFormType').value;
 if(type !== 'List') {
     type += "_" + document.getElementById('newFormLayout').value;
@@ -2589,7 +2591,6 @@ if(d.success) { alert(d.message); location.reload(); }
 async function updateExistingForm() {
 const formID = document.getElementById('editFormID').value;
 const name = document.getElementById('newFormName').value;
-// 🟢 FIX: Form Type मध्ये Horizontal/Vertical जोडणे
 let type = document.getElementById('newFormType').value;
 if(type !== 'List') {
     type += "_" + document.getElementById('newFormLayout').value;
