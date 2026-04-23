@@ -1807,19 +1807,14 @@ groupKeys.forEach((gKey) => {
         </div>`;
     }
 
-    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - डेटा ट्रान्सपोझ) 🟢
+    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - डेटा ट्रान्सपोझ आणि फिक्स) 🟢
     if(isVertical) {
         let baseVariables = [];
-        if(isProgressive) {
-            for(let i=0; i<showIndices.length; i+=2) {
-                let baseName = headers[showIndices[i]].replace(" - मासिक", "").trim();
-                baseVariables.push({ name: baseName, idxM: showIndices[i], idxP: showIndices[i+1] });
-            }
-        } else {
-            for(let i=0; i<showIndices.length; i++) {
-                baseVariables.push({ name: headers[showIndices[i]], idxM: showIndices[i], idxP: null });
-            }
-        }
+        
+        // FIX: No i+=2 loop anymore. Extract mapping safely based on type.
+        showIndices.forEach(idx => {
+            baseVariables.push({ name: headers[idx], isProg: isProgressive, idxM: idx, idxP: idx });
+        });
 
         let r1Html = `<tr>`;
         r1Html += `<th ${isProgressive ? 'rowspan="2"' : ''} style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
@@ -1851,7 +1846,7 @@ groupKeys.forEach((gKey) => {
             baseVariables.forEach((v, vIndex) => {
                 tbodyHtml += `<tr>`;
                 tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:0; z-index:1; text-align:center;">${vIndex+1}</td>`;
-                tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:45px; z-index:1; text-align:left; font-weight:bold;">${v.name}</td>`;
+                tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:45px; z-index:1; text-align:left; font-weight:bold; white-space:nowrap;">${v.name}</td>`;
                 
                 let rowTotM = 0;
                 let rowTotP = 0;
@@ -1863,7 +1858,7 @@ groupKeys.forEach((gKey) => {
                     if(!isNaN(parseFloat(mObj))) rowTotM += parseFloat(mObj);
 
                     if(isProgressive) {
-                        let pObj = (typeof valM === 'object' && valM !== null) ? valM.P : row[v.idxP];
+                        let pObj = (typeof valM === 'object' && valM !== null) ? valM.P : valM;
                         tbodyHtml += `<td style="text-align:center; border:1px solid #ddd;">${pObj !== undefined && pObj !== "" ? pObj : "-"}</td>`;
                         if(!isNaN(parseFloat(pObj))) rowTotP += parseFloat(pObj);
                     }
@@ -1878,7 +1873,7 @@ groupKeys.forEach((gKey) => {
             });
         }
 
-        html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none; white-space:nowrap;"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+        html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
 
     } 
     // 🟢 HORIZONTAL REPORT LOGIC (आडवा अहवाल) 🟢
@@ -2024,9 +2019,10 @@ let currentR = 2;
 let sheetData = [];
 let merges = [];
 
+let colCount = isVertical ? 2 : (showIndices.length + 2); // default safe val
+
 sheetData.push([`${rep.formName} अहवाल`]);
 sheetData.push([]);
-merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
 
 let groupHeaderRows = [];
 let headerRowIndices = [];
@@ -2041,18 +2037,13 @@ groupKeys.forEach(gKey => {
 
     if(isVertical) {
         let baseVariables = [];
-        if(isProgressive) {
-            for(let i=0; i<showIndices.length; i+=2) {
-                let baseName = headers[showIndices[i]].replace(" - मासिक", "").trim();
-                baseVariables.push({ name: baseName, idxM: showIndices[i], idxP: showIndices[i+1] });
-            }
-        } else {
-            for(let i=0; i<showIndices.length; i++) {
-                baseVariables.push({ name: headers[showIndices[i]], idxM: showIndices[i], idxP: null });
-            }
-        }
+        // FIX: No loop skipping. Safe extraction.
+        showIndices.forEach(idx => {
+            baseVariables.push({ name: headers[idx], isProg: isProgressive, idxM: idx, idxP: idx });
+        });
 
         let verticalColCount = 2 + (gRows.length * (isProgressive ? 2 : 1)) + (isProgressive ? 2 : 1);
+        merges[0] = { s: { r: 0, c: 0 }, e: { r: 0, c: verticalColCount - 1 } };
         
         if(dataRows.length > 0) {
             let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
@@ -2118,7 +2109,7 @@ groupKeys.forEach(gKey => {
                     cc++;
 
                     if(isProgressive) {
-                        let pObj = (typeof valM === 'object' && valM !== null) ? valM.P : row[v.idxP];
+                        let pObj = (typeof valM === 'object' && valM !== null) ? valM.P : valM;
                         rowData[cc] = pObj !== undefined && pObj !== "" ? pObj : "-";
                         if(!isNaN(parseFloat(pObj))) rowTotalP += parseFloat(pObj);
                         cc++;
@@ -2169,7 +2160,8 @@ groupKeys.forEach(gKey => {
             }
         }
 
-        let colCount = showIndices.length + 2;
+        colCount = showIndices.length + 2;
+        merges[0] = { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } };
 
         if(dataRows.length > 0) {
             let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
@@ -2556,7 +2548,7 @@ value="${ssfData ? (ssfData.options || '') : ''}">
 <input type="text" placeholder="संख्या मर्यादा (उदा. 15-45)" class="ssfrange" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.range || '') : ''}">
 </div>
 
-<div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
+<div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
 <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट:</label>
 <input type="text" placeholder="उदा. प्रश्न=No:Not aplicable" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
 </div>
