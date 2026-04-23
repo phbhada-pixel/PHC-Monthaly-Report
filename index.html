@@ -43,7 +43,6 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 .nav-tab { flex: 1 1 20%; text-align: center; padding: 10px; background: transparent; border: none; font-weight: bold; color: #555; border-radius: 6px; cursor: pointer; font-size: 14px; }
 .nav-tab.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 
-/* Bulk Data Entry Table Styles */
 .report-table input, .report-table select { padding: 6px; margin: 0; width: 100px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
 .report-table td { padding: 6px; vertical-align: middle; }
 .sticky-col { position: sticky; left: 0; background: #fdfdfd !important; border-right: 2px solid #ccc; z-index: 5; font-weight: bold; min-width: 100px; text-align:center;}
@@ -76,7 +75,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 <div id="dashboardWrapper" class="hidden">
 <div class="header-bar">
 <div>
-<h3 style="margin: 0;">स्वागत आहे, <span id="uName"></span></h3>
+<h3 style="margin: 0;" id="uNameTitle">स्वागत आहे, <span id="uName"></span></h3>
 <p id="uSub" style="margin: 2px 0 0 0; font-size: 13px; color: gray;"></p>
 </div>
 <button class="btn-logout" onclick="logoutUser()">Log Out</button>
@@ -222,11 +221,19 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 <input type="hidden" id="editFormID">
 <input type="text" id="newFormName" placeholder="फॉर्मचे नाव">
 
-<select id="newFormType">
+<select id="newFormType" onchange="document.getElementById('layoutDiv').style.display = this.value === 'List' ? 'none' : 'block'">
     <option value="List">गावनिहाय लिस्ट (Patient List)</option>
     <option value="Stats">गावनिहाय आकडेवारी (फक्त मासिक / Monthly Only)</option>
-    <option value="ProgressiveStats" style="font-weight:bold; color:var(--primary);">📊 गावनिहाय आकडेवारी (मासिक + क्रमिक / Progressive)</option>
+    <option value="ProgressiveStats" style="font-weight:bold; color:var(--primary);">📊 गावनिहाय आकडेवारी (मासिक + प्रगत)</option>
 </select>
+
+<div id="layoutDiv" style="display:none; margin-top:10px; background:#e1f5fe; padding:10px; border-radius:5px; border:1px solid #b3e5fc;">
+    <label style="font-weight:bold; color:#0277bd;">अहवाल फॉरमॅट (Report Layout):</label>
+    <select id="newFormLayout" style="margin-top:5px;">
+        <option value="Horizontal">आडवा अहवाल (गावे उभ्या रांगेत)</option>
+        <option value="Vertical" style="font-weight:bold; color:#0277bd;">उभा अहवाल (गावे आडव्या रांगेत)</option>
+    </select>
+</div>
 
 <div style="margin-top:10px;">
     <input type="checkbox" id="formIsActive" checked> <label for="formIsActive" style="font-weight:bold; color:#d35400;">हा फॉर्म सुरू (Active) ठेवा</label>
@@ -722,7 +729,9 @@ document.getElementById('netStatus').innerText = "Online";
 function showAppAfterLogin() {
 document.getElementById('loginBox').classList.add('hidden');
 document.getElementById('dashboardWrapper').classList.remove('hidden');
-document.getElementById('uName').innerText = user.name;
+
+// 🟢 FIX: नावासोबत पद (Designation) दाखवणे 
+document.getElementById('uName').innerText = user.name + " (" + user.role + ")";
 document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
 
 if(user.role === "Admin") {
@@ -822,7 +831,7 @@ function updateFormDropdowns() {
             if (isInactive && userRole !== "ADMIN") return;
 
             let isFullyFilled = false;
-            if (user && entryMonth && entryYear && (formType === 'Stats' || formType === 'ProgressiveStats')) {
+            if (user && entryMonth && entryYear && formType.includes('Stats')) {
                 let hasVillages = false;
                 let fullyFilledCheck = true;
                 masterData.villages.forEach(v => {
@@ -877,7 +886,7 @@ const belongsToSubCenter = String(v.SubCenterID).trim().toLowerCase() === String
 if(!belongsToSubCenter) return false;
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => { let t = String(f.FormType).trim(); return t === 'Stats' || t === 'ProgressiveStats'; });
+let statsForms = masterData.forms.filter(f => String(f.FormType).trim().includes('Stats'));
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 
 let isFullyFilled = true;
@@ -896,7 +905,7 @@ break;
 return !isFullyFilled;
 } else {
 const selectedForm = masterData.forms.find(f => f.FormID === fId);
-if(selectedForm && (String(selectedForm.FormType).trim() === 'Stats' || String(selectedForm.FormType).trim() === 'ProgressiveStats')) {
+if(selectedForm && String(selectedForm.FormType).trim().includes('Stats')) {
 if (isFormFilledForVillage(selectedForm, v.VillageName, month, year)) return false;
 }
 }
@@ -928,7 +937,7 @@ return;
 }
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => { let t = String(f.FormType).trim(); return t === 'Stats' || t === 'ProgressiveStats'; });
+let statsForms = masterData.forms.filter(f => String(f.FormType).trim().includes('Stats'));
 let allHtml = "";
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 let renderedFormsCount = 0;
@@ -976,7 +985,7 @@ if(!f) return;
 let formContainerId = `form_area_${f.FormID}`;
 let type = String(f.FormType).trim();
 
-if (type === 'Stats' || type === 'ProgressiveStats') {
+if (type.includes('Stats')) {
 let formSpecificVillages = [];
 if(isBulk) {
 formSpecificVillages = availableVillages.filter(vName => !isFormFilledForVillage(f, vName, month, year));
@@ -1045,7 +1054,7 @@ let formsToProcess = [];
 let prefixMap = {};
 
 if (fId === "ALL_STATS") {
-let statsForms = masterData.forms.filter(f => { let t = String(f.FormType).trim(); return t === 'Stats' || t === 'ProgressiveStats'; });
+let statsForms = masterData.forms.filter(f => String(f.FormType).trim().includes('Stats'));
 let userRole = user ? String(user.role).trim().toUpperCase() : "";
 statsForms.forEach(f => {
 let isInactive = isFormInactive(f);
@@ -1556,7 +1565,7 @@ d.reports.forEach(rep => {
     if(!headers) return;
 
     const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-    let isProgressive = formObj && String(formObj.FormType).trim() === 'ProgressiveStats';
+    let isProgressive = formObj && String(formObj.FormType).includes('ProgressiveStats');
 
     let monthIdx = headers.indexOf("महिना");
     let yearIdx = headers.indexOf("वर्ष");
@@ -1566,6 +1575,7 @@ d.reports.forEach(rep => {
     let fData = [];
     let dataRows = [];
 
+    // 🟢 FIX: "चालू महिना" ऐवजी "मासिक" आणि "क्रमिक" ऐवजी "प्रगत"
     if (isProgressive && selMonth !== "सर्व" && selYear !== "सर्व") {
         let flatFields = extractFieldsFromForm(formObj);
         let numericLabels = flatFields.filter(f => f.orig.type === 'number' || f.orig.type === 'sum').map(f => f.label);
@@ -1575,8 +1585,8 @@ d.reports.forEach(rep => {
         
         headers.forEach((h, i) => {
             if (numericLabels.includes(h)) {
-                newHeaders.push(`${h} - चालू महिना`);
-                newHeaders.push(`${h} - क्रमिक (एप्रिलपासून)`);
+                newHeaders.push(`${h} - मासिक`);
+                newHeaders.push(`${h} - प्रगत`);
                 numMap[i] = true;
             } else {
                 newHeaders.push(h);
@@ -1674,7 +1684,7 @@ alert("एरर: " + e.message);
 }
 }
 
-// 🟢 Reports नेहमी 3-Level Data Sheet मध्ये दिसण्यासाठी (मोबाईल आणि पीसी दोन्हीवर)
+// 🟢 NEW FEATURE: Horizontal आणि Vertical (उभा व आडवा) अहवाल रेंडर करणे
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
 let html = "";
@@ -1685,16 +1695,20 @@ let data = rep.data;
 let headers = data[0];
 let showIndices = [];
 headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.push(i); });
+let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-const isStats = formObj && (String(formObj.FormType).trim() === 'Stats' || String(formObj.FormType).trim() === 'ProgressiveStats');
+const formType = formObj ? String(formObj.FormType).trim() : "";
+const isStats = formType.includes('Stats');
+const isProgressive = formType.includes('ProgressiveStats');
+const isVertical = formType.includes('Vertical'); 
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
-// Build Tree Logic for 3-Level Headers
+// Build Tree Logic for Headers
 let h1Arr = [], h2Arr = [], h3Arr = [];
 showIndices.forEach(idx => {
     let parts = headers[idx].split(" - ");
@@ -1768,60 +1782,156 @@ groupKeys.forEach((gKey) => {
         </div>`;
     }
 
-    // 🟢 नेहमी Data Sheet (Table View) दिसेल
-    let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
-    r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
+    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल) 🟢
+    if(isVertical) {
+        let r1Html = `<tr><th colspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
+        gRows.forEach((row, i) => {
+            r1Html += `<th ${isProgressive ? 'colspan="2"' : ''} style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center;">${i+1}</th>`;
+        });
+        r1Html += `<th ${isProgressive ? 'colspan="2"' : ''} style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center;">एकूण</th></tr>`;
 
-    tree.forEach(n1 => {
-        let rs1 = n1.children.length === 0 ? maxDepth : 1;
-        r1Html += `<th colspan="${n1.colspan}" rowspan="${rs1}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; padding:8px;">${n1.label}</th>`;
-        if (n1.children.length > 0) {
-            n1.children.forEach(n2 => {
-                let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
-                r2Html += `<th colspan="${n2.colspan}" rowspan="${rs2}" style="background:#ffe082; color:#000; border:1px solid #ddd; font-size:13px; text-align:center; padding:6px;">${n2.label}</th>`;
-                if(n2.children.length > 0) {
-                    n2.children.forEach(n3 => {
-                        r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; font-size:12px; text-align:center; padding:6px;">${n3.label}</th>`;
-                    });
+        let r2Html = `<tr><th colspan="${maxDepth}" style="background:#ffe082; color:#000; border:1px solid #ddd; text-align:center; position:sticky; left:0; z-index:2;">गाव</th>`;
+        gRows.forEach((row) => {
+            let vName = row[villageIdx] || "-";
+            r2Html += `<th ${isProgressive ? 'colspan="2"' : ''} style="background:#ffe082; color:#000; border:1px solid #ddd; text-align:center;">${vName}</th>`;
+        });
+        r2Html += `<th ${isProgressive ? 'colspan="2"' : ''} style="background:#ffe082; color:#000; border:1px solid #ddd; text-align:center;">-</th></tr>`;
+
+        let r3Html = "";
+        if (isProgressive) {
+            r3Html = `<tr><th colspan="${maxDepth}" style="background:#fff3e0; color:#000; border:1px solid #ddd; position:sticky; left:0; z-index:2;">तपशील</th>`;
+            gRows.forEach(() => {
+                r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">मासिक</th>`;
+                r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">प्रगत</th>`;
+            });
+            r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">मासिक</th>`;
+            r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; text-align:center; font-size:12px;">प्रगत</th></tr>`;
+        }
+
+        let tbodyHtml = "";
+        let { totals, isNumericCol } = getTotalsRow([headers].concat(gRows), headers, showIndices);
+        
+        let variables = [];
+        if(isProgressive) {
+            for(let i=0; i<showIndices.length; i+=2) {
+                let idxM = showIndices[i];
+                let idxP = showIndices[i+1];
+                let baseName = headers[idxM].replace(" - मासिक", "");
+                variables.push({baseName, idxM, idxP});
+            }
+        } else {
+            for(let i=0; i<showIndices.length; i++) {
+                let idxM = showIndices[i];
+                let baseName = headers[idxM];
+                variables.push({baseName, idxM, idxP: null});
+            }
+        }
+
+        let prevH1 = "", prevH2 = "";
+        variables.forEach(v => {
+            let parts = v.baseName.split(" - ");
+            let h1 = parts[0] ? parts[0].trim() : "";
+            let h2 = parts[1] ? parts[1].trim() : "";
+            let h3 = parts.length > 2 ? parts.slice(2).join(" - ").trim() : "";
+
+            let cell1 = (h1 !== prevH1) ? h1 : "";
+            let cell2 = (h2 !== prevH2 || h1 !== prevH1) ? h2 : "";
+            
+            let trHtml = `<tr>`;
+            
+            if (maxDepth === 1) {
+                trHtml += `<td style="font-weight:bold; background:#fdfdfd; border:1px solid #ddd;">${h1}</td>`;
+            } else if (maxDepth === 2) {
+                trHtml += `<td style="font-weight:bold; background:#f9f9f9; border:1px solid #ddd;">${cell1}</td>`;
+                trHtml += `<td style="background:#fdfdfd; border:1px solid #ddd;">${cell2 || (cell1?"":h1)}</td>`; 
+            } else if (maxDepth === 3) {
+                trHtml += `<td style="font-weight:bold; background:#f9f9f9; border:1px solid #ddd;">${cell1}</td>`;
+                trHtml += `<td style="background:#fdfdfd; border:1px solid #ddd;">${cell2}</td>`;
+                trHtml += `<td style="border:1px solid #ddd;">${h3 || h2 || h1}</td>`;
+            }
+
+            prevH1 = h1; prevH2 = h2;
+
+            gRows.forEach(r => {
+                let strM = r[v.idxM] !== undefined && r[v.idxM] !== "" ? r[v.idxM] : "-";
+                trHtml += `<td style="text-align:center; border:1px solid #ddd;">${strM}</td>`;
+                if(isProgressive) {
+                    let strP = r[v.idxP] !== undefined && r[v.idxP] !== "" ? r[v.idxP] : "-";
+                    trHtml += `<td style="text-align:center; border:1px solid #ddd;">${strP}</td>`;
                 }
             });
-        }
-    });
-    r1Html += "</tr>"; r2Html += "</tr>"; r3Html += "</tr>";
 
-    let theadHtml = r1Html;
-    if(maxDepth >= 2) theadHtml += r2Html;
-    if(maxDepth === 3) theadHtml += r3Html;
-    
-    html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>`;
+            let totM = totals[v.idxM] !== undefined ? totals[v.idxM] : "-";
+            trHtml += `<td style="text-align:center; font-weight:bold; background:#e8f5e9; border:1px solid #ddd;">${totM}</td>`;
+            if(isProgressive) {
+                let totP = totals[v.idxP] !== undefined ? totals[v.idxP] : "-";
+                trHtml += `<td style="text-align:center; font-weight:bold; background:#e8f5e9; border:1px solid #ddd;">${totP}</td>`;
+            }
 
-    if(gRows.length === 0) {
-        html += `<tr><td colspan="${showIndices.length+1}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
-    } else {
-        gRows.forEach((row, i) => {
-            html += `<tr><td class="sticky-col" style="background:#fdfdfd;">${i+1}</td>`;
-            showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
-            html += `</tr>`;
+            trHtml += `</tr>`;
+            tbodyHtml += trHtml;
         });
 
-        if(isStats && gRows.length > 0) {
-            let pseudoData = [headers].concat(gRows);
-            let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-            html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td class="sticky-col" style="background:#d4edda;">एकूण</td>`;
-            showIndices.forEach(idx => {
-                if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
-                else html += `<td>-</td>`;
+        html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${r1Html}${r2Html}${r3Html}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+
+    } 
+    // 🟢 HORIZONTAL REPORT LOGIC (आडवा अहवाल) 🟢
+    else {
+        let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
+        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
+
+        tree.forEach(n1 => {
+            let rs1 = n1.children.length === 0 ? maxDepth : 1;
+            r1Html += `<th colspan="${n1.colspan}" rowspan="${rs1}" style="background:#f4b400; color:#000; border:1px solid #ddd; text-align:center; padding:8px;">${n1.label}</th>`;
+            if (n1.children.length > 0) {
+                n1.children.forEach(n2 => {
+                    let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
+                    r2Html += `<th colspan="${n2.colspan}" rowspan="${rs2}" style="background:#ffe082; color:#000; border:1px solid #ddd; font-size:13px; text-align:center; padding:6px;">${n2.label}</th>`;
+                    if(n2.children.length > 0) {
+                        n2.children.forEach(n3 => {
+                            r3Html += `<th style="background:#fff3e0; color:#000; border:1px solid #ddd; font-size:12px; text-align:center; padding:6px;">${n3.label}</th>`;
+                        });
+                    }
+                });
+            }
+        });
+        r1Html += "</tr>"; r2Html += "</tr>"; r3Html += "</tr>";
+
+        let theadHtml = r1Html;
+        if(maxDepth >= 2) theadHtml += r2Html;
+        if(maxDepth === 3) theadHtml += r3Html;
+        
+        html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>`;
+
+        if(gRows.length === 0) {
+            html += `<tr><td colspan="${showIndices.length+1}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
+        } else {
+            gRows.forEach((row, i) => {
+                html += `<tr><td class="sticky-col" style="background:#fdfdfd;">${i+1}</td>`;
+                showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
+                html += `</tr>`;
             });
-            html += `</tr>`;
+
+            if(isStats && gRows.length > 0) {
+                let pseudoData = [headers].concat(gRows);
+                let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td class="sticky-col" style="background:#d4edda;">एकूण</td>`;
+                showIndices.forEach(idx => {
+                    if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
+                    else html += `<td>-</td>`;
+                });
+                html += `</tr>`;
+            }
         }
+        html += `</tbody></table></div>`;
     }
-    html += `</tbody></table></div>`;
 });
 html += `</div>`;
 });
 container.innerHTML = html;
 }
 
+// 🟢 NEW FEATURE: Excel मध्ये उभा आणि आडवा अहवाल डाऊनलोड करणे
 function downloadConsolidatedExcel() {
 if(currentReports.length === 0) return;
 let month = document.getElementById('reportMonth').value;
@@ -1840,24 +1950,24 @@ headers.forEach((h, i) => { if(!CONFIG.hiddenColumns.includes(h)) showIndices.pu
 let colCount = showIndices.length + 1;
 
 const formObj = masterData.forms.find(x => x.FormName === rep.formName);
-const isStats = formObj && (String(formObj.FormType).trim() === 'Stats' || String(formObj.FormType).trim() === 'ProgressiveStats');
+const formType = formObj ? String(formObj.FormType).trim() : "";
+const isStats = formType.includes('Stats');
+const isProgressive = formType.includes('ProgressiveStats');
+const isVertical = formType.includes('Vertical');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
-// 3-Level Excel Header Tree Builder
 let h1Arr = [], h2Arr = [], h3Arr = [];
 showIndices.forEach(idx => {
     let parts = headers[idx].split(" - ");
     h1Arr.push(parts[0] ? parts[0].trim() : "");
     if(parts.length === 2) {
-        h2Arr.push(parts[1].trim());
-        h3Arr.push("");
+        h2Arr.push(parts[1].trim()); h3Arr.push("");
     } else if(parts.length >= 3) {
-        h2Arr.push(parts[1].trim());
-        h3Arr.push(parts.slice(2).join(" - ").trim());
+        h2Arr.push(parts[1].trim()); h3Arr.push(parts.slice(2).join(" - ").trim());
     } else {
         h2Arr.push(""); h3Arr.push("");
     }
@@ -1920,76 +2030,176 @@ groupKeys.forEach(gKey => {
         gRows.sort((a, b) => String(a[villageIdx]||"").localeCompare(String(b[villageIdx]||"")));
     }
 
-    if(dataRows.length > 0) {
-        let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
-        for(let x=1; x<colCount; x++) gHeaderArr.push("");
-        sheetData.push(gHeaderArr);
-        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
-        groupHeaderRows.push(currentR);
-        currentR++;
-    }
-
-    // 🟢 Excel Header Merges
-    let headerRow1 = Array(colCount).fill("");
-    let headerRow2 = Array(colCount).fill("");
-    let headerRow3 = Array(colCount).fill("");
-    headerRow1[0] = "अ.क्र.";
-    merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
-    
-    let cOffset = 1;
-    tree.forEach(n1 => {
-        headerRow1[cOffset] = n1.label;
-        let rs1 = n1.children.length === 0 ? maxDepth : 1;
-        if(n1.colspan > 1 || rs1 > 1) merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + rs1 - 1, c: cOffset + n1.colspan - 1 } });
+    if(isVertical) {
+        let verticalColCount = maxDepth + (gRows.length * (isProgressive ? 2 : 1)) + (isProgressive ? 2 : 1);
         
-        let cOffset2 = cOffset;
-        n1.children.forEach(n2 => {
-            headerRow2[cOffset2] = n2.label;
-            let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
-            if(n2.colspan > 1 || rs2 > 1) merges.push({ s: { r: currentR + 1, c: cOffset2 }, e: { r: currentR + 1 + rs2 - 1, c: cOffset2 + n2.colspan - 1 } });
-            
-            let cOffset3 = cOffset2;
-            n2.children.forEach(n3 => {
-                headerRow3[cOffset3] = n3.label;
-                cOffset3++;
-            });
-            cOffset2 += n2.colspan;
-        });
-        cOffset += n1.colspan;
-    });
-
-    sheetData.push(headerRow1); headerRowIndices.push(currentR);
-    if(maxDepth >= 2) { sheetData.push(headerRow2); headerRowIndices.push(currentR+1); }
-    if(maxDepth === 3) { sheetData.push(headerRow3); headerRowIndices.push(currentR+2); }
-    currentR += maxDepth;
-
-    if(gRows.length === 0) {
-        let nilRow = Array(colCount).fill(""); nilRow[0] = "निरंक (Nil)";
-        sheetData.push(nilRow);
-        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
-        currentR++;
-    } else {
-        gRows.forEach((row, i) => {
-            let rowData = [i+1];
-            showIndices.forEach(idx => rowData.push(row[idx] || "-"));
-            sheetData.push(rowData);
-            currentR++;
-        });
-
-        if(isStats) {
-            let pseudoData = [headers].concat(gRows);
-            let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-            let totalRow = ["एकूण"];
-            showIndices.forEach(idx => {
-                if(isNumericCol[idx]) totalRow.push(totals[idx]);
-                else totalRow.push("-");
-            });
-            sheetData.push(totalRow);
-            headerRowIndices.push(currentR); // Styling total row similar to header
+        if(dataRows.length > 0) {
+            let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
+            for(let x=1; x<verticalColCount; x++) gHeaderArr.push("");
+            sheetData.push(gHeaderArr);
+            merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: verticalColCount - 1 } });
+            groupHeaderRows.push(currentR);
             currentR++;
         }
+
+        let r1 = Array(verticalColCount).fill("");
+        r1[0] = "अ.क्र.";
+        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: maxDepth - 1 } });
+        let c = maxDepth;
+        gRows.forEach((row, i) => {
+            r1[c] = i + 1;
+            if(isProgressive) merges.push({ s: { r: currentR, c: c }, e: { r: currentR, c: c + 1 } });
+            c += isProgressive ? 2 : 1;
+        });
+        r1[c] = "एकूण";
+        if(isProgressive) merges.push({ s: { r: currentR, c: c }, e: { r: currentR, c: c + 1 } });
+        sheetData.push(r1); headerRowIndices.push(currentR); currentR++;
+
+        let r2 = Array(verticalColCount).fill("");
+        r2[0] = "गाव";
+        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: maxDepth - 1 } });
+        c = maxDepth;
+        gRows.forEach((row) => {
+            r2[c] = row[villageIdx] || "Unknown";
+            if(isProgressive) merges.push({ s: { r: currentR, c: c }, e: { r: currentR, c: c + 1 } });
+            c += isProgressive ? 2 : 1;
+        });
+        r2[c] = "-";
+        if(isProgressive) merges.push({ s: { r: currentR, c: c }, e: { r: currentR, c: c + 1 } });
+        sheetData.push(r2); headerRowIndices.push(currentR); currentR++;
+
+        if(isProgressive) {
+            let r3 = Array(verticalColCount).fill("");
+            merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: maxDepth - 1 } });
+            c = maxDepth;
+            gRows.forEach(() => {
+                r3[c] = "मासिक";
+                r3[c+1] = "प्रगत";
+                c += 2;
+            });
+            r3[c] = "मासिक"; r3[c+1] = "प्रगत";
+            sheetData.push(r3); headerRowIndices.push(currentR); currentR++;
+        }
+
+        let { totals, isNumericCol } = getTotalsRow([headers].concat(gRows), headers, showIndices);
+        let variables = [];
+        if(isProgressive) {
+            for(let i=0; i<showIndices.length; i+=2) {
+                variables.push({baseName: headers[showIndices[i]].replace(" - मासिक", ""), idxM: showIndices[i], idxP: showIndices[i+1]});
+            }
+        } else {
+            for(let i=0; i<showIndices.length; i++) {
+                variables.push({baseName: headers[showIndices[i]], idxM: showIndices[i], idxP: null});
+            }
+        }
+
+        let prevH1 = "", prevH2 = "";
+        variables.forEach(v => {
+            let parts = v.baseName.split(" - ");
+            let h1 = parts[0] ? parts[0].trim() : "";
+            let h2 = parts[1] ? parts[1].trim() : "";
+            let h3 = parts.length > 2 ? parts.slice(2).join(" - ").trim() : "";
+            
+            let cell1 = (h1 !== prevH1) ? h1 : "";
+            let cell2 = (h2 !== prevH2 || h1 !== prevH1) ? h2 : "";
+
+            let r = Array(verticalColCount).fill("");
+            if(maxDepth === 1) r[0] = h1;
+            else if(maxDepth === 2) { r[0] = cell1; r[1] = cell2 || (cell1?"":h1); }
+            else if(maxDepth === 3) { r[0] = cell1; r[1] = cell2; r[2] = h3 || h2 || h1; }
+
+            let cc = maxDepth;
+            gRows.forEach(row => {
+                r[cc] = row[v.idxM] !== undefined && row[v.idxM] !== "" ? row[v.idxM] : "-";
+                cc++;
+                if(isProgressive) {
+                    r[cc] = row[v.idxP] !== undefined && row[v.idxP] !== "" ? row[v.idxP] : "-";
+                    cc++;
+                }
+            });
+
+            r[cc] = totals[v.idxM] !== undefined ? totals[v.idxM] : "-";
+            cc++;
+            if(isProgressive) {
+                r[cc] = totals[v.idxP] !== undefined ? totals[v.idxP] : "-";
+            }
+
+            sheetData.push(r);
+            currentR++;
+            prevH1 = h1; prevH2 = h2;
+        });
+
+    } else {
+        if(dataRows.length > 0) {
+            let gHeaderArr = [`उपकेंद्र: ${sc}   |   कर्मचारी: ${ename}   |   महिना: ${periodText}`];
+            for(let x=1; x<colCount; x++) gHeaderArr.push("");
+            sheetData.push(gHeaderArr);
+            merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
+            groupHeaderRows.push(currentR);
+            currentR++;
+        }
+
+        let headerRow1 = Array(colCount).fill("");
+        let headerRow2 = Array(colCount).fill("");
+        let headerRow3 = Array(colCount).fill("");
+        headerRow1[0] = "अ.क्र.";
+        merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
+        
+        let cOffset = 1;
+        tree.forEach(n1 => {
+            headerRow1[cOffset] = n1.label;
+            let rs1 = n1.children.length === 0 ? maxDepth : 1;
+            if(n1.colspan > 1 || rs1 > 1) merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + rs1 - 1, c: cOffset + n1.colspan - 1 } });
+            
+            let cOffset2 = cOffset;
+            n1.children.forEach(n2 => {
+                headerRow2[cOffset2] = n2.label;
+                let rs2 = n2.children.length === 0 ? (maxDepth - 1) : 1;
+                if(n2.colspan > 1 || rs2 > 1) merges.push({ s: { r: currentR + 1, c: cOffset2 }, e: { r: currentR + 1 + rs2 - 1, c: cOffset2 + n2.colspan - 1 } });
+                
+                let cOffset3 = cOffset2;
+                n2.children.forEach(n3 => {
+                    headerRow3[cOffset3] = n3.label;
+                    cOffset3++;
+                });
+                cOffset2 += n2.colspan;
+            });
+            cOffset += n1.colspan;
+        });
+
+        sheetData.push(headerRow1); headerRowIndices.push(currentR);
+        if(maxDepth >= 2) { sheetData.push(headerRow2); headerRowIndices.push(currentR+1); }
+        if(maxDepth === 3) { sheetData.push(headerRow3); headerRowIndices.push(currentR+2); }
+        currentR += maxDepth;
+
+        if(gRows.length === 0) {
+            let nilRow = Array(colCount).fill(""); nilRow[0] = "निरंक (Nil)";
+            sheetData.push(nilRow);
+            merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: colCount - 1 } });
+            currentR++;
+        } else {
+            gRows.forEach((row, i) => {
+                let rowData = [i+1];
+                showIndices.forEach(idx => rowData.push(row[idx] || "-"));
+                sheetData.push(rowData);
+                currentR++;
+            });
+
+            if(isStats) {
+                let pseudoData = [headers].concat(gRows);
+                let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
+                let totalRow = ["एकूण"];
+                showIndices.forEach(idx => {
+                    if(isNumericCol[idx]) totalRow.push(totals[idx]);
+                    else totalRow.push("-");
+                });
+                sheetData.push(totalRow);
+                headerRowIndices.push(currentR); 
+                currentR++;
+            }
+        }
     }
-    sheetData.push(Array(colCount).fill(""));
+    sheetData.push([]);
     currentR++;
 });
 
@@ -1997,7 +2207,7 @@ let ws = XLSX.utils.aoa_to_sheet(sheetData);
 ws["!merges"] = merges;
 
 for(let R=0; R<sheetData.length; R++) {
-for(let C=0; C<colCount; C++) {
+for(let C=0; C<200; C++) { 
 let cellRef = XLSX.utils.encode_cell({r: R, c: C});
 if(!ws[cellRef]) continue;
 let cellStyle = { font: { name: "Arial", sz: 11, color: { rgb: "000000" } }, alignment: { vertical: "center", horizontal: "center", wrapText: true } };
@@ -2025,8 +2235,8 @@ ws[cellRef].s = cellStyle;
 }
 }
 
-let wscols = [{ wch: 8 }];
-for(let c=1; c<colCount; c++) wscols.push({ wch: 20 });
+let wscols = [{ wch: 15 }, { wch: 15 }, { wch: 15 }]; 
+for(let c=3; c<50; c++) wscols.push({ wch: 12 });
 ws["!cols"] = wscols;
 
 let safeSheetName = rep.formName.replace(/[\\\/\?\*\[\]\:]/g, "").substring(0, 31);
@@ -2060,6 +2270,8 @@ document.getElementById('builderTitle').innerText = "नवीन फॉर्�
 document.getElementById('editFormID').value = "";
 document.getElementById('newFormName').value = "";
 document.getElementById('formIsActive').checked = true;
+document.getElementById('newFormType').value = "List";
+document.getElementById('layoutDiv').style.display = "none";
 
 document.getElementById('roleAll').checked = true;
 toggleRoles(document.getElementById('roleAll'));
@@ -2089,9 +2301,18 @@ document.getElementById('existingFormsArea').classList.add('hidden');
 document.getElementById('formBuilder').classList.remove('hidden');
 document.getElementById('builderTitle').innerText = "फॉर्म एडिट: " + f.FormName;
 document.getElementById('editFormID').value = f.FormID;
-document.getElementById('newFormName').value = f.FormName;
-document.getElementById('newFormType').value = f.FormType;
 
+// 🟢 FIX: Form Type & Layout Parsing
+let typeParts = String(f.FormType).trim().split('_');
+document.getElementById('newFormType').value = typeParts[0];
+if(typeParts[1]) {
+    document.getElementById('newFormLayout').value = typeParts[1];
+    document.getElementById('layoutDiv').style.display = "block";
+} else {
+    document.getElementById('layoutDiv').style.display = "none";
+}
+
+document.getElementById('newFormName').value = f.FormName;
 document.getElementById('formIsActive').checked = !isFormInactive(f);
 
 let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
@@ -2346,7 +2567,12 @@ return fields;
 
 async function saveFullForm() {
 const name = document.getElementById('newFormName').value;
-const type = document.getElementById('newFormType').value;
+// 🟢 FIX: Form Type मध्ये Horizontal/Vertical जोडणे
+let type = document.getElementById('newFormType').value;
+if(type !== 'List') {
+    type += "_" + document.getElementById('newFormLayout').value;
+}
+
 const isActive = document.getElementById('formIsActive').checked;
 const statusText = isActive ? "Active" : "Inactive";
 const allowedRoles = getSelectedRoles();
@@ -2363,7 +2589,12 @@ if(d.success) { alert(d.message); location.reload(); }
 async function updateExistingForm() {
 const formID = document.getElementById('editFormID').value;
 const name = document.getElementById('newFormName').value;
-const type = document.getElementById('newFormType').value;
+// 🟢 FIX: Form Type मध्ये Horizontal/Vertical जोडणे
+let type = document.getElementById('newFormType').value;
+if(type !== 'List') {
+    type += "_" + document.getElementById('newFormLayout').value;
+}
+
 const isActive = document.getElementById('formIsActive').checked;
 const statusText = isActive ? "Active" : "Inactive";
 const allowedRoles = getSelectedRoles();
