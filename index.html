@@ -292,6 +292,25 @@ function toggleLayoutOption() {
     document.getElementById('layoutDiv').style.display = (val === 'List') ? 'none' : 'block';
 }
 
+// 🟢 NEW FIX: Date Parser Function for 100% precision in 48-hrs check
+function parseCustomDate(dateStr) {
+    if(!dateStr) return NaN;
+    let recTime = new Date(dateStr).getTime();
+    if(!isNaN(recTime)) return recTime;
+    
+    let parts = String(dateStr).replace(/-/g, '/').replace('T', ' ').split(' ');
+    let dParts = parts[0].split('/');
+    let tParts = parts[1] ? parts[1].split(':') : [0,0,0];
+    
+    if(dParts.length === 3) {
+        let y = dParts[0].length === 4 ? +dParts[0] : +dParts[2];
+        let m = dParts[0].length === 4 ? +dParts[1] : +dParts[1];
+        let d = dParts[0].length === 4 ? +dParts[2] : +dParts[0];
+        return new Date(y, m-1, d, +tParts[0], +tParts[1], +(tParts[2]||0)).getTime();
+    }
+    return NaN;
+}
+
 // --- Helper Functions ---
 function generateInputHTML(f, id, label, areaId, val="") {
 let html = "";
@@ -802,7 +821,7 @@ function isFormFilledForVillage(formObj, vName, month, year) {
     return isLocalFilled || isServerFilled;
 }
 
-// 🟢 FIX: Forms disappearing properly when 100% of subcenter villages are filled. ALL_STATS option removal logic handled accurately.
+// 🟢 FIX: ALL_STATS ऑप्शन 100% गायब होण्यासाठी स्मार्ट लॉजिक 
 function updateFormDropdowns() {
     const selForm = document.getElementById('selForm');
     const editForm = document.getElementById('editFormSelect');
@@ -836,6 +855,7 @@ function updateFormDropdowns() {
             if (isInactive && userRole !== "ADMIN") return;
 
             let isFullyFilled = false;
+            // List प्रकारचा फॉर्म कायमस्वरूपी दिसेल
             if (user && entryMonth && entryYear && formType.includes('Stats')) {
                 let hasVillages = false;
                 let fullyFilledCheck = true;
@@ -1217,6 +1237,7 @@ if(saveBtn) saveBtn.disabled = false;
 }
 
 // --- Edit Section Logic ---
+// 🟢 FIX: 48 Hours Check with precise cross-browser date parsing
 function updateEditVillageDropdown() {
 const vSel = document.getElementById('editVillageSelect');
 const fId = document.getElementById('editFormSelect').value;
@@ -1237,9 +1258,9 @@ serverHistory.forEach(h => {
 if(h.formID === fId && String(h.month).trim() === String(month).trim() && String(h.year).trim() === String(year).trim()) {
 
 if (h.timestamp) {
-    let recDate = new Date(h.timestamp);
-    if (!isNaN(recDate.getTime())) {
-        let diffHours = (new Date() - recDate) / (1000 * 60 * 60);
+    let recTime = parseCustomDate(h.timestamp);
+    if (!isNaN(recTime)) {
+        let diffHours = (Date.now() - recTime) / (1000 * 60 * 60);
         if (diffHours > 48 && user.role !== "Admin") {
             return; 
         }
@@ -1287,9 +1308,9 @@ document.getElementById('editLoader').style.display = "none";
 if(d.success) {
 let recordDateStr = d.formData["तारीख"] || d.formData["Timestamp"];
 if(recordDateStr && user.role !== "Admin") {
-    let recDate = new Date(recordDateStr);
-    if(!isNaN(recDate.getTime())) {
-        let diffHours = (new Date() - recDate) / (1000 * 60 * 60);
+    let recTime = parseCustomDate(recordDateStr);
+    if(!isNaN(recTime)) {
+        let diffHours = (Date.now() - recTime) / (1000 * 60 * 60);
         if(diffHours > 48) {
             alert("⏳ क्षमस्व! हा फॉर्म भरून ४८ तासांपेक्षा जास्त वेळ (२ दिवस) झाला आहे. त्यामुळे आता यामध्ये बदल (Edit) करता येणार नाही.");
             return; 
@@ -1756,7 +1777,6 @@ alert("एरर: " + e.message);
 }
 }
 
-// 🟢 NEW FEATURE: Horizontal आणि Vertical (उभा व आडवा) अहवाल रेंडर करणे
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
 let html = "";
@@ -1767,7 +1787,6 @@ let data = rep.data;
 let headers = data[0];
 let showIndices = [];
 headers.forEach((h, i) => { 
-    // "गाव" ला प्रश्नांच्या यादीतून वगळले
     if(!CONFIG.hiddenColumns.includes(h) && h !== "गाव" && h !== "Village") showIndices.push(i); 
 });
 let colCount = showIndices.length + 1;
@@ -1817,11 +1836,8 @@ groupKeys.forEach((gKey) => {
         </div>`;
     }
 
-    // 🟢 VERTICAL REPORT LOGIC (उभा अहवाल - डेटा ट्रान्सपोझ आणि 100% फिक्स) 🟢
     if(isVertical) {
         let baseVariables = [];
-        
-        // FIX: No loop skipping. Safe extraction directly from showIndices.
         showIndices.forEach(idx => {
             baseVariables.push({ name: headers[idx], isProg: isProgressive, idxM: idx, idxP: idx });
         });
@@ -1886,7 +1902,6 @@ groupKeys.forEach((gKey) => {
         html += `<div class="table-responsive"><table class="report-table" style="margin-top:0; border-top:none;"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
 
     } 
-    // 🟢 HORIZONTAL REPORT LOGIC (आडवा अहवाल) 🟢
     else {
         let h1Arr = [], h2Arr = [], h3Arr = [];
         showIndices.forEach(idx => {
@@ -1978,7 +1993,6 @@ html += `</div>`;
 container.innerHTML = html;
 }
 
-// 🟢 NEW FEATURE: Excel मध्ये उभा आणि आडवा अहवाल अचूक डाऊनलोड करणे
 function downloadConsolidatedExcel() {
 if(currentReports.length === 0) return;
 let month = document.getElementById('reportMonth').value;
@@ -2004,7 +2018,7 @@ const isProgressive = formType.includes('ProgressiveStats');
 const isVertical = formType.includes('Vertical');
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
-let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
+let nameIdx = headers.indexOf("कर्मऱ्याचे नाव");
 let mobIdx = headers.indexOf("मोबाईल क्र.");
 let villageIdx = headers.indexOf("गाव");
 
@@ -2028,7 +2042,7 @@ let currentR = 2;
 let sheetData = [];
 let merges = [];
 
-let colCount = isVertical ? 2 : (showIndices.length + 2);
+let colCountSafe = isVertical ? 2 : (showIndices.length + 2);
 
 sheetData.push([`${rep.formName} अहवाल`]);
 sheetData.push([]);
@@ -2134,7 +2148,6 @@ groupKeys.forEach(gKey => {
         }
 
     } else {
-        // Horizontal Excel Download
         let h1Arr = [], h2Arr = [], h3Arr = [];
         showIndices.forEach(idx => {
             let parts = headers[idx].split(" - ");
@@ -2169,7 +2182,7 @@ groupKeys.forEach(gKey => {
             }
         }
 
-        colCount = showIndices.length + 2;
+        let colCount = showIndices.length + 2;
         merges[0] = { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } };
 
         if(dataRows.length > 0) {
