@@ -51,7 +51,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
   .mobile-hide { display: none !important; }
 }
 
-/* 🟢 NEW: Field ID Badge Style - High Contrast & Dark Black */
+/* 🟢 Field ID Badge Style - High Contrast & Dark Black */
 .fid-badge {
     background: #ffeb3b !important;
     color: #000000 !important;
@@ -70,15 +70,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 </head>
 <body>
 
-<div id="lockScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0f1c24; z-index:9999; display:flex; justify-content:center; align-items:center;">
-<div style="background:white; padding:30px; border-radius:10px; width:85%; max-width:350px;">
-<h3>Security Access</h3>
-<input type="password" id="sitePass" placeholder="Enter Password (1234)">
-<button class="btn-primary" onclick="unlockApp()">Unlock</button>
-</div>
-</div>
-
-<div class="container hidden" id="mainApp">
+<div class="container" id="mainApp">
 <div id="netStatus" class="status-bar online">Online</div>
 
 <div id="loginBox">
@@ -268,7 +260,6 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 </div>
 
 </div>
-</div>
 
 <script>
 // 🌟 Configuration 🌟
@@ -283,6 +274,18 @@ let user = null;
 let currentReports = [];
 let isSaving = false;
 let globalFieldCounter = 1;
+
+// 🟢 NEW: Auto Initialization Logic
+window.onload = async function() {
+    document.getElementById('netStatus').innerText = "डेटा लोड होत आहे...";
+    await fetchData();
+    document.getElementById('netStatus').innerText = "Online";
+    const savedUser = localStorage.getItem("phc_user_session");
+    if(savedUser) { 
+        user = JSON.parse(savedUser); 
+        showAppAfterLogin(); 
+    }
+};
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -453,22 +456,22 @@ if (f.type === 'number' && f.range) {
 let r = String(f.range).trim();
 if (r.startsWith('<=')) {
 let max = Number(r.replace('<=', '').trim());
-rangeAttr = ` max="${max}" title="कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) > ${max}) { alert('⚠️ कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
+rangeAttr = ` max="${max}" title="कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) > ${max}) { this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.startsWith('<')) {
 let max = Number(r.replace('<', '').trim());
-rangeAttr = ` max="${max-1}" title="कृपया ${max} पेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) >= ${max}) { alert('⚠️ कृपया ${max} पेक्षा कमी संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
+rangeAttr = ` max="${max-1}" title="कृपया ${max} पेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) >= ${max}) { this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.startsWith('>=')) {
 let min = Number(r.replace('>=', '').trim());
-rangeAttr = ` min="${min}" title="कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) < ${min}) { alert('⚠️ कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
+rangeAttr = ` min="${min}" title="कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) < ${min}) { this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.startsWith('>')) {
 let min = Number(r.replace('>', '').trim());
-rangeAttr = ` min="${min+1}" title="कृपया ${min} पेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) <= ${min}) { alert('⚠️ कृपया ${min} पेक्षा जास्त संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
+rangeAttr = ` min="${min+1}" title="कृपया ${min} पेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) <= ${min}) { this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.includes('-')) {
 let parts = r.split('-');
 if(parts.length === 2) {
 let min = parts[0].trim();
 let max = parts[1].trim();
-rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { alert('⚠️ कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
+rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { this.value=''; processAllLogic('${areaId}'); }"`;
 }
 }
 }
@@ -780,18 +783,6 @@ return formData;
 }
 
 // --- Core Logic ---
-async function unlockApp() {
-if(document.getElementById('sitePass').value === "1234") {
-document.getElementById('lockScreen').classList.add('hidden');
-document.getElementById('mainApp').classList.remove('hidden');
-document.getElementById('netStatus').innerText = "डेटा लोड होत आहे...";
-await fetchData();
-document.getElementById('netStatus').innerText = "Online";
-const savedUser = localStorage.getItem("phc_user_session");
-if(savedUser) { user = JSON.parse(savedUser); showAppAfterLogin(); }
-} else { alert("चुकीचा पासवर्ड!"); }
-}
-
 async function fetchData() {
 try {
 const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"getInitialData"}) });
@@ -2276,7 +2267,6 @@ let fileName = `मासिक_अहवाल_${user.subcenter}_${periodText}.
 XLSX.writeFile(wb, fileName);
 }
 
-// --- Admin Form Builder Logic ---
 function toggleRoles(checkbox) {
 document.getElementById('specificRoles').style.display = checkbox.checked ? 'none' : 'block';
 if(checkbox.checked) {
@@ -2305,7 +2295,7 @@ document.getElementById('roleAll').checked = true;
 toggleRoles(document.getElementById('roleAll'));
 
 document.getElementById('fieldsList').innerHTML = "";
-globalFieldCounter = 1; // Reset counter for new form
+globalFieldCounter = 1; 
 document.getElementById('mainActionBtn').innerText = "फॉर्म सेव्ह करा";
 document.getElementById('mainActionBtn').onclick = saveFullForm;
 }
@@ -2357,7 +2347,6 @@ cb.checked = roles.includes(cb.value.toUpperCase());
 
 document.getElementById('fieldsList').innerHTML = "";
 
-// Find max field ID to resume counter
 let maxFid = 0;
 JSON.parse(f.StructureJSON).forEach(field => {
     if(field.fid) { let num = parseInt(field.fid.replace('f_','')); if(num > maxFid) maxFid = num; }
