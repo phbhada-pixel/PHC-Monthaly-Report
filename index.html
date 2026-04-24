@@ -50,6 +50,19 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 @media (max-width: 768px) {
   .mobile-hide { display: none !important; }
 }
+
+/* 🟢 NEW: Field ID Badge Style */
+.fid-badge {
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
 </style>
 </head>
 <body>
@@ -125,8 +138,6 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 
 <div id="editSection" class="hidden">
 <h3>सबमिट केलेले फॉर्म एडिट करा</h3>
-
-<label>कोणता फॉर्म एडिट करायचा आहे?</label>
 <select id="editFormSelect" onchange="updateEditVillageDropdown()"></select>
 
 <div class="row-flex" style="margin-top: 10px;">
@@ -163,7 +174,6 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 
 <div id="reportsSection" class="hidden">
 <h3>मासिक अहवाल डाउनलोड करा</h3>
-
 <div class="row-flex" id="adminRoleFilterDiv" style="margin-bottom: 15px; display: none; background: #e8f4f8; padding: 10px; border-radius: 8px; border: 1px solid #bce8f1;">
 <div style="flex: 1;">
 <label style="font-weight:bold; color:#31708f;">कर्मचाऱ्याचे पद (फक्त ॲडमिनसाठी):</label>
@@ -184,8 +194,10 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 <label>महिना:</label>
 <select id="reportMonth">
 <option value="सर्व">सर्व महिने</option><option value="जानेवारी">जानेवारी</option><option value="फेब्रुवारी">फेब्रुवारी</option>
-<option value="मार्च">मार्च</option><option value="एप्रिल" selected>एप्रिल</option><option value="मे">मे</option><option value="जून">जून</option>
-<option value="जुलै">जुलै</option><option value="ऑगस्ट">ऑगस्ट</option><option value="सप्टेंबर">सप्टेंबर</option><option value="ऑक्टोबर">ऑक्टोबर</option>
+<option value="मार्च">मार्च</option><option value="एप्रिल" selected>एप्रिल</option>
+<option value="मे">मे</option><option value="जून">जून</option>
+<option value="जुलै">जुलै</option><option value="ऑगस्ट">ऑगस्ट</option>
+<option value="सप्टेंबर">सप्टेंबर</option><option value="ऑक्टोबर">ऑक्टोबर</option>
 <option value="नोव्हेंबर">नोव्हेंबर</option><option value="डिसेंबर">डिसेंबर</option>
 </select>
 </div>
@@ -267,10 +279,9 @@ let masterData = { forms: [], villages: [], filledStats: [] };
 let user = null;
 let currentReports = [];
 let isSaving = false;
+let globalFieldCounter = 1; // 🟢 New Global Counter for Unique Field IDs
 
-function isMobile() {
-    return window.innerWidth <= 768; 
-}
+function isMobile() { return window.innerWidth <= 768; }
 
 function isFormInactive(f) {
     if (f.Status !== undefined && f.Status !== null) {
@@ -293,11 +304,9 @@ function parseCustomDate(dateStr) {
     if(!dateStr) return NaN;
     let d = new Date(dateStr);
     if (!isNaN(d.getTime())) return d.getTime();
-    
     let parts = String(dateStr).replace(/-/g, '/').replace('T', ' ').split(' ');
     let dParts = parts[0].split('/');
     let tParts = parts[1] ? parts[1].split(':') : [0,0,0];
-    
     if(dParts.length === 3) {
         let y = dParts[0].length === 4 ? +dParts[0] : +dParts[2];
         let m = dParts[0].length === 4 ? +dParts[1] : +dParts[1];
@@ -307,38 +316,166 @@ function parseCustomDate(dateStr) {
     return NaN;
 }
 
+// 🟢 NEW: Math & Conditional Logic Engine
+function getFieldValueByFid(containerId, fid) {
+    let container = document.getElementById(containerId);
+    if(!container) return `""`;
+    let el = container.querySelector(`[data-fid="${fid}"]`);
+    if(el && el.value !== "") {
+        let val = String(el.value).trim();
+        if(!isNaN(val) && val !== "") return parseFloat(val);
+        return `"${val}"`; 
+    }
+    return `""`; 
+}
+
+function evaluateMathFormulas(containerId) {
+    let container = document.getElementById(containerId);
+    if(!container) return;
+    let formulaInputs = container.querySelectorAll('input[data-formula]');
+    
+    for(let loop=0; loop<2; loop++) {
+        formulaInputs.forEach(input => {
+            let rawFormula = input.getAttribute('data-formula');
+            if(!rawFormula) return;
+            
+            let hasValue = false;
+            let evalString = rawFormula.replace(/\bf_\d+\b/g, function(match) {
+                let val = getFieldValueByFid(containerId, match);
+                if (val !== `""`) hasValue = true;
+                return val === `""` ? 0 : val;
+            });
+            
+            if(hasValue) {
+                try {
+                    let result = eval(evalString);
+                    let finalVal = (result === Infinity || isNaN(result)) ? "" : (Number.isInteger(result) ? result : result.toFixed(2));
+                    if (input.value !== String(finalVal)) {
+                        input.value = finalVal;
+                        input.dispatchEvent(new Event('change'));
+                    }
+                } catch(e) {}
+            } else {
+                if (input.value !== "") {
+                    input.value = "";
+                    input.dispatchEvent(new Event('change'));
+                }
+            }
+        });
+    }
+}
+
+function evaluateConditions(containerId) {
+    let container = document.getElementById(containerId);
+    if(!container) return;
+
+    let depInputs = container.querySelectorAll('[data-dependency]');
+    depInputs.forEach(depInput => {
+        let rawCond = depInput.getAttribute('data-dependency');
+        if(!rawCond) return;
+
+        let conditions = rawCond.split('|');
+        let matchedVal = null;
+        let matchedColor = null;
+
+        for(let cond of conditions) {
+            let parts = cond.split(':');
+            if(parts.length >= 2) {
+                let expr = parts[0].trim();
+                let resultVal = parts.slice(1).join(':').trim();
+
+                let evalString = expr.replace(/\bf_\d+\b/g, function(match) {
+                    return getFieldValueByFid(containerId, match);
+                });
+
+                evalString = evalString.replace(/(?<![<>=!])=(?![=])/g, "==");
+
+                try {
+                    if(eval(evalString)) {
+                        resultVal = resultVal.replace(/^['"]|['"]$/g, '');
+                        let colorMatch = resultVal.match(/\[([a-zA-Z]+)\]/);
+                        if (colorMatch) {
+                            matchedColor = colorMatch[1];
+                            resultVal = resultVal.replace(colorMatch[0], '').trim();
+                        }
+                        matchedVal = resultVal;
+                        break;
+                    }
+                } catch(e) {}
+            }
+        }
+
+        if(matchedVal !== null) {
+            depInput.value = matchedVal;
+            depInput.style.pointerEvents = "none";
+            depInput.style.backgroundColor = matchedColor || "#e9ecef";
+            depInput.style.color = matchedColor ? "white" : "var(--primary)";
+            depInput.style.fontWeight = "bold";
+            depInput.tabIndex = -1;
+            if (depInput.dataset.lastVal !== matchedVal) {
+                depInput.dataset.lastVal = matchedVal;
+                depInput.dispatchEvent(new Event('change'));
+            }
+        } else {
+            if(depInput.style.pointerEvents === "none") {
+                depInput.value = "";
+                depInput.style.pointerEvents = "auto";
+                depInput.style.backgroundColor = "";
+                depInput.style.color = "#333";
+                depInput.style.fontWeight = "normal";
+                depInput.removeAttribute("tabIndex");
+                depInput.dataset.lastVal = "";
+                depInput.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+}
+
+function processAllLogic(containerId) {
+    calculateAutoSums(containerId); // Backward compatibility
+    handleDependencies(containerId); // Backward compatibility
+    evaluateMathFormulas(containerId); // New FID logic
+    evaluateConditions(containerId); // New FID logic
+}
+
 // --- Helper Functions ---
 function generateInputHTML(f, id, label, areaId, val="") {
 let html = "";
-let depAttr = f.dependency ? `data-dependency="${f.dependency}"` : "";
+let fidAttr = f.fid ? `data-fid="${f.fid}"` : ""; 
+let safeDep = f.dependency ? String(f.dependency).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
+let depAttr = safeDep ? `data-dependency="${safeDep}"` : "";
+let safeForm = (f.options && f.type === 'sum') ? String(f.options).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
+let formulaAttr = safeForm ? `data-formula="${safeForm}" data-sum-targets="${safeForm}"` : "";
 let rangeAttr = "";
+
+let onEvent = `oninput="processAllLogic('${areaId}')" onchange="processAllLogic('${areaId}')"`;
 
 if (f.type === 'number' && f.range) {
 let r = String(f.range).trim();
 if (r.startsWith('<=')) {
 let max = Number(r.replace('<=', '').trim());
-rangeAttr = ` max="${max}" title="कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) > ${max}) { alert('⚠️ कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+rangeAttr = ` max="${max}" title="कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) > ${max}) { alert('⚠️ कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.startsWith('<')) {
 let max = Number(r.replace('<', '').trim());
-rangeAttr = ` max="${max-1}" title="कृपया ${max} पेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) >= ${max}) { alert('⚠️ कृपया ${max} पेक्षा कमी संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+rangeAttr = ` max="${max-1}" title="कृपया ${max} पेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) >= ${max}) { alert('⚠️ कृपया ${max} पेक्षा कमी संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.startsWith('>=')) {
 let min = Number(r.replace('>=', '').trim());
-rangeAttr = ` min="${min}" title="कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) < ${min}) { alert('⚠️ कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+rangeAttr = ` min="${min}" title="कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) < ${min}) { alert('⚠️ कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.startsWith('>')) {
 let min = Number(r.replace('>', '').trim());
-rangeAttr = ` min="${min+1}" title="कृपया ${min} पेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) <= ${min}) { alert('⚠️ कृपया ${min} पेक्षा जास्त संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+rangeAttr = ` min="${min+1}" title="कृपया ${min} पेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) <= ${min}) { alert('⚠️ कृपया ${min} पेक्षा जास्त संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
 } else if (r.includes('-')) {
 let parts = r.split('-');
 if(parts.length === 2) {
 let min = parts[0].trim();
 let max = parts[1].trim();
-rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { alert('⚠️ कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका'); this.value=''; calculateAutoSums('${areaId}'); handleDependencies('${areaId}'); }"`;
+rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { alert('⚠️ कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका'); this.value=''; processAllLogic('${areaId}'); }"`;
 }
 }
 }
 
 if (f.type === 'dropdown') {
-html += `<select id="${id}" data-label="${label}" ${depAttr} onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')"><option value="">-- निवडा --</option>`;
+html += `<select id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${onEvent}><option value="">-- निवडा --</option>`;
 if(f.options) { f.options.split(',').forEach(opt => {
 let o = opt.trim();
 let sel = (o === val) ? "selected" : "";
@@ -346,72 +483,17 @@ if(o) html += `<option value="${o}" ${sel}>${o}</option>`;
 }); }
 html += `</select>`;
 } else if(f.type === 'sum') {
-html += `<input type="number" id="${id}" data-label="${label}" data-sum-targets="${f.options}" value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Sum">`;
+html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${formulaAttr} value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Calculation">`;
 } else if(f.type === 'number') {
-html += `<input type="number" id="${id}" data-label="${label}" ${depAttr} ${rangeAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
+html += `<input type="number" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${rangeAttr} value="${val}" ${onEvent}>`;
 } else if(f.type === 'mobile') {
-html += `<input type="tel" id="${id}" data-label="${label}" ${depAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length>10) this.value=this.value.slice(0,10); calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
+html += `<input type="tel" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); processAllLogic('${areaId}');" onchange="processAllLogic('${areaId}')">`;
 } else if(f.type === 'date') {
-html += `<input type="date" id="${id}" data-label="${label}" ${depAttr} value="${val}" onchange="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
+html += `<input type="date" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} value="${val}" ${onEvent}>`;
 } else {
-html += `<input type="text" id="${id}" data-label="${label}" ${depAttr} value="${val}" oninput="calculateAutoSums('${areaId}'); handleDependencies('${areaId}')">`;
+html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} value="${val}" ${onEvent}>`;
 }
 return html;
-}
-
-function handleDependencies(containerId) {
-let container = document.getElementById(containerId);
-if(!container) return;
-
-let dependentInputs = container.querySelectorAll('[data-dependency]');
-
-dependentInputs.forEach(depInput => {
-let rule = depInput.getAttribute('data-dependency');
-if(!rule) return;
-
-let parts = rule.split('=');
-if(parts.length === 2) {
-let parentTargetLabel = parts[0].trim();
-let subParts = parts[1].split(':');
-
-if(subParts.length === 2) {
-let conditionVal = subParts[0].trim().toLowerCase();
-let targetVal = subParts[1].trim();
-
-let parentElement = container.querySelector(`[data-label="${parentTargetLabel}"]`);
-
-if(!parentElement) {
-let allInputs = container.querySelectorAll('[data-label]');
-let cleanTarget = parentTargetLabel.replace(/\s+/g, '').toLowerCase();
-for(let inp of allInputs) {
-let currentLabel = inp.getAttribute('data-label').replace(/\s+/g, '').toLowerCase();
-if(currentLabel === cleanTarget || currentLabel.endsWith(cleanTarget) || currentLabel.endsWith("-" + cleanTarget)) {
-parentElement = inp;
-break;
-}
-}
-}
-
-if(parentElement) {
-let currentParentVal = parentElement.value.trim().toLowerCase();
-
-if(currentParentVal === conditionVal && conditionVal !== "") {
-depInput.value = targetVal;
-depInput.style.pointerEvents = "none";
-depInput.style.backgroundColor = "#e9ecef";
-depInput.tabIndex = -1;
-} else {
-if(depInput.style.pointerEvents === "none") {
-depInput.value = "";
-depInput.style.pointerEvents = "auto";
-depInput.style.backgroundColor = "";
-depInput.removeAttribute("tabIndex");
-}
-}
-}
-}
-}
-});
 }
 
 function extractFieldsFromForm(f) {
@@ -780,7 +862,7 @@ updateVillageDropdown();
 } else if(tab === 'edit') {
 document.getElementById('tabEdit').classList.add('active');
 document.getElementById('editSection').classList.remove('hidden');
-updateEditVillageDropdown(); 
+updateEditVillageDropdown();
 } else if(tab === 'reports') {
 document.getElementById('tabReports').classList.add('active');
 document.getElementById('reportsSection').classList.remove('hidden');
@@ -790,13 +872,10 @@ document.getElementById('adminSection').classList.remove('hidden');
 }
 }
 
-// 🌟 FIX: फक्त सर्व्हर हिस्ट्री (गुगल शीट डेटा) वापरून तपासणी करणे 
 function isFormFilledForVillage(formObj, vName, month, year) {
     const serverHistory = masterData.filledStats || [];
-
     let allowedRoles = formObj.AllowedRoles ? formObj.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
     let isAll = allowedRoles.includes("ALL");
-
     let safeVName = String(vName).trim();
     let safeMonth = String(month).trim();
     let safeYear = String(year).trim();
@@ -842,7 +921,6 @@ function updateFormDropdowns() {
             if (isInactive && userRole !== "ADMIN") return;
 
             let isFullyFilled = false;
-            // List प्रकारचा फॉर्म कायमस्वरूपी दिसेल
             if (user && entryMonth && entryYear && formType.includes('Stats')) {
                 let hasVillages = false;
                 let fullyFilledCheck = true;
@@ -1037,13 +1115,11 @@ area.innerHTML = `<div id="${formContainerId}" style="border: 2px solid #00705a;
 
 setTimeout(() => {
 document.querySelectorAll('[id^="form_area_"], [id^="bulkrow_"], [id^="listrow_"]').forEach(el => {
-calculateAutoSums(el.id);
-handleDependencies(el.id);
+processAllLogic(el.id);
 });
 }, 100);
 }
 
-// 🌟 FIX: थेट गुगल शीटवर सेव्ह करणे (Offline/Queue काढून टाकले)
 async function saveDataToServer() {
 if(isSaving) return;
 const saveBtn = document.getElementById('mainSaveBtn');
@@ -1110,8 +1186,7 @@ let rowIdParts = tr.id.split('_');
 let rIdx = rowIdParts[rowIdParts.length - 1];
 let prefix = `list_${f.FormID}_${rIdx}`;
 
-calculateAutoSums(tr.id);
-handleDependencies(tr.id);
+processAllLogic(tr.id);
 
 let formData = extractFormData(f, prefix);
 
@@ -1140,8 +1215,7 @@ let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f
 let containerEl = document.getElementById(containerId);
 if (!containerEl) return;
 
-calculateAutoSums(containerId);
-handleDependencies(containerId);
+processAllLogic(containerId);
 
 let formData = extractFormData(f, prefix);
 
@@ -1200,8 +1274,6 @@ if(saveBtn) saveBtn.disabled = false;
 }
 }
 
-// --- Edit Section Logic ---
-// 🌟 FIX: फक्त सर्व्हरचा डेटा वापरून अचूक Edit लिस्ट दाखवणे
 function updateEditVillageDropdown() {
 const vSel = document.getElementById('editVillageSelect');
 const fId = document.getElementById('editFormSelect').value;
@@ -1337,8 +1409,7 @@ area.classList.remove('hidden');
 document.getElementById('editSaveBtn').classList.remove('hidden');
 
 setTimeout(() => {
-calculateAutoSums('editDynamicFormArea');
-handleDependencies('editDynamicFormArea');
+processAllLogic('editDynamicFormArea');
 }, 100);
 }
 
@@ -1349,8 +1420,7 @@ saveBtn.disabled = true;
 isSaving = true;
 
 try {
-calculateAutoSums('editDynamicFormArea');
-handleDependencies('editDynamicFormArea');
+processAllLogic('editDynamicFormArea');
 
 const fId = document.getElementById('editFormSelect').value;
 const month = document.getElementById('editMonth').value;
@@ -1466,6 +1536,18 @@ sumInput.value = total;
 sumInput.value = "";
 }
 });
+}
+}
+
+function clearLocalHistory() {
+if(confirm("जर तुम्ही गुगल शीटमधील जुना डेटा डिलीट केला असेल, तरच हे बटण दाबा. यामुळे लपलेली सर्व गावे पुन्हा दिसू लागतील. तुम्हाला गावे रीसेट करायची आहेत का?")) {
+localStorage.removeItem("submissionHistory");
+updateVillageDropdown();
+updateFormDropdowns();
+const statusText = document.getElementById('syncStatus');
+statusText.style.color = "#ffc107";
+statusText.innerText = "✅ गावांची यादी यशस्वीरित्या रीसेट झाली आहे!";
+setTimeout(() => { statusText.innerText = ""; statusText.style.color = "green"; }, 3000);
 }
 }
 
@@ -2260,362 +2342,6 @@ XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
 
 let fileName = `मासिक_अहवाल_${user.subcenter}_${periodText}.xlsx`;
 XLSX.writeFile(wb, fileName);
-}
-
-// --- Admin Form Builder Logic ---
-function toggleRoles(checkbox) {
-document.getElementById('specificRoles').style.display = checkbox.checked ? 'none' : 'block';
-if(checkbox.checked) {
-document.querySelectorAll('.form-role').forEach(cb => cb.checked = false);
-}
-}
-
-function getSelectedRoles() {
-if(document.getElementById('roleAll').checked) return "ALL";
-let roles = [];
-document.querySelectorAll('.form-role:checked').forEach(cb => roles.push(cb.value));
-return roles.length > 0 ? roles.join(',') : "ALL";
-}
-
-function openNewFormBuilder() {
-document.getElementById('existingFormsArea').classList.add('hidden');
-document.getElementById('formBuilder').classList.remove('hidden');
-document.getElementById('builderTitle').innerText = "नवीन फॉर्म तयार करा";
-document.getElementById('editFormID').value = "";
-document.getElementById('newFormName').value = "";
-document.getElementById('formIsActive').checked = true;
-document.getElementById('newFormType').value = "List";
-document.getElementById('layoutDiv').style.display = "none";
-
-document.getElementById('roleAll').checked = true;
-toggleRoles(document.getElementById('roleAll'));
-
-document.getElementById('fieldsList').innerHTML = "";
-document.getElementById('mainActionBtn').innerText = "फॉर्म सेव्ह करा";
-document.getElementById('mainActionBtn').onclick = saveFullForm;
-}
-
-function renderFormsListForEdit() {
-const listDiv = document.getElementById('formsEditList');
-listDiv.innerHTML = "";
-masterData.forms.forEach(f => {
-let isInactive = isFormInactive(f);
-let nameDisplay = f.FormName + (isInactive ? ' <span style="color:red; font-size:14px;">(Inactive)</span>' : '');
-listDiv.innerHTML += `<div class="edit-row" style="background:white; padding:10px; margin-bottom:5px; border-radius:5px; border:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
-<span><b>${nameDisplay}</b></span>
-<button class="btn-edit-tab" style="padding:6px 15px; width:auto; border-radius:4px;" onclick="startEditing('${f.FormID}')">Edit</button>
-</div>`;
-});
-}
-
-function startEditing(fId) {
-const f = masterData.forms.find(x => x.FormID === fId);
-if(!f) return;
-document.getElementById('existingFormsArea').classList.add('hidden');
-document.getElementById('formBuilder').classList.remove('hidden');
-document.getElementById('builderTitle').innerText = "फॉर्म एडिट: " + f.FormName;
-document.getElementById('editFormID').value = f.FormID;
-
-let typeParts = String(f.FormType).trim().split('_');
-document.getElementById('newFormType').value = typeParts[0];
-if(typeParts[1]) {
-    document.getElementById('newFormLayout').value = typeParts[1];
-    document.getElementById('layoutDiv').style.display = "block";
-} else {
-    document.getElementById('layoutDiv').style.display = "none";
-}
-
-document.getElementById('newFormName').value = f.FormName;
-document.getElementById('formIsActive').checked = !isFormInactive(f);
-
-let roles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
-if(roles.includes("ALL")) {
-document.getElementById('roleAll').checked = true;
-toggleRoles(document.getElementById('roleAll'));
-} else {
-document.getElementById('roleAll').checked = false;
-toggleRoles(document.getElementById('roleAll'));
-document.querySelectorAll('.form-role').forEach(cb => {
-cb.checked = roles.includes(cb.value.toUpperCase());
-});
-}
-
-document.getElementById('fieldsList').innerHTML = "";
-document.getElementById('mainActionBtn').innerText = "बदल अपडेट करा (Update)";
-document.getElementById('mainActionBtn').onclick = updateExistingForm;
-JSON.parse(f.StructureJSON).forEach(field => addField(field));
-}
-
-function toggleFieldOptions(id, val) {
-document.getElementById('opts_' + id).style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
-let depEl = document.getElementById('dep_' + id);
-if(depEl) depEl.style.display = (val === 'dropdown' || val === 'number' || val === 'text' || val === 'mobile') ?
-'block' : 'none';
-
-let rngEl = document.getElementById('rng_' + id);
-if(rngEl) rngEl.style.display = (val === 'number') ? 'block' : 'none';
-
-document.getElementById('group_' + id).style.display = (val === 'group') ? 'block' : 'none';
-
-let labelEl = document.querySelector(`#opts_${id} label`);
-let inputEl = document.querySelector(`#opts_${id} .foptions`);
-if(labelEl && inputEl) {
-if(val === 'sum') {
-labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची? (स्वल्पविरामाने अचूक नावे लिहा):";
-inputEl.placeholder = "उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली";
-} else if(val === 'dropdown') {
-labelEl.innerText = "येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):";
-inputEl.placeholder = "उदा. होय, नाही";
-}
-}
-}
-
-function toggleSubFieldOptions(sfId, val) {
-let container = document.getElementById(`sfopts_container_${sfId}`);
-let depContainer = document.getElementById(`sfdep_container_${sfId}`);
-let rngContainer = document.getElementById(`sfrng_container_${sfId}`);
-let groupContainer = document.getElementById(`ssf_group_${sfId}`);
-let labelEl = document.getElementById(`sflabel_${sfId}`);
-let inputEl = document.getElementById(`sfopts_${sfId}`);
-
-container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
-if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text' || val === 'mobile') ?
-'block' : 'none';
-if(rngContainer) rngContainer.style.display = (val === 'number') ? 'block' : 'none';
-if(groupContainer) groupContainer.style.display = (val === 'group') ? 'block' : 'none';
-
-if(val === 'sum') {
-labelEl.innerText = "कोणत्या प्रश्नांची बेरीज करायची?";
-inputEl.placeholder = "उदा. रुग्ण - पुरुष, रुग्ण - स्त्री";
-} else if(val === 'dropdown') {
-labelEl.innerText = "पर्याय लिहा (स्वल्पविरामाने वेगळे करा):";
-inputEl.placeholder = "उदा. होय, नाही";
-}
-}
-
-function toggleSubSubFieldOptions(ssfId, val) {
-let container = document.getElementById(`ssfopts_container_${ssfId}`);
-let depContainer = document.getElementById(`ssfdep_container_${ssfId}`);
-let rngContainer = document.getElementById(`ssfrng_container_${ssfId}`);
-let inputEl = document.getElementById(`ssfopts_${ssfId}`);
-
-container.style.display = (val === 'dropdown' || val === 'sum') ? 'block' : 'none';
-if(depContainer) depContainer.style.display = (val === 'dropdown' || val === 'number' || val === 'text' || val === 'mobile') ?
-'block' : 'none';
-if(rngContainer) rngContainer.style.display = (val === 'number') ? 'block' : 'none';
-
-if(val === 'sum') inputEl.placeholder = "बेरीज सूत्र (उदा. गट - उपगट - प्रश्न)...";
-else if(val === 'dropdown') inputEl.placeholder = "पर्याय लिहा (उदा. होय, नाही)...";
-}
-
-function addField(data = null) {
-const id = Math.floor(Math.random() * 1000000);
-const html = `
-<div class="field-card" id="f_${id}">
-<button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
-<div style="display:flex; flex-direction:column; gap:5px; margin-top: 5px;">
-<label style="font-size:14px; color:#555; font-weight:bold;">मुख्य प्रश्नाचे नाव:</label>
-<input type="text" placeholder="उदा. ब्लिचिंग पावडर" class="fname" style="width:100%; margin-top:0;" value="${data ? data.label : ''}">
-</div>
-<select class="ftype" onchange="toggleFieldOptions('${id}', this.value)" style="margin-top:10px; background:#f0f8ff;">
-<option value="text" ${data && data.type==='text'?'selected':''}>Text (साधा मजकूर)</option>
-<option value="number" ${data && data.type==='number'?'selected':''}>Number (आकडे)</option>
-<option value="mobile" ${data && data.type==='mobile'?'selected':''}>Mobile No. (मोबाईल नंबर)</option>
-<option value="date" ${data && data.type==='date'?'selected':''}>Date (तारीख)</option>
-<option value="dropdown" ${data && data.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
-<option value="group" ${data && data.type==='group'?'selected':''}>Group / गट (उप-प्रश्न)</option>
-<option value="sum" ${data && data.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
-</select>
-
-<div id="opts_${id}" style="display:${data && (data.type==='dropdown' || data.type==='sum') ? 'block' : 'none'}; margin-top:10px; background:#ffe4b5; padding:10px; border-radius:5px;">
-<label style="font-size:12px; font-weight:bold; color:#d35400;">
-${data && data.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची?' : 'येथे पर्याय लिहा (स्वल्पविरामाने , वेगळे करा):'}
-</label>
-<input type="text" placeholder="${data && data.type==='sum' ? 'उदा. 0-5 वर्षे मुले, 0-5 वर्षे मुली' : 'उदा. होय, नाही'}" class="foptions" value="${data ? (data.options || '') : ''}">
-</div>
-
-<div id="rng_${id}" style="display:${data && data.type==='number' ? 'block' : 'none'}; margin-top:10px; background:#e8f5e9; padding:10px; border-radius:5px; border-left: 3px solid #2e7d32;">
-<label style="font-size:12px; font-weight:bold; color:#2e7d32;">🔢 संख्या मर्यादा / Range (Optional):<br><span style="font-weight:normal; font-size:11px;">उदा.
-जर वय 15 ते 45 च्या दरम्यान हवे असेल तर खाली 15-45 लिहा.</span></label>
-<input type="text" placeholder="उदा. 15-45" class="frange" style="width: 100%; margin-top: 5px; font-size:12px;" value="${data ? (data.range || '') : ''}">
-</div>
-
-<div id="dep_${id}" style="display:${data && (data.type==='dropdown' || data.type==='number' || data.type==='text' || data.type==='mobile') ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
-<label style="font-size:12px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट (Conditional Auto-Fill):<br><span style="font-weight:normal; font-size:11px;">उदा.
-जर 'ब्लिचिंग पावडर उपलब्ध आहे का' चे उत्तर 'No' असेल, तर इथे 'Not aplicable' यावे.</span><br>फॉर्मॅट: <b>प्रश्नाचे नाव=उत्तर:व्हॅल्यू</b></label>
-<input type="text" placeholder="उदा. ब्लिचिंग पावडर उपलब्ध आहे का=No:Not aplicable" class="fdepend" style="width: 100%; margin-top: 5px; font-size:12px;"
-value="${data ? (data.dependency || '') : ''}">
-</div>
-
-<div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
-<label style="font-size:13px; font-weight:bold; color:var(--primary);">या गटातील उप-प्रश्न जोडा:</label>
-<div id="subfields_container_${id}"></div>
-<button type="button" onclick="addSubFieldUI('${id}')" style="margin-top:10px; font-size:13px; background:#fff; border:1px solid #ccc; padding:6px; cursor:pointer; width:100%;">+ उप-प्रश्न जोडा</button>
-</div>
-</div>`;
-document.getElementById('fieldsList').insertAdjacentHTML('beforeend', html);
-if(data && data.type === 'group' && data.subFields) { data.subFields.forEach(sf => addSubFieldUI(id, sf)); }
-else if (data && data.type === 'group') { addSubFieldUI(id); }
-}
-
-function addSubFieldUI(parentId, sfData = null) {
-const sfId = Math.floor(Math.random() * 1000000);
-const html = `
-<div class="sub-field-item" id="sf_${sfId}">
-<button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
-<input type="text" placeholder="उप-प्रश्नाचे नाव" class="sfname" style="width: 100%; margin-top: 5px;" value="${sfData ? sfData.label : ''}">
-<select class="sftype" style="width: 100%; margin-top: 5px;" onchange="toggleSubFieldOptions('${sfId}', this.value)">
-<option value="text" ${sfData && sfData.type==='text'?'selected':''}>Text (मजकूर)</option>
-<option value="number" ${sfData && sfData.type==='number'?'selected':''}>Number (आकडे)</option>
-<option value="mobile" ${sfData && sfData.type==='mobile'?'selected':''}>Mobile No. (मोबाईल नंबर)</option>
-<option value="date" ${sfData && sfData.type==='date'?'selected':''}>Date (तारीख)</option>
-<option value="dropdown" ${sfData && sfData.type==='dropdown'?'selected':''}>Dropdown (पर्याय)</option>
-<option value="sum" ${sfData && sfData.type==='sum'?'selected':''}>Total / बेरीज (Auto Sum)</option>
-<option value="group" ${sfData && sfData.type==='group'?'selected':''}>Group / उप-गट (Sub-Group)</option>
-</select>
-<div id="sfopts_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='sum') ? 'block' : 'none'}; margin-top: 5px; background:#fff3e0; padding:8px; border-radius:4px;">
-<label id="sflabel_${sfId}" style="font-size:11px; font-weight:bold; color:#d35400;">
-${sfData && sfData.type==='sum' ? 'कोणत्या प्रश्नांची बेरीज करायची?' : 'पर्याय लिहा (स्वल्पविरामाने वेगळे करा):'}
-</label>
-<input type="text" id="sfopts_${sfId}" placeholder="..." class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
-</div>
-
-<div id="sfrng_container_${sfId}" style="display:${sfData && sfData.type==='number' ? 'block' : 'none'}; margin-top: 5px; background:#e8f5e9; padding:8px; border-radius:4px; border-left: 2px solid #2e7d32;">
-<label style="font-size:11px; font-weight:bold; color:#2e7d32;">🔢 संख्या मर्यादा (उदा. 15-45):</label>
-<input type="text" placeholder="15-45" class="sfrange" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.range || '') : ''}">
-</div>
-
-<div id="sfdep_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='number' || sfData.type==='text' || sfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:8px; border-radius:4px; border-left: 2px solid #00acc1;">
-<label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट (Conditional):</label>
-<input type="text" placeholder="उदा. ब्लिचिंग पावडर=No:Not aplicable" class="sfdepend" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.dependency || '') : ''}">
-</div>
-
-<div id="ssf_group_${sfId}" style="display:${sfData && sfData.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
-<label style="font-size:12px; font-weight:bold; color:#00838f;">या उप-गटातील प्रश्न जोडा:</label>
-<div id="subsubfields_container_${sfId}"></div>
-<button type="button" onclick="addSubSubFieldUI('${sfId}')" style="margin-top:10px; font-size:12px; background:#fff; border:1px solid #ccc; padding:4px; cursor:pointer; width:100%;">+ उप-गटातील प्रश्न जोडा</button>
-</div>
-</div>
-`;
-document.getElementById('subfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
-
-if(sfData && sfData.type === 'group' && sfData.subFields) {
-sfData.subFields.forEach(ssf => addSubSubFieldUI(sfId, ssf));
-} else if (sfData && sfData.type === 'group') {
-addSubSubFieldUI(sfId);
-}
-}
-
-function addSubSubFieldUI(parentId, ssfData = null) {
-const ssfId = Math.floor(Math.random() * 1000000);
-const html = `
-<div class="sub-sub-field-item" id="ssf_${ssfId}">
-<button type="button" class="btn-remove" style="padding:2px 6px !important; font-size:10px !important; top:4px !important; right:4px !important;" onclick="this.parentElement.remove()">X</button>
-<input type="text" placeholder="प्रश्नाचे नाव" class="ssfname" style="width: 100%; font-size:13px; padding:6px;" value="${ssfData ? ssfData.label : ''}">
-<select class="ssftype" style="width: 100%; font-size:13px; padding:6px; margin-top: 5px;" onchange="toggleSubSubFieldOptions('${ssfId}', this.value)">
-<option value="text" ${ssfData && ssfData.type==='text'?'selected':''}>Text</option>
-<option value="number" ${ssfData && ssfData.type==='number'?'selected':''}>Number</option>
-<option value="mobile" ${ssfData && ssfData.type==='mobile'?'selected':''}>Mobile</option>
-<option value="date" ${ssfData && ssfData.type==='date'?'selected':''}>Date</option>
-<option value="dropdown" ${ssfData && ssfData.type==='dropdown'?'selected':''}>Dropdown</option>
-<option value="sum" ${ssfData && ssfData.type==='sum'?'selected':''}>Total (Sum)</option>
-</select>
-<div id="ssfopts_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='sum') ? 'block' : 'none'}; margin-top: 5px; background:#f3e5f5; padding:6px; border-radius:4px;">
-<input type="text" id="ssfopts_${ssfId}" placeholder="${ssfData && ssfData.type==='sum' ? 'बेरीज सूत्र...' : 'पर्याय...'}" class="ssfopts" style="width: 100%; font-size:12px; padding:4px;"
-value="${ssfData ? (ssfData.options || '') : ''}">
-</div>
-
-<div id="ssfrng_container_${ssfId}" style="display:${ssfData && ssfData.type==='number' ? 'block' : 'none'}; margin-top: 5px; background:#e8f5e9; padding:6px; border-radius:4px; border-left: 2px solid #2e7d32;">
-<input type="text" placeholder="संख्या मर्यादा (उदा. 15-45)" class="ssfrange" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.range || '') : ''}">
-</div>
-
-<div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
-<label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 ऑटो-फिल अट:</label>
-<input type="text" placeholder="उदा. प्रश्न=No:Not aplicable" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
-</div>
-</div>
-`;
-document.getElementById('subsubfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
-}
-
-function getFieldsData() {
-let fields = [];
-document.querySelectorAll('.field-card').forEach(el => {
-let fieldObj = {
-label: el.querySelector('.fname').value,
-type: el.querySelector('.ftype').value,
-options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "",
-range: el.querySelector('.frange') ? el.querySelector('.frange').value : "",
-dependency: el.querySelector('.fdepend') ? el.querySelector('.fdepend').value : ""
-};
-if (fieldObj.type === 'group') {
-fieldObj.subFields = [];
-el.querySelectorAll('.sub-field-item').forEach(sfEl => {
-let sfObj = {
-label: sfEl.querySelector('.sfname').value,
-type: sfEl.querySelector('.sftype').value,
-options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "",
-range: sfEl.querySelector('.sfrange') ? sfEl.querySelector('.sfrange').value : "",
-dependency: sfEl.querySelector('.sfdepend') ? sfEl.querySelector('.sfdepend').value : ""
-};
-if(sfObj.type === 'group') {
-sfObj.subFields = [];
-sfEl.querySelectorAll('.sub-sub-field-item').forEach(ssfEl => {
-sfObj.subFields.push({
-label: ssfEl.querySelector('.ssfname').value,
-type: ssfEl.querySelector('.ssftype').value,
-options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "",
-range: ssfEl.querySelector('.ssfrange') ? ssfEl.querySelector('.ssfrange').value : "",
-dependency: ssfEl.querySelector('.ssfdepend') ? ssfEl.querySelector('.ssfdepend').value : ""
-});
-});
-}
-fieldObj.subFields.push(sfObj);
-});
-}
-fields.push(fieldObj);
-});
-return fields;
-}
-
-async function saveFullForm() {
-const name = document.getElementById('newFormName').value;
-let type = document.getElementById('newFormType').value;
-if(type !== 'List') {
-    type += "_" + document.getElementById('newFormLayout').value;
-}
-
-const isActive = document.getElementById('formIsActive').checked;
-const statusText = isActive ? "Active" : "Inactive";
-const allowedRoles = getSelectedRoles();
-
-if(!name) { alert("फॉर्मचे नाव टाका"); return; }
-if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
-
-const payload = { name, type, allowedRoles, isActive, status: statusText, fields: getFieldsData(), adminMobile: user.mobile };
-const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"createForm", payload}) });
-const d = await r.json();
-if(d.success) { alert(d.message); location.reload(); }
-}
-
-async function updateExistingForm() {
-const formID = document.getElementById('editFormID').value;
-const name = document.getElementById('newFormName').value;
-let type = document.getElementById('newFormType').value;
-if(type !== 'List') {
-    type += "_" + document.getElementById('newFormLayout').value;
-}
-
-const isActive = document.getElementById('formIsActive').checked;
-const statusText = isActive ? "Active" : "Inactive";
-const allowedRoles = getSelectedRoles();
-
-if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
-
-const payload = { formID, name, type, allowedRoles, isActive, status: statusText, fields: getFieldsData() };
-const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateForm", payload}) });
-const d = await r.json();
-if(d.success) { alert(d.message); location.reload(); }
 }
 </script>
 
