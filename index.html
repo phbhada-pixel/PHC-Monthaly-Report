@@ -51,17 +51,20 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
   .mobile-hide { display: none !important; }
 }
 
-/* 🟢 NEW: Field ID Badge Style */
+/* 🟢 NEW: Field ID Badge Style - High Contrast & Dark Black */
 .fid-badge {
-    color: white;
-    padding: 3px 8px;
+    background: #ffeb3b !important;
+    color: #000000 !important;
+    padding: 4px 8px;
     border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
+    font-size: 13px;
+    font-weight: 900;
     position: absolute;
     top: 8px;
     left: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border: 1px solid #000;
+    z-index: 10;
 }
 </style>
 </head>
@@ -279,7 +282,7 @@ let masterData = { forms: [], villages: [], filledStats: [] };
 let user = null;
 let currentReports = [];
 let isSaving = false;
-let globalFieldCounter = 1; // 🟢 New Global Counter for Unique Field IDs
+let globalFieldCounter = 1;
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -316,7 +319,6 @@ function parseCustomDate(dateStr) {
     return NaN;
 }
 
-// 🟢 NEW: Math & Conditional Logic Engine
 function getFieldValueByFid(containerId, fid) {
     let container = document.getElementById(containerId);
     if(!container) return `""`;
@@ -436,7 +438,6 @@ function processAllLogic(containerId) {
     evaluateConditions(containerId);
 }
 
-// --- Helper Functions ---
 function generateInputHTML(f, id, label, areaId, val="") {
 let html = "";
 let fidAttr = f.fid ? `data-fid="${f.fid}"` : ""; 
@@ -860,7 +861,7 @@ updateVillageDropdown();
 } else if(tab === 'edit') {
 document.getElementById('tabEdit').classList.add('active');
 document.getElementById('editSection').classList.remove('hidden');
-updateEditVillageDropdown(); 
+updateEditVillageDropdown();
 } else if(tab === 'reports') {
 document.getElementById('tabReports').classList.add('active');
 document.getElementById('reportsSection').classList.remove('hidden');
@@ -1483,40 +1484,6 @@ isSaving = false;
 }
 }
 
-// Backward Compatibility for pure sums
-function calculateAutoSums(containerId) {
-let container = document.getElementById(containerId);
-if(!container) return;
-let sumInputs = container.querySelectorAll('input[data-sum-targets]');
-for(let loop = 0; loop < 2; loop++) {
-sumInputs.forEach(sumInput => {
-let targets = sumInput.getAttribute('data-sum-targets').split(',');
-let total = 0;
-let hasValue = false;
-targets.forEach(targetLabel => {
-let tLabel = targetLabel.trim();
-if(!tLabel) return;
-let targetElement = container.querySelector(`[data-label="${tLabel}"]`);
-if(!targetElement) {
-let allInputs = container.querySelectorAll('[data-label]');
-let cleanTarget = tLabel.replace(/\s+/g, '').toLowerCase();
-for(let inp of allInputs) {
-let currentLabel = inp.getAttribute('data-label').replace(/\s+/g, '').toLowerCase();
-if(currentLabel === cleanTarget) { targetElement = inp; break; }
-if(currentLabel.endsWith(cleanTarget) || currentLabel.endsWith("-" + cleanTarget)) { targetElement = inp; break; }
-}
-}
-if(targetElement && targetElement.value !== "") {
-let val = parseFloat(targetElement.value);
-if(!isNaN(val)) { total += val; hasValue = true; }
-}
-});
-if(hasValue) { sumInput.value = total; } else { sumInput.value = ""; }
-});
-}
-}
-
-// --- Reports & Progressive Logic ---
 function getTotalsRow(data, headers, showIndices) {
 let totals = Array(headers.length).fill(0);
 let isNumericCol = Array(headers.length).fill(false);
@@ -1647,7 +1614,7 @@ d.reports.forEach(rep => {
             if(isMatch) {
                 let sc = headers.indexOf("उपकेंद्र") > -1 ? String(row[headers.indexOf("उपकेंद्र")]).trim() : "";
                 let empName = headers.indexOf("कर्मचाऱ्याचे नाव") > -1 ? String(row[headers.indexOf("कर्मचाऱ्याचे नाव")]).trim() : "";
-                let mob = headers.indexOf("मोबाईल ক্র.") > -1 ? String(row[headers.indexOf("मोबाईल क्र.")]).trim() : "";
+                let mob = headers.indexOf("मोबाईल क्र.") > -1 ? String(row[headers.indexOf("मोबाईल क्र.")]).trim() : "";
 
                 let gKey = `${sc}_${mob}_${v}`;
 
@@ -2508,8 +2475,8 @@ ${data && data.type==='sum' ? 'सूत्र लिहा (उदा. f_1 + f_
 </div>
 
 <div id="dep_${id}" style="display:${data && (data.type==='dropdown' || data.type==='number' || data.type==='text' || data.type==='mobile') ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
-<label style="font-size:12px; font-weight:bold; color:#00838f;">🔗 अटी (Conditional Logic):<br><span style="font-weight:normal; font-size:11px;">उदा. जर f_1 मधील व्हॅल्यू ५० पेक्षा मोठी असेल तर "High" सेट करा: <b>f_1 > 50 : "High" | f_1 <= 50 : "Low"</b></span></label>
-<input type="text" placeholder="उदा. f_1 > 50 : High" class="fdepend" style="width: 100%; margin-top: 5px; font-size:12px;"
+<label style="font-size:12px; font-weight:bold; color:#00838f;">🔗 अटी (Conditional Logic):<br><span style="font-weight:normal; font-size:11px;">उदा. जर f_1 मधील व्हॅल्यू ५० पेक्षा मोठी असेल तर "High" सेट करा: <b>f_1 > 50 : High [red] | f_1 <= 50 : Low [green]</b></span></label>
+<input type="text" placeholder="उदा. f_1 > 50 : High [red]" class="fdepend" style="width: 100%; margin-top: 5px; font-size:12px;"
 value="${data ? (data.dependency || '') : ''}">
 </div>
 
@@ -2530,7 +2497,7 @@ const fid = sfData && sfData.fid ? sfData.fid : generateFid();
 
 const html = `
 <div class="sub-field-item" id="sf_${sfId}">
-<span class="fid-badge" style="background:#e67e22;">ID: ${fid}</span>
+<span class="fid-badge">ID: ${fid}</span>
 <input type="hidden" class="hidden-fid" value="${fid}">
 <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
 <input type="text" placeholder="उप-प्रश्नाचे नाव" class="sfname" style="width: 100%; margin-top: 5px;" value="${sfData ? sfData.label : ''}">
@@ -2557,7 +2524,7 @@ ${sfData && sfData.type==='sum' ? 'सूत्र (f_1 + f_2):' : 'पर्य
 </div>
 
 <div id="sfdep_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='number' || sfData.type==='text' || sfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:8px; border-radius:4px; border-left: 2px solid #00acc1;">
-<label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 अटी (f_1 > 10 : High):</label>
+<label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 अटी (f_1 > 10 : High [red]):</label>
 <input type="text" placeholder="..." class="sfdepend" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.dependency || '') : ''}">
 </div>
 
@@ -2583,7 +2550,7 @@ const fid = ssfData && ssfData.fid ? ssfData.fid : generateFid();
 
 const html = `
 <div class="sub-sub-field-item" id="ssf_${ssfId}">
-<span class="fid-badge" style="background:#8e44ad; top:2px; left:2px; font-size:10px;">ID: ${fid}</span>
+<span class="fid-badge" style="top:2px; left:2px; font-size:11px;">ID: ${fid}</span>
 <input type="hidden" class="hidden-fid" value="${fid}">
 <button type="button" class="btn-remove" style="padding:2px 6px !important; font-size:10px !important; top:4px !important; right:4px !important;" onclick="this.parentElement.remove()">X</button>
 <input type="text" placeholder="प्रश्नाचे नाव" class="ssfname" style="width: 100%; font-size:13px; padding:6px; margin-top:15px;" value="${ssfData ? ssfData.label : ''}">
@@ -2606,7 +2573,7 @@ value="${ssfData ? (ssfData.options || '') : ''}">
 </div>
 
 <div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
-<input type="text" placeholder="अटी (उदा. f_1>10:Ok)" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
+<input type="text" placeholder="अटी (उदा. f_1>10:Ok [green])" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
 </div>
 </div>
 `;
