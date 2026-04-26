@@ -86,6 +86,9 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
     margin-bottom: 15px;
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+input::placeholder { color: #999; }
+input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -315,16 +318,22 @@ let currentReports = [];
 let isSaving = false;
 let globalFieldCounter = 1;
 
-window.onload = async function() {
-    await fetchData(); 
-    document.getElementById('initialLoader').style.display = 'none'; 
+// 🟢 NEW: Zero-Wait Direct Loading
+window.onload = function() {
     document.getElementById('mainApp').classList.remove('hidden'); 
-
+    
     const savedUser = localStorage.getItem("phc_user_session");
     if(savedUser) { 
         user = JSON.parse(savedUser); 
         showAppAfterLogin(); 
+        
+        document.getElementById('netStatus').innerText = "डेटा लोड होत आहे...";
+        fetchData().then(() => {
+            document.getElementById('netStatus').innerText = "Online";
+            document.getElementById('initialLoader').style.display = 'none'; 
+        });
     } else {
+        document.getElementById('initialLoader').style.display = 'none'; 
         document.getElementById('loginBox').classList.remove('hidden');
     }
 };
@@ -478,9 +487,71 @@ function evaluateConditions(containerId) {
     });
 }
 
+function evaluateRanges(containerId) {
+    let container = document.getElementById(containerId);
+    if(!container) return;
+
+    let inputs = container.querySelectorAll('input[data-range]');
+    inputs.forEach(input => {
+        let r = input.getAttribute('data-range').trim();
+        if(!r || input.value === "") {
+            input.style.border = "1px solid #ccc";
+            input.classList.remove('error-input');
+            return;
+        }
+
+        let val = parseFloat(input.value);
+        if(isNaN(val)) return;
+
+        function parseLimit(str) {
+            let s = str.trim();
+            if(s.startsWith('f_')) {
+                let fVal = getFieldValueByFid(containerId, s);
+                return fVal === `""` ? NaN : parseFloat(fVal);
+            }
+            return parseFloat(s);
+        }
+
+        let isError = false;
+
+        if (r.startsWith('<=')) {
+            let max = parseLimit(r.replace('<=', ''));
+            if(!isNaN(max) && val > max) isError = true;
+        } else if (r.startsWith('<')) {
+            let max = parseLimit(r.replace('<', ''));
+            if(!isNaN(max) && val >= max) isError = true;
+        } else if (r.startsWith('>=')) {
+            let min = parseLimit(r.replace('>=', ''));
+            if(!isNaN(min) && val < min) isError = true;
+        } else if (r.startsWith('>')) {
+            let min = parseLimit(r.replace('>', ''));
+            if(!isNaN(min) && val <= min) isError = true;
+        } else if (r.includes('-')) {
+            let parts = r.split('-');
+            if(parts.length === 2) {
+                let min = parseLimit(parts[0]);
+                let max = parseLimit(parts[1]);
+                if(!isNaN(min) && !isNaN(max) && (val < min || val > max)) isError = true;
+            }
+        }
+
+        if(isError) {
+            input.style.border = "2px solid red";
+            input.value = ""; 
+            input.classList.add('error-input');
+            input.setAttribute("placeholder", "अवैध संख्या!");
+        } else {
+            input.style.border = "1px solid #ccc";
+            input.classList.remove('error-input');
+            input.removeAttribute("placeholder");
+        }
+    });
+}
+
 function processAllLogic(containerId) {
     evaluateMathFormulas(containerId);
     evaluateConditions(containerId);
+    evaluateRanges(containerId); 
 }
 
 function generateInputHTML(f, id, label, areaId, val="") {
@@ -490,33 +561,9 @@ let safeDep = f.dependency ? String(f.dependency).replace(/"/g, "&quot;").replac
 let depAttr = safeDep ? `data-dependency="${safeDep}"` : "";
 let safeForm = (f.options && f.type === 'sum') ? String(f.options).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
 let formulaAttr = safeForm ? `data-formula="${safeForm}" data-sum-targets="${safeForm}"` : "";
-let rangeAttr = "";
+let rangeAttr = f.range ? `data-range="${f.range}"` : "";
 
 let onEvent = `oninput="processAllLogic('${areaId}')" onchange="processAllLogic('${areaId}')"`;
-
-if (f.type === 'number' && f.range) {
-let r = String(f.range).trim();
-if (r.startsWith('<=')) {
-let max = Number(r.replace('<=', '').trim());
-rangeAttr = ` max="${max}" title="कृपया ${max} किंवा त्यापेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) > ${max}) { this.value=''; processAllLogic('${areaId}'); }"`;
-} else if (r.startsWith('<')) {
-let max = Number(r.replace('<', '').trim());
-rangeAttr = ` max="${max-1}" title="कृपया ${max} पेक्षा कमी संख्या टाका" onchange="if(this.value && Number(this.value) >= ${max}) { this.value=''; processAllLogic('${areaId}'); }"`;
-} else if (r.startsWith('>=')) {
-let min = Number(r.replace('>=', '').trim());
-rangeAttr = ` min="${min}" title="कृपया ${min} किंवा त्यापेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) < ${min}) { this.value=''; processAllLogic('${areaId}'); }"`;
-} else if (r.startsWith('>')) {
-let min = Number(r.replace('>', '').trim());
-rangeAttr = ` min="${min+1}" title="कृपया ${min} पेक्षा जास्त संख्या टाका" onchange="if(this.value && Number(this.value) <= ${min}) { this.value=''; processAllLogic('${areaId}'); }"`;
-} else if (r.includes('-')) {
-let parts = r.split('-');
-if(parts.length === 2) {
-let min = parts[0].trim();
-let max = parts[1].trim();
-rangeAttr = ` min="${min}" max="${max}" title="कृपया ${min} ते ${max} च्या दरम्यानची संख्या टाका" onchange="if(this.value && (Number(this.value) < ${min} || Number(this.value) > ${max})) { this.value=''; processAllLogic('${areaId}'); }"`;
-}
-}
-}
 
 if (f.type === 'dropdown') {
 html += `<select id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${onEvent}><option value="">-- निवडा --</option>`;
@@ -540,23 +587,27 @@ html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${depAtt
 return html;
 }
 
+// 🟢 NEW: Trim everything
 function extractFieldsFromForm(f) {
 let fields = [];
 JSON.parse(f.StructureJSON).forEach((field, i) => {
+let exactLabel = String(field.label).trim();
 if (field.type === 'group') {
 field.subFields.forEach((sf, j) => {
+let exactSfLabel = String(sf.label).trim();
 if (sf.type === 'group') {
 sf.subFields.forEach((ssf, k) => {
-let label = `${field.label} - ${sf.label} - ${ssf.label}`;
+let exactSsfLabel = String(ssf.label).trim();
+let label = `${exactLabel} - ${exactSfLabel} - ${exactSsfLabel}`;
 fields.push({ label, idSuffix: `${i}_${j}_${k}`, orig: ssf });
 });
 } else {
-let label = `${field.label} - ${sf.label}`;
+let label = `${exactLabel} - ${exactSfLabel}`;
 fields.push({ label, idSuffix: `${i}_${j}`, orig: sf });
 }
 });
 } else {
-fields.push({ label: field.label, idSuffix: `${i}`, orig: field });
+fields.push({ label: exactLabel, idSuffix: `${i}`, orig: field });
 }
 });
 return fields;
@@ -579,14 +630,14 @@ if (field.type === 'group') {
 field.subFields.forEach((sf, j) => {
 if (sf.type === 'group') {
 sf.subFields.forEach((ssf, k) => {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${ssf.label}<br><small style="font-weight:normal; color:#ddd;">(${sf.label})</small></th>`;
+headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(ssf.label).trim()}<br><small style="font-weight:normal; color:#ddd;">(${String(sf.label).trim()})</small></th>`;
 });
 } else {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${sf.label}<br><small style="font-weight:normal; color:#ddd;">(${field.label})</small></th>`;
+headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(sf.label).trim()}<br><small style="font-weight:normal; color:#ddd;">(${String(field.label).trim()})</small></th>`;
 }
 });
 } else {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${field.label}</th>`;
+headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(field.label).trim()}</th>`;
 }
 });
 headersHtml += `</tr>`;
@@ -675,35 +726,37 @@ tr.children[0].innerHTML = `<b>${index + 1}</b> <br><button type="button" tabind
 }
 }
 
+// 🟢 NEW: Trim everything
 function generateFormHTML(f, prefix, areaId) {
 let html = "";
 JSON.parse(f.StructureJSON).forEach((field, i) => {
-let exactLabel = field.label;
+let exactLabel = String(field.label).trim();
 if (field.type === 'group') {
 html += `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
-<h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
+<h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${exactLabel}</h4>`;
 field.subFields.forEach((sf, j) => {
+let exactSfLabel = String(sf.label).trim();
 if(sf.type === 'group') {
 html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
-<h5 style="margin:0 0 5px 0; color:#00838f;">${sf.label}</h5>`;
+<h5 style="margin:0 0 5px 0; color:#00838f;">${exactSfLabel}</h5>`;
 sf.subFields.forEach((ssf, k) => {
-let exactSubSubLabel = `${field.label} - ${sf.label} - ${ssf.label}`;
-html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${ssf.label}:</b></label>`;
+let exactSsfLabel = String(ssf.label).trim();
+let exactSubSubLabel = `${exactLabel} - ${exactSfLabel} - ${exactSsfLabel}`;
+html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${exactSsfLabel}:</b></label>`;
 html += generateInputHTML(ssf, `${prefix}_inp_${i}_${j}_${k}`, exactSubSubLabel, areaId, "");
 html += `</div>`;
 });
 html += `</div>`;
 } else {
-let exactSubLabel = `${field.label} - ${sf.label}`;
-html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
+let exactSubLabel = `${exactLabel} - ${exactSfLabel}`;
+html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${exactSfLabel}:</b></label>`;
 html += generateInputHTML(sf, `${prefix}_inp_${i}_${j}`, exactSubLabel, areaId, "");
 html += `</div>`;
 }
 });
 html += `</div>`;
 } else {
-let exactLabel = field.label;
-html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
+html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${exactLabel}:</b></label>`;
 html += generateInputHTML(field, `${prefix}_inp_${i}`, exactLabel, areaId, "");
 html += `</div>`;
 }
@@ -727,28 +780,30 @@ function generateTableHeaders(f) {
     r1 += `<th rowspan="${maxDepth}" class="sticky-header-col" style="background:#00705a; color:white; z-index:4; position:sticky; top:0; left:0; border:1px solid #ddd; padding:10px; text-align:center;">गाव (Village)</th>`;
 
     struct.forEach(field => {
+        let exactLabel = String(field.label).trim();
         if (field.type === 'group') {
             let colSpan1 = 0;
             let fieldHtml2 = "", fieldHtml3 = "";
             field.subFields.forEach(sf => {
+                let exactSfLabel = String(sf.label).trim();
                 if (sf.type === 'group') {
                     let colSpan2 = sf.subFields.length;
                     colSpan1 += colSpan2;
-                    fieldHtml2 += `<th colspan="${colSpan2}" style="background:#00705a; color:white; border:1px solid #ddd; padding:8px; text-align:center;">${sf.label}</th>`;
+                    fieldHtml2 += `<th colspan="${colSpan2}" style="background:#00705a; color:white; border:1px solid #ddd; padding:8px; text-align:center;">${exactSfLabel}</th>`;
                     sf.subFields.forEach(ssf => {
-                        fieldHtml3 += `<th style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:6px; text-align:center;">${ssf.label}</th>`;
+                        fieldHtml3 += `<th style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:6px; text-align:center;">${String(ssf.label).trim()}</th>`;
                     });
                 } else {
                     colSpan1 += 1;
                     let rs2 = maxDepth === 3 ? 2 : 1;
-                    fieldHtml2 += `<th rowspan="${rs2}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:8px; text-align:center;">${sf.label}</th>`;
+                    fieldHtml2 += `<th rowspan="${rs2}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:8px; text-align:center;">${exactSfLabel}</th>`;
                 }
             });
-            r1 += `<th colspan="${colSpan1}" style="background:#00705a; color:white; border:1px solid #ddd; padding:10px; text-align:center;">${field.label}</th>`;
+            r1 += `<th colspan="${colSpan1}" style="background:#00705a; color:white; border:1px solid #ddd; padding:10px; text-align:center;">${exactLabel}</th>`;
             r2 += fieldHtml2;
             r3 += fieldHtml3;
         } else {
-            r1 += `<th rowspan="${maxDepth}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:10px; text-align:center;">${field.label}</th>`;
+            r1 += `<th rowspan="${maxDepth}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:10px; text-align:center;">${exactLabel}</th>`;
         }
     });
 
@@ -801,24 +856,28 @@ function generateBulkTableHTML(f, availableVillages, formPrefix) {
     </div>`;
 }
 
+// 🟢 NEW: Trim JSON Keys
 function extractFormData(f, prefix) {
 let formData = {};
 JSON.parse(f.StructureJSON).forEach((field, i) => {
+let exactL = String(field.label).trim();
 if (field.type === 'group') {
 field.subFields.forEach((sf, j) => {
+let exactSL = String(sf.label).trim();
 if(sf.type === 'group') {
 sf.subFields.forEach((ssf, k) => {
+let exactSSL = String(ssf.label).trim();
 let el = document.getElementById(`${prefix}_inp_${i}_${j}_${k}`);
-if(el) formData[`${field.label} - ${sf.label} - ${ssf.label}`] = el.value;
+if(el) formData[`${exactL} - ${exactSL} - ${exactSSL}`] = el.value;
 });
 } else {
 let el = document.getElementById(`${prefix}_inp_${i}_${j}`);
-if(el) formData[`${field.label} - ${sf.label}`] = el.value;
+if(el) formData[`${exactL} - ${exactSL}`] = el.value;
 }
 });
 } else {
 let el = document.getElementById(`${prefix}_inp_${i}`);
-if(el) formData[field.label] = el.value;
+if(el) formData[exactL] = el.value;
 }
 });
 return formData;
@@ -879,7 +938,6 @@ function logoutUser() {
 if(confirm("लॉग आऊट करायचे आहे का?")) { localStorage.removeItem("phc_user_session"); location.reload(); }
 }
 
-// 🟢 Change Password Functions
 function openChangePassword() {
     document.getElementById('changePasswordBox').classList.remove('hidden');
 }
@@ -1549,7 +1607,7 @@ setTimeout(() => { statusText.innerText = ""; }, 4000);
 document.getElementById('editDynamicFormArea').classList.add('hidden');
 saveBtn.classList.add('hidden');
 
-document.getElementById('netStatus').innerText = "डेटा रिफ्रेश होत आहे...";
+document.getElementById('netStatus').innerText = "डेटा रिफ्रेश होत internal...";
 await fetchData(); 
 document.getElementById('netStatus').innerText = "Online";
 
@@ -1925,7 +1983,7 @@ groupKeys.forEach((gKey) => {
             baseVariables.forEach((v, vIndex) => {
                 tbodyHtml += `<tr>`;
                 tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:0; z-index:1; text-align:center;">${vIndex+1}</td>`;
-                tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:45px; z-index:1; text-align:left; font-weight:bold; white-space:nowrap;">${v.name}</td>`;
+                tbodyHtml += `<td class="sticky-col" style="background:#fdfdfd; left:45px; z-index:1; text-align:left; font-weight:bold; white-space:nowrap;">${String(v.name).trim()}</td>`;
                 
                 let rowTotM = 0;
                 let rowTotP = 0;
@@ -2173,7 +2231,7 @@ groupKeys.forEach(gKey => {
             baseVariables.forEach((v, vIndex) => {
                 let rowData = Array(verticalColCount).fill("");
                 rowData[0] = vIndex + 1;
-                rowData[1] = v.name;
+                rowData[1] = String(v.name).trim();
                 
                 let cc = 2;
                 let rowTotalM = 0; let rowTotalP = 0;
@@ -2577,7 +2635,7 @@ const fid = sfData && sfData.fid ? sfData.fid : generateFid();
 
 const html = `
 <div class="sub-field-item" id="sf_${sfId}">
-<span class="fid-badge" style="background:#e67e22;">ID: ${fid}</span>
+<span class="fid-badge" style="background:#e67e22 !important;">ID: ${fid}</span>
 <input type="hidden" class="hidden-fid" value="${fid}">
 <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
 <input type="text" placeholder="उप-प्रश्नाचे नाव" class="sfname" style="width: 100%; margin-top: 5px;" value="${sfData ? sfData.label : ''}">
@@ -2630,7 +2688,7 @@ const fid = ssfData && ssfData.fid ? ssfData.fid : generateFid();
 
 const html = `
 <div class="sub-sub-field-item" id="ssf_${ssfId}">
-<span class="fid-badge" style="top:2px; left:2px; font-size:11px;">ID: ${fid}</span>
+<span class="fid-badge" style="background:#8e44ad !important; top:2px; left:2px; font-size:11px;">ID: ${fid}</span>
 <input type="hidden" class="hidden-fid" value="${fid}">
 <button type="button" class="btn-remove" style="padding:2px 6px !important; font-size:10px !important; top:4px !important; right:4px !important;" onclick="this.parentElement.remove()">X</button>
 <input type="text" placeholder="प्रश्नाचे नाव" class="ssfname" style="width: 100%; font-size:13px; padding:6px; margin-top:15px;" value="${ssfData ? ssfData.label : ''}">
@@ -2665,7 +2723,7 @@ let fields = [];
 document.querySelectorAll('.field-card').forEach(el => {
 let fieldObj = {
 fid: el.querySelector('.hidden-fid').value,
-label: el.querySelector('.fname').value,
+label: String(el.querySelector('.fname').value).trim(),
 type: el.querySelector('.ftype').value,
 options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "",
 range: el.querySelector('.frange') ? el.querySelector('.frange').value : "",
@@ -2676,7 +2734,7 @@ fieldObj.subFields = [];
 el.querySelectorAll('.sub-field-item').forEach(sfEl => {
 let sfObj = {
 fid: sfEl.querySelector('.hidden-fid').value,
-label: sfEl.querySelector('.sfname').value,
+label: String(sfEl.querySelector('.sfname').value).trim(),
 type: sfEl.querySelector('.sftype').value,
 options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "",
 range: sfEl.querySelector('.sfrange') ? sfEl.querySelector('.sfrange').value : "",
@@ -2687,7 +2745,7 @@ sfObj.subFields = [];
 sfEl.querySelectorAll('.sub-sub-field-item').forEach(ssfEl => {
 sfObj.subFields.push({
 fid: ssfEl.querySelector('.hidden-fid').value,
-label: ssfEl.querySelector('.ssfname').value,
+label: String(ssfEl.querySelector('.ssfname').value).trim(),
 type: ssfEl.querySelector('.ssftype').value,
 options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "",
 range: ssfEl.querySelector('.ssfrange') ? ssfEl.querySelector('.ssfrange').value : "",
@@ -2735,7 +2793,7 @@ const isActive = document.getElementById('formIsActive').checked;
 const statusText = isActive ? "Active" : "Inactive";
 const allowedRoles = getSelectedRoles();
 
-if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान Role निवडा."); return; }
+if(allowedRoles === "" && !document.getElementById('roleAll').checked) { alert("कृपया किमान एक Role निवडा."); return; }
 
 const payload = { formID, name, type, allowedRoles, isActive, status: statusText, fields: getFieldsData() };
 const r = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({action:"updateForm", payload}) });
