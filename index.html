@@ -88,7 +88,6 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 input::placeholder { color: #999; }
-input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 .req-star { color: red; font-weight: bold; margin-left: 3px; font-size: 16px; }
 </style>
 </head>
@@ -537,13 +536,10 @@ function evaluateRanges(containerId) {
 
         if(isError) {
             input.style.border = "2px solid red";
-            input.value = ""; 
             input.classList.add('error-input');
-            input.setAttribute("placeholder", "अवैध संख्या!");
         } else {
             input.style.border = "1px solid #ccc";
             input.classList.remove('error-input');
-            input.removeAttribute("placeholder");
         }
     });
 }
@@ -1275,8 +1271,8 @@ async function saveDataToServer() {
 if(isSaving) return;
 const saveBtn = document.getElementById('mainSaveBtn');
 
-// 🟢 NEW: REQUIRED FIELD VALIDATION LOGIC 🟢
 let hasValidationError = false;
+let hasRangeError = false;
 let formsToProcess = [];
 const fId = document.getElementById('selForm').value;
 const vName = document.getElementById('selVillage').value;
@@ -1320,6 +1316,8 @@ let reqInputs = tr.querySelectorAll('[data-required="true"]');
 reqInputs.forEach(inp => {
 if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") { inp.style.border = "2px solid red"; hasValidationError = true; }
 });
+let errInputs = tr.querySelectorAll('.error-input');
+if(errInputs.length > 0) hasRangeError = true;
 });
 }
 } else {
@@ -1331,6 +1329,8 @@ let reqInputs = containerEl.querySelectorAll('[data-required="true"]');
 reqInputs.forEach(inp => {
 if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") { inp.style.border = "2px solid red"; hasValidationError = true; }
 });
+let errInputs = containerEl.querySelectorAll('.error-input');
+if(errInputs.length > 0) hasRangeError = true;
 }
 }
 });
@@ -1338,6 +1338,10 @@ if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") { inp.style.bo
 
 if(hasValidationError) {
 alert("⚠️ कृपया लाल रंगाने हायलाईट केलेली सर्व आवश्यक (*) फील्ड्स भरा!");
+return;
+}
+if(hasRangeError) {
+alert("⚠️ काही फील्ड्समध्ये चुकीची (अवैध) संख्या टाकली आहे. कृपया लाल रंगाची फील्ड्स तपासा.");
 return;
 }
 
@@ -1595,8 +1599,8 @@ async function saveEditedData() {
 if(isSaving) return;
 const saveBtn = document.getElementById('editSaveBtn');
 
-// 🟢 NEW: REQUIRED VALIDATION ON EDIT
 let hasValidationError = false;
+let hasRangeError = false;
 let reqInputs = document.getElementById('editDynamicFormArea').querySelectorAll('[data-required="true"]');
 reqInputs.forEach(inp => {
     if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") {
@@ -1604,8 +1608,15 @@ reqInputs.forEach(inp => {
         hasValidationError = true;
     }
 });
+let errInputs = document.getElementById('editDynamicFormArea').querySelectorAll('.error-input');
+if (errInputs.length > 0) hasRangeError = true;
+
 if (hasValidationError) {
     alert("⚠️ कृपया लाल रंगाने हायलाईट केलेली सर्व आवश्यक (*) फील्ड्स भरा!");
+    return;
+}
+if (hasRangeError) {
+    alert("⚠️ काही फील्ड्समध्ये चुकीची (अवैध) संख्या टाकली आहे. कृपया लाल रंगाची फील्ड्स तपासा.");
     return;
 }
 
@@ -2676,7 +2687,7 @@ value="${data ? (data.dependency || '') : ''}">
 </div>
 
 <div style="margin-top:8px;">
-<input type="checkbox" class="freq" ${data ? (data.isRequired !== false ? 'checked' : '') : 'checked'}> <label style="font-size:12px; font-weight:bold; color:#c0392b;">हा प्रश्न भरणे सक्तीचे आहे (Required)</label>
+<input type="checkbox" class="freq" ${data ? (data.isRequired !== false ? 'checked' : '') : 'checked'}> <label style="font-size:12px; font-weight:bold; color:#c0392b;">सक्तीचे आहे (Required)</label>
 </div>
 
 <div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
