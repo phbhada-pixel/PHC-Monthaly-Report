@@ -89,6 +89,7 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 
 input::placeholder { color: #999; }
 input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
+.req-star { color: red; font-weight: bold; margin-left: 3px; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -318,7 +319,6 @@ let currentReports = [];
 let isSaving = false;
 let globalFieldCounter = 1;
 
-// 🟢 NEW: Zero-Wait Direct Loading
 window.onload = function() {
     document.getElementById('mainApp').classList.remove('hidden'); 
     
@@ -557,16 +557,17 @@ function processAllLogic(containerId) {
 function generateInputHTML(f, id, label, areaId, val="") {
 let html = "";
 let fidAttr = f.fid ? `data-fid="${f.fid}"` : ""; 
+let reqAttr = f.isRequired ? `data-required="true"` : "";
 let safeDep = f.dependency ? String(f.dependency).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
 let depAttr = safeDep ? `data-dependency="${safeDep}"` : "";
 let safeForm = (f.options && f.type === 'sum') ? String(f.options).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
 let formulaAttr = safeForm ? `data-formula="${safeForm}" data-sum-targets="${safeForm}"` : "";
 let rangeAttr = f.range ? `data-range="${f.range}"` : "";
 
-let onEvent = `oninput="processAllLogic('${areaId}')" onchange="processAllLogic('${areaId}')"`;
+let onEvent = `oninput="this.style.border=''; processAllLogic('${areaId}')" onchange="this.style.border=''; processAllLogic('${areaId}')"`;
 
 if (f.type === 'dropdown') {
-html += `<select id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${onEvent}><option value="">-- निवडा --</option>`;
+html += `<select id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} ${onEvent}><option value="">-- निवडा --</option>`;
 if(f.options) { f.options.split(',').forEach(opt => {
 let o = opt.trim();
 let sel = (o === val) ? "selected" : "";
@@ -576,18 +577,17 @@ html += `</select>`;
 } else if(f.type === 'sum') {
 html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${formulaAttr} value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Calculation">`;
 } else if(f.type === 'number') {
-html += `<input type="number" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${rangeAttr} value="${val}" ${onEvent}>`;
+html += `<input type="number" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${rangeAttr} ${reqAttr} value="${val}" ${onEvent}>`;
 } else if(f.type === 'mobile') {
-html += `<input type="tel" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); processAllLogic('${areaId}');" onchange="processAllLogic('${areaId}')">`;
+html += `<input type="tel" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); this.style.border=''; processAllLogic('${areaId}');" onchange="this.style.border=''; processAllLogic('${areaId}')">`;
 } else if(f.type === 'date') {
-html += `<input type="date" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} value="${val}" ${onEvent}>`;
+html += `<input type="date" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} value="${val}" ${onEvent}>`;
 } else {
-html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} value="${val}" ${onEvent}>`;
+html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} value="${val}" ${onEvent}>`;
 }
 return html;
 }
 
-// 🟢 NEW: Trim everything
 function extractFieldsFromForm(f) {
 let fields = [];
 JSON.parse(f.StructureJSON).forEach((field, i) => {
@@ -630,14 +630,17 @@ if (field.type === 'group') {
 field.subFields.forEach((sf, j) => {
 if (sf.type === 'group') {
 sf.subFields.forEach((ssf, k) => {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(ssf.label).trim()}<br><small style="font-weight:normal; color:#ddd;">(${String(sf.label).trim()})</small></th>`;
+let reqStar = ssf.isRequired ? '<span class="req-star">*</span>' : '';
+headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(ssf.label).trim()}${reqStar}<br><small style="font-weight:normal; color:#ddd;">(${String(sf.label).trim()})</small></th>`;
 });
 } else {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(sf.label).trim()}<br><small style="font-weight:normal; color:#ddd;">(${String(field.label).trim()})</small></th>`;
+let reqStar = sf.isRequired ? '<span class="req-star">*</span>' : '';
+headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(sf.label).trim()}${reqStar}<br><small style="font-weight:normal; color:#ddd;">(${String(field.label).trim()})</small></th>`;
 }
 });
 } else {
-headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(field.label).trim()}</th>`;
+let reqStar = field.isRequired ? '<span class="req-star">*</span>' : '';
+headersHtml += `<th style="background:#00705a; color:white; font-size:12px; min-width:110px; position:sticky; top:0; z-index:2;">${String(field.label).trim()}${reqStar}</th>`;
 }
 });
 headersHtml += `</tr>`;
@@ -687,7 +690,8 @@ html += `<div style="display:flex; justify-content:space-between; align-items:ce
 
 fields.forEach(fld => {
 html += `<div style="margin-bottom:12px;">`;
-html += `<label style="font-size:14px; font-weight:bold; color:#444; display:block; margin-bottom:5px;">${fld.label}</label>`;
+let reqStar = fld.orig.isRequired ? '<span class="req-star">*</span>' : '';
+html += `<label style="font-size:14px; font-weight:bold; color:#444; display:block; margin-bottom:5px;">${fld.label}${reqStar}</label>`;
 let cellHtml = generateInputHTML(fld.orig, `${inputPrefix}_inp_${fld.idSuffix}`, fld.label, rowId, "");
 html += cellHtml;
 html += `</div>`;
@@ -726,37 +730,41 @@ tr.children[0].innerHTML = `<b>${index + 1}</b> <br><button type="button" tabind
 }
 }
 
-// 🟢 NEW: Trim everything
 function generateFormHTML(f, prefix, areaId) {
 let html = "";
 JSON.parse(f.StructureJSON).forEach((field, i) => {
 let exactLabel = String(field.label).trim();
+let reqStar1 = field.isRequired ? '<span class="req-star">*</span>' : '';
+
 if (field.type === 'group') {
 html += `<div style="margin-bottom:15px; background:#fffaf0; padding:12px; border-radius:8px; border:1px solid #f5b041;">
-<h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${exactLabel}</h4>`;
+<h4 style="margin-top:0; color:var(--primary); text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${exactLabel}${reqStar1}</h4>`;
 field.subFields.forEach((sf, j) => {
 let exactSfLabel = String(sf.label).trim();
+let reqStar2 = sf.isRequired ? '<span class="req-star">*</span>' : '';
+
 if(sf.type === 'group') {
 html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
-<h5 style="margin:0 0 5px 0; color:#00838f;">${exactSfLabel}</h5>`;
+<h5 style="margin:0 0 5px 0; color:#00838f;">${exactSfLabel}${reqStar2}</h5>`;
 sf.subFields.forEach((ssf, k) => {
 let exactSsfLabel = String(ssf.label).trim();
+let reqStar3 = ssf.isRequired ? '<span class="req-star">*</span>' : '';
 let exactSubSubLabel = `${exactLabel} - ${exactSfLabel} - ${exactSsfLabel}`;
-html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${exactSsfLabel}:</b></label>`;
+html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${exactSsfLabel}${reqStar3}:</b></label>`;
 html += generateInputHTML(ssf, `${prefix}_inp_${i}_${j}_${k}`, exactSubSubLabel, areaId, "");
 html += `</div>`;
 });
 html += `</div>`;
 } else {
 let exactSubLabel = `${exactLabel} - ${exactSfLabel}`;
-html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${exactSfLabel}:</b></label>`;
+html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${exactSfLabel}${reqStar2}:</b></label>`;
 html += generateInputHTML(sf, `${prefix}_inp_${i}_${j}`, exactSubLabel, areaId, "");
 html += `</div>`;
 }
 });
 html += `</div>`;
 } else {
-html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${exactLabel}:</b></label>`;
+html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${exactLabel}${reqStar1}:</b></label>`;
 html += generateInputHTML(field, `${prefix}_inp_${i}`, exactLabel, areaId, "");
 html += `</div>`;
 }
@@ -781,29 +789,34 @@ function generateTableHeaders(f) {
 
     struct.forEach(field => {
         let exactLabel = String(field.label).trim();
+        let reqStar1 = field.isRequired ? '<span class="req-star">*</span>' : '';
+        
         if (field.type === 'group') {
             let colSpan1 = 0;
             let fieldHtml2 = "", fieldHtml3 = "";
             field.subFields.forEach(sf => {
                 let exactSfLabel = String(sf.label).trim();
+                let reqStar2 = sf.isRequired ? '<span class="req-star">*</span>' : '';
+                
                 if (sf.type === 'group') {
                     let colSpan2 = sf.subFields.length;
                     colSpan1 += colSpan2;
-                    fieldHtml2 += `<th colspan="${colSpan2}" style="background:#00705a; color:white; border:1px solid #ddd; padding:8px; text-align:center;">${exactSfLabel}</th>`;
+                    fieldHtml2 += `<th colspan="${colSpan2}" style="background:#00705a; color:white; border:1px solid #ddd; padding:8px; text-align:center;">${exactSfLabel}${reqStar2}</th>`;
                     sf.subFields.forEach(ssf => {
-                        fieldHtml3 += `<th style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:6px; text-align:center;">${String(ssf.label).trim()}</th>`;
+                        let reqStar3 = ssf.isRequired ? '<span class="req-star">*</span>' : '';
+                        fieldHtml3 += `<th style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:6px; text-align:center;">${String(ssf.label).trim()}${reqStar3}</th>`;
                     });
                 } else {
                     colSpan1 += 1;
                     let rs2 = maxDepth === 3 ? 2 : 1;
-                    fieldHtml2 += `<th rowspan="${rs2}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:8px; text-align:center;">${exactSfLabel}</th>`;
+                    fieldHtml2 += `<th rowspan="${rs2}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:8px; text-align:center;">${exactSfLabel}${reqStar2}</th>`;
                 }
             });
-            r1 += `<th colspan="${colSpan1}" style="background:#00705a; color:white; border:1px solid #ddd; padding:10px; text-align:center;">${exactLabel}</th>`;
+            r1 += `<th colspan="${colSpan1}" style="background:#00705a; color:white; border:1px solid #ddd; padding:10px; text-align:center;">${exactLabel}${reqStar1}</th>`;
             r2 += fieldHtml2;
             r3 += fieldHtml3;
         } else {
-            r1 += `<th rowspan="${maxDepth}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:10px; text-align:center;">${exactLabel}</th>`;
+            r1 += `<th rowspan="${maxDepth}" style="background:#00705a; color:white; font-size:12px; border:1px solid #ddd; padding:10px; text-align:center;">${exactLabel}${reqStar1}</th>`;
         }
     });
 
@@ -856,7 +869,6 @@ function generateBulkTableHTML(f, availableVillages, formPrefix) {
     </div>`;
 }
 
-// 🟢 NEW: Trim JSON Keys
 function extractFormData(f, prefix) {
 let formData = {};
 JSON.parse(f.StructureJSON).forEach((field, i) => {
@@ -1262,31 +1274,23 @@ processAllLogic(el.id);
 async function saveDataToServer() {
 if(isSaving) return;
 const saveBtn = document.getElementById('mainSaveBtn');
-if(saveBtn) saveBtn.disabled = true;
-isSaving = true;
 
-try {
+// 🟢 NEW: REQUIRED FIELD VALIDATION LOGIC 🟢
+let hasValidationError = false;
+let formsToProcess = [];
 const fId = document.getElementById('selForm').value;
 const vName = document.getElementById('selVillage').value;
 const month = document.getElementById('selMonth').value;
 const year = document.getElementById('selYear').value;
 
-if(!fId || !vName) {
-alert("कृपया फॉर्म आणि गाव निवडा!");
-return;
-}
+if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); return; }
 
 let isBulk = (vName === "ALL_VILLAGES");
-
 let baseVillages = [];
 masterData.villages.forEach(v => {
-if(String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all") {
-baseVillages.push(v.VillageName);
-}
+if(String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all") { baseVillages.push(v.VillageName); }
 });
 let availableVillages = isBulk ? baseVillages : [vName];
-
-let formsToProcess = [];
 let prefixMap = {};
 
 if (fId === "ALL_STATS") {
@@ -1295,21 +1299,52 @@ let userRole = user ? String(user.role).trim().toUpperCase() : "";
 statsForms.forEach(f => {
 let isInactive = isFormInactive(f);
 if (isInactive && userRole !== "ADMIN") return;
-
 let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
-formsToProcess.push(f);
-prefixMap[f.FormID] = f.FormID;
+formsToProcess.push(f); prefixMap[f.FormID] = f.FormID;
 }
 });
 } else {
 const f = masterData.forms.find(x => x.FormID === fId);
-if(f) {
-formsToProcess.push(f);
-prefixMap[f.FormID] = isBulk ? f.FormID : "single";
-}
+if(f) { formsToProcess.push(f); prefixMap[f.FormID] = isBulk ? f.FormID : "single"; }
 }
 
+formsToProcess.forEach(f => {
+let formPrefix = prefixMap[f.FormID];
+availableVillages.forEach(village => {
+if (String(f.FormType).trim() === 'List') {
+let tbody = document.getElementById(`list_tbody_${f.FormID}`);
+if(tbody) {
+Array.from(tbody.children).forEach(tr => {
+let reqInputs = tr.querySelectorAll('[data-required="true"]');
+reqInputs.forEach(inp => {
+if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") { inp.style.border = "2px solid red"; hasValidationError = true; }
+});
+});
+}
+} else {
+let safeVName = village.replace(/\s+/g, '_');
+let containerId = isBulk ? `bulkrow_${formPrefix}_${safeVName}` : `form_area_${f.FormID}`;
+let containerEl = document.getElementById(containerId);
+if (containerEl) {
+let reqInputs = containerEl.querySelectorAll('[data-required="true"]');
+reqInputs.forEach(inp => {
+if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") { inp.style.border = "2px solid red"; hasValidationError = true; }
+});
+}
+}
+});
+});
+
+if(hasValidationError) {
+alert("⚠️ कृपया लाल रंगाने हायलाईट केलेली सर्व आवश्यक (*) फील्ड्स भरा!");
+return;
+}
+
+if(saveBtn) saveBtn.disabled = true;
+isSaving = true;
+
+try {
 let dataToSave = [];
 let hasNewData = false;
 
@@ -1326,15 +1361,11 @@ let rIdx = rowIdParts[rowIdParts.length - 1];
 let prefix = `list_${f.FormID}_${rIdx}`;
 
 processAllLogic(tr.id);
-
 let formData = extractFormData(f, prefix);
 
 let isEmpty = true;
 for(let key in formData) {
-if(formData[key] !== undefined && String(formData[key]).trim() !== "") {
-isEmpty = false;
-break;
-}
+if(formData[key] !== undefined && String(formData[key]).trim() !== "") { isEmpty = false; break; }
 }
 
 if(!isEmpty) {
@@ -1355,7 +1386,6 @@ let containerEl = document.getElementById(containerId);
 if (!containerEl) return;
 
 processAllLogic(containerId);
-
 let formData = extractFormData(f, prefix);
 
 formData["महिना"] = month;
@@ -1370,6 +1400,8 @@ hasNewData = true;
 
 if(!hasNewData) {
 alert("⚠️ तुम्ही कोणतीही नवीन माहिती भरलेली नाही! कृपया फॉर्म भरा.");
+if(saveBtn) saveBtn.disabled = false;
+isSaving = false;
 return;
 }
 
@@ -1510,26 +1542,33 @@ if(!f) return;
 
 let html = "";
 JSON.parse(f.StructureJSON).forEach((field, i) => {
-let exactLabel = field.label;
+let exactLabel = String(field.label).trim();
+let reqStar1 = field.isRequired ? '<span class="req-star">*</span>' : '';
+
 if (field.type === 'group') {
 html += `<div style="margin-bottom:15px; background:#e3f2fd; padding:12px; border-radius:8px; border:1px solid #f39c12;">
-<h4 style="margin-top:0; color:#d35400; text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${field.label}</h4>`;
+<h4 style="margin-top:0; color:#d35400; text-align:left; border-bottom:1px solid #ccc; padding-bottom:5px;">${exactLabel}${reqStar1}</h4>`;
 field.subFields.forEach((sf, j) => {
+let exactSfLabel = String(sf.label).trim();
+let reqStar2 = sf.isRequired ? '<span class="req-star">*</span>' : '';
+
 if(sf.type === 'group') {
 html += `<div style="margin-bottom:10px; margin-left:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left:3px solid #00acc1;">
-<h5 style="margin:0 0 5px 0; color:#00838f;">${sf.label}</h5>`;
+<h5 style="margin:0 0 5px 0; color:#00838f;">${exactSfLabel}${reqStar2}</h5>`;
 sf.subFields.forEach((ssf, k) => {
-let exactSubSubLabel = `${field.label} - ${sf.label} - ${ssf.label}`;
+let exactSsfLabel = String(ssf.label).trim();
+let reqStar3 = ssf.isRequired ? '<span class="req-star">*</span>' : '';
+let exactSubSubLabel = `${exactLabel} - ${exactSfLabel} - ${exactSsfLabel}`;
 let val = formData[exactSubSubLabel] || "";
-html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${ssf.label}:</b></label>`;
+html += `<div style="margin-bottom:8px;"><label style="font-size:13px; color:#555;"><b>${exactSsfLabel}${reqStar3}:</b></label>`;
 html += generateInputHTML(ssf, `edit_inp_${i}_${j}_${k}`, exactSubSubLabel, 'editDynamicFormArea', val);
 html += `</div>`;
 });
 html += `</div>`;
 } else {
-let exactSubLabel = `${field.label} - ${sf.label}`;
+let exactSubLabel = `${exactLabel} - ${exactSfLabel}`;
 let val = formData[exactSubLabel] || "";
-html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${sf.label}:</b></label>`;
+html += `<div style="margin-bottom:10px;"><label style="font-size:14px; color:#555;"><b>${exactSfLabel}${reqStar2}:</b></label>`;
 html += generateInputHTML(sf, `edit_inp_${i}_${j}`, exactSubLabel, 'editDynamicFormArea', val);
 html += `</div>`;
 }
@@ -1537,7 +1576,7 @@ html += `</div>`;
 html += `</div>`;
 } else {
 let val = formData[exactLabel] || "";
-html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${field.label}:</b></label>`;
+html += `<div style="margin-bottom:15px; background:white; padding:10px; border-radius:8px; border:1px solid #ddd;"><label><b>${exactLabel}${reqStar1}:</b></label>`;
 html += generateInputHTML(field, `edit_inp_${i}`, exactLabel, 'editDynamicFormArea', val);
 html += `</div>`;
 }
@@ -1555,6 +1594,21 @@ processAllLogic('editDynamicFormArea');
 async function saveEditedData() {
 if(isSaving) return;
 const saveBtn = document.getElementById('editSaveBtn');
+
+// 🟢 NEW: REQUIRED VALIDATION ON EDIT
+let hasValidationError = false;
+let reqInputs = document.getElementById('editDynamicFormArea').querySelectorAll('[data-required="true"]');
+reqInputs.forEach(inp => {
+    if(inp.style.pointerEvents !== "none" && inp.value.trim() === "") {
+        inp.style.border = "2px solid red";
+        hasValidationError = true;
+    }
+});
+if (hasValidationError) {
+    alert("⚠️ कृपया लाल रंगाने हायलाईट केलेली सर्व आवश्यक (*) फील्ड्स भरा!");
+    return;
+}
+
 saveBtn.disabled = true;
 isSaving = true;
 
@@ -1573,18 +1627,21 @@ updatedFormData["वर्ष"] = year;
 
 const f = masterData.forms.find(x => x.FormID === fId);
 JSON.parse(f.StructureJSON).forEach((field, i) => {
+let exactL = String(field.label).trim();
 if (field.type === 'group') {
 field.subFields.forEach((sf, j) => {
+let exactSL = String(sf.label).trim();
 if(sf.type === 'group') {
 sf.subFields.forEach((ssf, k) => {
-updatedFormData[`${field.label} - ${sf.label} - ${ssf.label}`] = document.getElementById(`edit_inp_${i}_${j}_${k}`).value;
+let exactSSL = String(ssf.label).trim();
+updatedFormData[`${exactL} - ${exactSL} - ${exactSSL}`] = document.getElementById(`edit_inp_${i}_${j}_${k}`).value;
 });
 } else {
-updatedFormData[`${field.label} - ${sf.label}`] = document.getElementById(`edit_inp_${i}_${j}`).value;
+updatedFormData[`${exactL} - ${exactSL}`] = document.getElementById(`edit_inp_${i}_${j}`).value;
 }
 });
 } else {
-updatedFormData[field.label] = document.getElementById(`edit_inp_${i}`).value;
+updatedFormData[exactL] = document.getElementById(`edit_inp_${i}`).value;
 }
 });
 
@@ -1607,7 +1664,7 @@ setTimeout(() => { statusText.innerText = ""; }, 4000);
 document.getElementById('editDynamicFormArea').classList.add('hidden');
 saveBtn.classList.add('hidden');
 
-document.getElementById('netStatus').innerText = "डेटा रिफ्रेश होत internal...";
+document.getElementById('netStatus').innerText = "डेटा रिफ्रेश होत आहे...";
 await fetchData(); 
 document.getElementById('netStatus').innerText = "Online";
 
@@ -2618,6 +2675,10 @@ ${data && data.type==='sum' ? 'सूत्र लिहा (उदा. f_1 + f_
 value="${data ? (data.dependency || '') : ''}">
 </div>
 
+<div style="margin-top:8px;">
+<input type="checkbox" class="freq" ${data ? (data.isRequired !== false ? 'checked' : '') : 'checked'}> <label style="font-size:12px; font-weight:bold; color:#c0392b;">हा प्रश्न भरणे सक्तीचे आहे (Required)</label>
+</div>
+
 <div id="group_${id}" style="display:${data && data.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#eef; padding:10px; border-radius:5px; border-left: 3px solid var(--primary);">
 <label style="font-size:13px; font-weight:bold; color:var(--primary);">या गटातील उप-प्रश्न जोडा:</label>
 <div id="subfields_container_${id}"></div>
@@ -2664,6 +2725,10 @@ ${sfData && sfData.type==='sum' ? 'सूत्र (f_1 + f_2):' : 'पर्य
 <div id="sfdep_container_${sfId}" style="display:${sfData && (sfData.type==='dropdown' || sfData.type==='number' || sfData.type==='text' || sfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:8px; border-radius:4px; border-left: 2px solid #00acc1;">
 <label style="font-size:11px; font-weight:bold; color:#00838f;">🔗 अटी (f_1 > 10 : High [red]):</label>
 <input type="text" placeholder="..." class="sfdepend" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData ? (sfData.dependency || '') : ''}">
+</div>
+
+<div style="margin-top:8px;">
+<input type="checkbox" class="freq" ${sfData ? (sfData.isRequired !== false ? 'checked' : '') : 'checked'}> <label style="font-size:12px; font-weight:bold; color:#c0392b;">सक्तीचे आहे (Required)</label>
 </div>
 
 <div id="ssf_group_${sfId}" style="display:${sfData && sfData.type==='group' ? 'block' : 'none'}; margin-top:10px; background:#e0f7fa; padding:10px; border-radius:5px; border-left: 3px solid #00acc1;">
@@ -2713,6 +2778,11 @@ value="${ssfData ? (ssfData.options || '') : ''}">
 <div id="ssfdep_container_${ssfId}" style="display:${ssfData && (ssfData.type==='dropdown' || ssfData.type==='number' || ssfData.type==='text' || ssfData.type==='mobile') ? 'block' : 'none'}; margin-top: 5px; background:#e0f7fa; padding:6px; border-radius:4px; border-left: 2px solid #00acc1;">
 <input type="text" placeholder="अटी (उदा. f_1>10:Ok [green])" class="ssfdepend" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.dependency || '') : ''}">
 </div>
+
+<div style="margin-top:8px;">
+<input type="checkbox" class="freq" ${ssfData ? (ssfData.isRequired !== false ? 'checked' : '') : 'checked'}> <label style="font-size:12px; font-weight:bold; color:#c0392b;">सक्तीचे (Required)</label>
+</div>
+
 </div>
 `;
 document.getElementById('subsubfields_container_' + parentId).insertAdjacentHTML('beforeend', html);
@@ -2727,7 +2797,8 @@ label: String(el.querySelector('.fname').value).trim(),
 type: el.querySelector('.ftype').value,
 options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "",
 range: el.querySelector('.frange') ? el.querySelector('.frange').value : "",
-dependency: el.querySelector('.fdepend') ? el.querySelector('.fdepend').value : ""
+dependency: el.querySelector('.fdepend') ? el.querySelector('.fdepend').value : "",
+isRequired: el.querySelector('.freq').checked
 };
 if (fieldObj.type === 'group') {
 fieldObj.subFields = [];
@@ -2738,7 +2809,8 @@ label: String(sfEl.querySelector('.sfname').value).trim(),
 type: sfEl.querySelector('.sftype').value,
 options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "",
 range: sfEl.querySelector('.sfrange') ? sfEl.querySelector('.sfrange').value : "",
-dependency: sfEl.querySelector('.sfdepend') ? sfEl.querySelector('.sfdepend').value : ""
+dependency: sfEl.querySelector('.sfdepend') ? sfEl.querySelector('.sfdepend').value : "",
+isRequired: sfEl.querySelector('.freq').checked
 };
 if(sfObj.type === 'group') {
 sfObj.subFields = [];
@@ -2749,7 +2821,8 @@ label: String(ssfEl.querySelector('.ssfname').value).trim(),
 type: ssfEl.querySelector('.ssftype').value,
 options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "",
 range: ssfEl.querySelector('.ssfrange') ? ssfEl.querySelector('.ssfrange').value : "",
-dependency: ssfEl.querySelector('.ssfdepend') ? ssfEl.querySelector('.ssfdepend').value : ""
+dependency: ssfEl.querySelector('.ssfdepend') ? ssfEl.querySelector('.ssfdepend').value : "",
+isRequired: ssfEl.querySelector('.freq').checked
 });
 });
 }
