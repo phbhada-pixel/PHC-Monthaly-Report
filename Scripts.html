@@ -1,0 +1,69 @@
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+// --- NAVIGATION ROUTER ---
+function navigateTo(pageName) {
+  const appUrl = "YOUR_WEB_APP_URL_HERE"; // Paste your published script URL here
+  window.top.location.href = appUrl + "?page=" + pageName;
+}
+
+// --- DIRECT CLIENT-SIDE PDF DOWNLOAD ---
+function downloadReportPDF() {
+  const element = document.getElementById('reportTableContainer');
+  if (!element || element.innerHTML.trim() === "") return alert("अहवाल उपलब्ध नाही!");
+  
+  const opt = {
+      margin:       0.5,
+      filename:     `Report_${new Date().getTime()}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
+  };
+  
+  html2pdf().set(opt).from(element).save();
+}
+
+// --- UPDATED INPUT GENERATOR (Added Default 0) ---
+function generateInputHTML(f, id, label, areaId, val="") {
+  let html = "";
+  let fidAttr = f.fid ? `data-fid="${f.fid}"` : "";
+  let reqAttr = f.isRequired ? `data-required="true"` : "";
+  let safeDep = f.dependency ? String(f.dependency).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
+  let depAttr = safeDep ? `data-dependency="${safeDep}"` : "";
+  let safeForm = (f.options && f.type === 'sum') ? String(f.options).replace(/"/g, "&quot;").replace(/'/g, "&apos;") : "";
+  let formulaAttr = safeForm ? `data-formula="${safeForm}" data-sum-targets="${safeForm}"` : "";
+  let rangeAttr = f.range ? `data-range="${f.range}"` : "";
+
+  let onEvent = `oninput="this.style.border=''; processAllLogic('${areaId}')" onchange="this.style.border=''; processAllLogic('${areaId}')"`;
+
+  if (f.type === 'dropdown') {
+      html += `<select id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} ${onEvent}><option value="">-- निवडा --</option>`;
+      if(f.options) { f.options.split(',').forEach(opt => {
+          let o = opt.trim();
+          let sel = (o === val) ? "selected" : "";
+          if(o) html += `<option value="${o}" ${sel}>${o}</option>`;
+      }); }
+      html += `</select>`;
+  } else if(f.type === 'sum') {
+      html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${formulaAttr} value="${val}" readonly style="background:#e9ecef; font-weight:bold; color:var(--primary); cursor:not-allowed;" placeholder="Auto Calculation">`;
+  } else if(f.type === 'number') {
+      // 🟢 CHANGED: If value is empty, force default value to 0
+      let finalVal = val !== "" ? val : "0";
+      html += `<input type="number" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${rangeAttr} ${reqAttr} value="${finalVal}" ${onEvent}>`;
+  } else if(f.type === 'mobile') {
+      html += `<input type="tel" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} value="${val}" maxlength="10" pattern="[0-9]{10}" title="10 अंकी मोबाईल नंबर टाका" placeholder="10 अंकी नंबर" oninput="this.value=this.value.replace(/[^0-9]/g,''); this.style.border=''; processAllLogic('${areaId}');" onchange="this.style.border=''; processAllLogic('${areaId}')">`;
+  } else if(f.type === 'date') {
+      html += `<input type="date" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} value="${val}" ${onEvent}>`;
+  } else {
+      html += `<input type="text" id="${id}" data-label="${label}" ${fidAttr} ${depAttr} ${reqAttr} value="${val}" ${onEvent}>`;
+  }
+  return html;
+}
+
+// ==========================================
+// PASTE THE REST OF YOUR ORIGINAL JS HERE
+// Lines 524 to 2505 (extractFieldsFromForm, processAllLogic, fetchData, etc.)
+// Note: Since we are routing via URL now, you can remove the old switchTab logic.
+// ==========================================
+</script>
