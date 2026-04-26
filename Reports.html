@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHC Advance Management - Reports</title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+
+<div id="initialLoader">
+  <div class="spinner"></div>
+  <h3 style="color: var(--primary);">डेटा लोड होत आहे, कृपया प्रतीक्षा करा...</h3>
+</div>
+
+<div class="container hidden" id="mainApp">
+  <div id="netStatus" class="status-bar online">Online</div>
+
+  <div class="nav-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+    <button class="nav-tab" style="flex:1; background: #e9ecef;" onclick="navigateTo('entry')">⬅ 📝 डेटा एंट्री कडे जा</button>
+    <button class="nav-tab active" style="flex:1;">📊 रिपोर्ट्स</button>
+  </div>
+
+  <div id="reportsSection">
+    <h3>मासिक अहवाल डाउनलोड करा</h3>
+    
+    <div class="row-flex" style="margin-bottom: 15px;">
+      <div style="flex: 2;"><label>अहवाल निवडा:</label><select id="reportFormSelect"></select></div>
+    </div>
+    
+    <div class="row-flex" style="margin-bottom: 15px;">
+      <div>
+        <label>महिना:</label>
+        <select id="reportMonth">
+          <option value="सर्व">सर्व महिने</option><option value="जानेवारी">जानेवारी</option><option value="एप्रिल" selected>एप्रिल</option>
+        </select>
+      </div>
+      <div>
+        <label>वर्ष:</label>
+        <select id="reportYear">
+          <option value="सर्व">सर्व वर्षे</option><option value="2025">2025</option><option value="2026" selected>2026</option>
+        </select>
+      </div>
+    </div>
+    
+    <button class="btn-report" onclick="fetchReportData()">अहवाल तयार करा 📊</button>
+    <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत आहे, कृपया थांबा...</div>
+    
+    <div id="reportContentArea" class="hidden" style="margin-top: 20px;">
+      <div style="text-align: right; margin-bottom: 10px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="downloadReportPDF()" style="background:#dc3545; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px;">📄 PDF डाउनलोड करा</button>
+        <button onclick="downloadConsolidatedExcel()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px;">📥 Excel (.xlsx) डाउनलोड करा</button>
+      </div>
+      <div class="table-responsive" id="reportTableContainer"></div>
+    </div>
+  </div>
+</div>
+
+<?!= include('Scripts'); ?>
+</body>
+</html>
