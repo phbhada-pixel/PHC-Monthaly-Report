@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHC Advance Management</title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+
+<div id="initialLoader">
+  <div class="spinner"></div>
+  <h3 style="color: var(--primary);">डेटा लोड होत आहे, कृपया प्रतीक्षा करा...</h3>
+</div>
+
+<div class="container hidden" id="mainApp">
+  <div id="netStatus" class="status-bar online">Online</div>
+
+  <div class="nav-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+    <button class="nav-tab active" style="flex:1;">📝 डेटा एंट्री & ॲडमिन</button>
+    <button class="nav-tab" style="flex:1; background: #e9ecef;" onclick="navigateTo('reports')">📊 रिपोर्ट्स कडे जा ➡</button>
+  </div>
+
+  <div id="loginBox" class="hidden">
+    <h3>कर्मचारी लॉगिन</h3>
+    <input type="tel" id="mob" placeholder="मोबाईल नंबर">
+    <input type="password" id="pwd" placeholder="वैयक्तिक पासवर्ड">
+    <button class="btn-primary" onclick="handleLogin()">प्रवेश करा</button>
+  </div>
+
+  <div id="dashboardWrapper" class="hidden">
+    <div class="header-bar">
+      <div>
+        <h3 style="margin: 0;" id="uNameTitle">स्वागत आहे, <span id="uName"></span></h3>
+        <p id="uSub" style="margin: 2px 0 0 0; font-size: 13px; color: gray;"></p>
+      </div>
+      <div style="display:flex; gap:5px;">
+        <button class="btn-logout" style="background:#17a2b8;" onclick="openChangePassword()">पासवर्ड बदला</button>
+        <button class="btn-logout" onclick="logoutUser()">Log Out</button>
+      </div>
+    </div>
+
+    <div id="entrySection">
+      <label>फॉर्म निवडा:</label>
+      <select id="selForm" onchange="updateVillageDropdown(); loadDynamicFields();"></select>
+      <div id="dynamicFormArea"></div>
+      <button id="mainSaveBtn" class="btn-primary" onclick="saveDataToServer()" style="margin-top:20px;">माहिती जतन करा (Save to Cloud)</button>
+      <p id="syncStatus" style="text-align:center; font-size:14px; font-weight:bold; margin-top: 10px;"></p>
+    </div>
+
+    <div id="editSection" class="hidden">
+        </div>
+
+    <div id="adminSection" class="hidden">
+        </div>
+  </div>
+</div>
+
+<?!= include('Scripts'); ?>
+</body>
+</html>
