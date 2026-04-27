@@ -2166,11 +2166,19 @@ groupKeys.forEach((gKey) => {
 
         if(gRows.length === 0) {
             html += `<tr><td colspan="${showIndices.length+2}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
-        } else {
+       } else {
             gRows.forEach((row, i) => {
                 html += `<tr><td class="sticky-col" style="background:#fdfdfd; left:0;">${i+1}</td>`;
                 html += `<td class="sticky-col" style="background:#fdfdfd; left:45px;">${row[villageIdx] || "-"}</td>`;
-                showIndices.forEach(idx => { html += `<td>${row[idx] || "-"}</td>`; });
+                showIndices.forEach(idx => { 
+                    let cellVal = row[idx] !== undefined && row[idx] !== "" ? String(row[idx]) : "-";
+                    // 🟢 स्क्रीनवर दिसणाऱ्या तारखेचा फॉरमॅट (DD-MM-YYYY) करणे
+                    if (/^\d{4}-\d{2}-\d{2}/.test(cellVal)) {
+                        let dParts = cellVal.split('T')[0].split('-');
+                        cellVal = `${dParts[2]}-${dParts[1]}-${dParts[0]}`;
+                    }
+                    html += `<td>${cellVal}</td>`; 
+                });
                 html += `</tr>`;
             });
 
