@@ -202,7 +202,7 @@ input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 <label>भरलेले गाव / रेकॉर्ड निवडा (फक्त मागील ४८ तासांतील):</label>
 <select id="editVillageSelect"></select>
 
-<button class="btn-edit-tab" onclick="fetchRecordForEdit()" style="margin-top:15px; padding:12px;">माहिती मिळवा 🔍</button>
+<button class="btn-edit-tab" id="btnFetchEdit" onclick="fetchRecordForEdit()" style="margin-top:15px; padding:12px;">माहिती मिळवा 🔍</button>
 <div id="editLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा शोधत आहे...</div>
 
 <div id="editDynamicFormArea" class="hidden" style="margin-top: 20px;"></div>
@@ -382,6 +382,20 @@ function parseCustomDate(dateStr) {
     return NaN;
 }
 
+// 🟢 NEW: Time Lock Check Function (Next month 10th limit)
+function isMonthLocked(mStr, yStr) {
+    if (user && user.role === "Admin") return false; // ॲडमिनला कधीही बदल करता येईल
+    const months = ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"];
+    let mIdx = months.indexOf(mStr);
+    if (mIdx === -1) return false;
+    let year = parseInt(yStr);
+
+    let lockDate = new Date(year, mIdx + 1, 11, 0, 0, 0); // पुढील महिन्याची ११ तारीख (म्हणजे १० तारीख संपल्यावर)
+    let now = new Date();
+
+    return now >= lockDate;
+}
+
 function getFieldValueByFid(containerId, fid) {
     let container = document.getElementById(containerId);
     if(!container) return `""`;
@@ -546,13 +560,10 @@ function evaluateRanges(containerId) {
 
         if(isError) {
             input.style.border = "2px solid red";
-            input.value = ""; 
             input.classList.add('error-input');
-            input.setAttribute("placeholder", "अवैध संख्या!");
         } else {
             input.style.border = "1px solid #ccc";
             input.classList.remove('error-input');
-            input.removeAttribute("placeholder");
         }
     });
 }
@@ -950,7 +961,6 @@ document.getElementById('dashboardWrapper').classList.remove('hidden');
 document.getElementById('uName').innerText = user.name + " (" + user.role + ")";
 document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
 
-// 🟢 NEW: Viewer/Manager Check for Tabs
 if(user.role === "Admin") {
     document.getElementById('tabEntry').classList.remove('hidden');
     document.getElementById('tabEdit').classList.remove('hidden');
@@ -958,11 +968,9 @@ if(user.role === "Admin") {
     document.getElementById('adminRoleFilterDiv').style.display = "flex";
     renderFormsListForEdit();
 } else if (user.role === "VIEWER" || user.role === "MANAGER") {
-    // Hide Entry and Edit tabs
     document.getElementById('tabEntry').classList.add('hidden');
     document.getElementById('tabEdit').classList.add('hidden');
     document.getElementById('tabAdmin').classList.add('hidden');
-    // Force switch to Reports tab
     switchTab('reports');
 } else {
     document.getElementById('tabEntry').classList.remove('hidden');
@@ -1201,7 +1209,16 @@ const month = document.getElementById('selMonth').value;
 const year = document.getElementById('selYear').value;
 
 area.innerHTML = "";
+document.getElementById('mainSaveBtn').style.display = 'none';
+
 if(!fId || !vId) return;
+
+// 🟢 NEW: Time Lock Check (Next month 10th limit)
+if (isMonthLocked(month, year)) {
+    area.innerHTML = "<p style='color:red; text-align:center; font-weight:bold; font-size:18px; padding:20px; border:2px solid red; border-radius:8px; background:#fff;'>⏳ क्षमस्व! या महिन्याची माहिती भरण्याची किंवा बदलण्याची मुदत (पुढील महिन्याची १० तारीख) संपली आहे.</p>";
+    return;
+}
+document.getElementById('mainSaveBtn').style.display = 'block';
 
 let isBulk = (vId === "ALL_VILLAGES");
 
@@ -1211,6 +1228,7 @@ let availableVillages = Array.from(document.getElementById('selVillage').options
 
 if (availableVillages.length === 0 && isBulk) {
 area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी सर्व गावांचा डेटा आधीच भरून पूर्ण झाला आहे!</p>";
+document.getElementById('mainSaveBtn').style.display = 'none';
 return;
 }
 
@@ -1252,6 +1270,7 @@ renderedFormsCount++;
 
 if (renderedFormsCount === 0) {
 area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी सर्व आकडेवारी फॉर्म्स आधीच भरून पूर्ण झाले आहेत!</p>";
+document.getElementById('mainSaveBtn').style.display = 'none';
 } else {
 area.innerHTML = allHtml;
 }
@@ -1273,6 +1292,7 @@ if(!isFormFilledForVillage(f, vId, month, year)) formSpecificVillages.push(vId);
 
 if(formSpecificVillages.length === 0) {
 area.innerHTML = "<p style='color:green; text-align:center; font-weight:bold; font-size:18px;'>🎉 अभिनंदन! या महिन्यासाठी हा फॉर्म भरून पूर्ण झाला आहे!</p>";
+document.getElementById('mainSaveBtn').style.display = 'none';
 return;
 }
 
@@ -1284,6 +1304,7 @@ area.innerHTML = `<div id="${formContainerId}">` + generateFormHTML(f, "single",
 } else {
 if(isBulk) {
 area.innerHTML = "<p style='color:red; text-align:center; font-weight:bold; padding:15px;'>⚠️ यादी (List) प्रकारच्या फॉर्मसाठी 'सर्व गावे' निवडता येत नाहीत. कृपया ड्रॉपडाऊनमधून एक विशिष्ट गाव निवडा.</p>";
+document.getElementById('mainSaveBtn').style.display = 'none';
 return;
 }
 
@@ -1313,6 +1334,11 @@ const month = document.getElementById('selMonth').value;
 const year = document.getElementById('selYear').value;
 
 if(!fId || !vName) { alert("कृपया फॉर्म आणि गाव निवडा!"); return; }
+
+if (isMonthLocked(month, year)) {
+    alert("⏳ क्षमस्व! मुदत संपली आहे.");
+    return;
+}
 
 let isBulk = (vName === "ALL_VILLAGES");
 let baseVillages = [];
@@ -1491,6 +1517,16 @@ const year = document.getElementById('editYear').value;
 vSel.innerHTML = '<option value="">-- भरलेले गाव / रेकॉर्ड निवडा --</option>';
 if(!user || !fId) return;
 
+if (isMonthLocked(month, year)) {
+    vSel.innerHTML = '<option value="">-- मुदत संपली आहे --</option>';
+    document.getElementById('editDynamicFormArea').classList.add('hidden');
+    document.getElementById('editSaveBtn').classList.add('hidden');
+    document.getElementById('btnFetchEdit').style.display = 'none';
+    return;
+} else {
+    document.getElementById('btnFetchEdit').style.display = 'block';
+}
+
 const f = masterData.forms.find(x => x.FormID === fId);
 let allowedRoles = f && f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
 let isAll = allowedRoles.includes("ALL");
@@ -1534,6 +1570,11 @@ const year = document.getElementById('editYear').value;
 const village = document.getElementById('editVillageSelect').value;
 
 if(!formID || !village) { alert("कृपया फॉर्म आणि गाव निवडा."); return; }
+
+if (isMonthLocked(month, year)) {
+    alert("⏳ क्षमस्व! या महिन्याची माहिती बदलण्याची मुदत (पुढील महिन्याची १० तारीख) संपली आहे.");
+    return;
+}
 
 document.getElementById('editLoader').style.display = "block";
 document.getElementById('editDynamicFormArea').classList.add('hidden');
@@ -1653,6 +1694,14 @@ if (hasRangeError) {
     return;
 }
 
+const month = document.getElementById('editMonth').value;
+const year = document.getElementById('editYear').value;
+
+if (isMonthLocked(month, year)) {
+    alert("⏳ क्षमस्व! या महिन्याची माहिती बदलण्याची मुदत संपली आहे.");
+    return;
+}
+
 saveBtn.disabled = true;
 isSaving = true;
 
@@ -1660,8 +1709,6 @@ try {
 processAllLogic('editDynamicFormArea');
 
 const fId = document.getElementById('editFormSelect').value;
-const month = document.getElementById('editMonth').value;
-const year = document.getElementById('editYear').value;
 const vName = document.getElementById('editVillageSelect').value;
 const statusText = document.getElementById('editSyncStatus');
 
@@ -2468,7 +2515,7 @@ groupKeys.forEach(gKey => {
                 currentR++;
             });
 
-            if(isStats && gRows.length > 0) {
+            if(isStats) {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
                 let totalRow = ["एकूण", ""];
