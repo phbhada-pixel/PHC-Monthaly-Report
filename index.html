@@ -96,7 +96,7 @@ input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 
 <div id="initialLoader">
     <div class="spinner"></div>
-    <h3 style="color: var(--primary);">डेटा लोड होत आहे...</h3>
+    <h3 style="color: var(--primary);">डेटा लोड होत आहे, कृपया प्रतीक्षा करा...</h3>
 </div>
 
 <div class="container hidden" id="mainApp">
@@ -319,12 +319,10 @@ let currentReports = [];
 let isSaving = false;
 let globalFieldCounter = 1;
 
-// 🟢 NEW: Zero-Wait Direct Loading with Cache
 window.onload = function() {
     document.getElementById('initialLoader').style.display = 'none'; 
     document.getElementById('mainApp').classList.remove('hidden'); 
     
-    // १. कॅशेमधून जुना डेटा लोड करा
     const cachedData = localStorage.getItem("phc_master_data");
     if (cachedData) {
         try { masterData = JSON.parse(cachedData); } catch(e){}
@@ -333,9 +331,8 @@ window.onload = function() {
     const savedUser = localStorage.getItem("phc_user_session");
     if(savedUser) { 
         user = JSON.parse(savedUser); 
-        showAppAfterLogin(); // २. थेट ड्रॉपडाऊन भरा
+        showAppAfterLogin(); 
         
-        // ३. बॅकग्राउंडला नवीन डेटा तपासा
         document.getElementById('netStatus').innerText = "डेटा अपडेट होत आहे...";
         document.getElementById('netStatus').style.backgroundColor = "#fff3cd";
         document.getElementById('netStatus').style.color = "#856404";
@@ -920,7 +917,7 @@ if(textResponse.trim().startsWith("<")) throw new Error("Google Blocked Request"
 const d = JSON.parse(textResponse);
 if(d.success) {
 masterData = d;
-localStorage.setItem("phc_master_data", JSON.stringify(d)); // Update Cache
+localStorage.setItem("phc_master_data", JSON.stringify(d)); 
 updateFormDropdowns();
 renderFormsListForEdit();
 }
@@ -953,11 +950,26 @@ document.getElementById('dashboardWrapper').classList.remove('hidden');
 document.getElementById('uName').innerText = user.name + " (" + user.role + ")";
 document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
 
+// 🟢 NEW: Viewer/Manager Check for Tabs
 if(user.role === "Admin") {
-document.getElementById('tabAdmin').classList.remove('hidden');
-document.getElementById('adminRoleFilterDiv').style.display = "flex";
-renderFormsListForEdit();
+    document.getElementById('tabEntry').classList.remove('hidden');
+    document.getElementById('tabEdit').classList.remove('hidden');
+    document.getElementById('tabAdmin').classList.remove('hidden');
+    document.getElementById('adminRoleFilterDiv').style.display = "flex";
+    renderFormsListForEdit();
+} else if (user.role === "VIEWER" || user.role === "MANAGER") {
+    // Hide Entry and Edit tabs
+    document.getElementById('tabEntry').classList.add('hidden');
+    document.getElementById('tabEdit').classList.add('hidden');
+    document.getElementById('tabAdmin').classList.add('hidden');
+    // Force switch to Reports tab
+    switchTab('reports');
+} else {
+    document.getElementById('tabEntry').classList.remove('hidden');
+    document.getElementById('tabEdit').classList.remove('hidden');
+    document.getElementById('tabAdmin').classList.add('hidden');
 }
+
 updateFormDropdowns();
 updateVillageDropdown();
 updateEditVillageDropdown();
@@ -1085,7 +1097,7 @@ function updateFormDropdowns() {
         let isInactive = isFormInactive(f);
         let formType = String(f.FormType).trim();
 
-        if (userRole === "ADMIN" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
+        if (userRole === "ADMIN" || userRole === "VIEWER" || userRole === "MANAGER" || allowedRoles.includes("ALL") || allowedRoles.includes(userRole)) {
             if (isInactive && userRole !== "ADMIN") return;
 
             let isFullyFilled = false;
@@ -1093,7 +1105,7 @@ function updateFormDropdowns() {
                 let hasVillages = false;
                 let fullyFilledCheck = true;
                 masterData.villages.forEach(v => {
-                    const belongsToSubCenter = (userRole === "ADMIN") ? true : (String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all");
+                    const belongsToSubCenter = (userRole === "ADMIN" || userRole === "VIEWER" || userRole === "MANAGER") ? true : (String(v.SubCenterID).trim().toLowerCase() === String(user.subcenter).trim().toLowerCase() || String(v.SubCenterID).trim().toLowerCase() === "all");
                     if(belongsToSubCenter) {
                         hasVillages = true;
                         if (!isFormFilledForVillage(f, v.VillageName, entryMonth, entryYear)) {
@@ -1773,7 +1785,7 @@ const selYear = document.getElementById('reportYear').value;
 if(!formID) { alert("कृपया अहवाल निवडा"); return; }
 
 let filterRole = "सर्व";
-if(user && user.role === "Admin" && document.getElementById('reportRoleFilter')) {
+if((user.role === "Admin" || user.role === "VIEWER" || user.role === "MANAGER") && document.getElementById('reportRoleFilter')) {
 filterRole = document.getElementById('reportRoleFilter').value;
 }
 
@@ -2166,13 +2178,12 @@ groupKeys.forEach((gKey) => {
 
         if(gRows.length === 0) {
             html += `<tr><td colspan="${showIndices.length+2}" style="color:red; font-weight:bold; font-size:16px;">निरंक (Nil)</td></tr>`;
-       } else {
+        } else {
             gRows.forEach((row, i) => {
                 html += `<tr><td class="sticky-col" style="background:#fdfdfd; left:0;">${i+1}</td>`;
                 html += `<td class="sticky-col" style="background:#fdfdfd; left:45px;">${row[villageIdx] || "-"}</td>`;
                 showIndices.forEach(idx => { 
                     let cellVal = row[idx] !== undefined && row[idx] !== "" ? String(row[idx]) : "-";
-                    // 🟢 स्क्रीनवर दिसणाऱ्या तारखेचा फॉरमॅट (DD-MM-YYYY) करणे
                     if (/^\d{4}-\d{2}-\d{2}/.test(cellVal)) {
                         let dParts = cellVal.split('T')[0].split('-');
                         cellVal = `${dParts[2]}-${dParts[1]}-${dParts[0]}`;
@@ -2207,7 +2218,7 @@ let month = document.getElementById('reportMonth').value;
 let year = document.getElementById('reportYear').value;
 let filterRole = document.getElementById('reportRoleFilter') ? document.getElementById('reportRoleFilter').value : "सर्व";
 let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year}`;
-if(user.role === 'Admin' && filterRole !== 'सर्व') periodText += ` (${filterRole})`;
+if((user.role === 'Admin' || user.role === 'VIEWER' || user.role === 'MANAGER') && filterRole !== 'सर्व') periodText += ` (${filterRole})`;
 
 let wb = XLSX.utils.book_new();
 
@@ -2447,20 +2458,17 @@ groupKeys.forEach(gKey => {
                 let rowData = [i+1, row[villageIdx] || "-"];
                 showIndices.forEach(idx => {
                     let cellValue = row[idx] !== undefined && row[idx] !== "" ? String(row[idx]) : "-";
-                    
-                    // 🟢 तारखेचा फॉरमॅट (YYYY-MM-DD) बदलून (DD-MM-YYYY) करणे
                     if (/^\d{4}-\d{2}-\d{2}/.test(cellValue)) {
                         let dParts = cellValue.split('T')[0].split('-');
                         cellValue = `${dParts[2]}-${dParts[1]}-${dParts[0]}`;
                     }
-                    
                     rowData.push(cellValue);
                 });
                 sheetData.push(rowData);
                 currentR++;
             });
 
-            if(isStats) {
+            if(isStats && gRows.length > 0) {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
                 let totalRow = ["एकूण", ""];
@@ -2713,6 +2721,11 @@ ${data && data.type==='sum' ? 'सूत्र लिहा (उदा. f_1 + f_
 <input type="text" placeholder="${data && data.type==='sum' ? 'f_1 + f_2 / 2' : 'उदा. होय, नाही'}" class="foptions" value="${data ? (data.options || '') : ''}">
 </div>
 
+<div id="def_${id}" style="margin-top:10px; background:#f5eef8; padding:10px; border-radius:5px; border-left: 3px solid #8e44ad;">
+<label style="font-size:12px; font-weight:bold; color:#8e44ad;">📌 डिफॉल्ट व्हॅल्यू (Default Value - Optional):</label>
+<input type="text" placeholder="उदा. 0 किंवा लागू नाही" class="fdefault" style="width: 100%; margin-top: 5px; font-size:12px;" value="${data && data.defaultValue !== undefined ? data.defaultValue : ''}">
+</div>
+
 <div id="rng_${id}" style="display:${data && data.type==='number' ? 'block' : 'none'}; margin-top:10px; background:#e8f5e9; padding:10px; border-radius:5px; border-left: 3px solid #2e7d32;">
 <label style="font-size:12px; font-weight:bold; color:#2e7d32;">🔢 संख्या मर्यादा / Range (Optional):<br><span style="font-weight:normal; font-size:11px;">उदा.
 जर वय 15 ते 45 च्या दरम्यान हवे असेल तर खाली 15-45 लिहा.</span></label>
@@ -2765,6 +2778,11 @@ const html = `
 ${sfData && sfData.type==='sum' ? 'सूत्र (f_1 + f_2):' : 'पर्याय लिहा:'}
 </label>
 <input type="text" id="sfopts_${sfId}" placeholder="..." class="sfopts" style="width: 100%; margin-top: 2px;" value="${sfData ? (sfData.options || '') : ''}">
+</div>
+
+<div id="sfdef_container_${sfId}" style="margin-top: 5px; background:#f5eef8; padding:8px; border-radius:4px; border-left: 2px solid #8e44ad;">
+<label style="font-size:11px; font-weight:bold; color:#8e44ad;">📌 डिफॉल्ट व्हॅल्यू (Optional):</label>
+<input type="text" placeholder="उदा. 0" class="sfdefault" style="width: 100%; margin-top: 2px; font-size:12px;" value="${sfData && sfData.defaultValue !== undefined ? sfData.defaultValue : ''}">
 </div>
 
 <div id="sfrng_container_${sfId}" style="display:${sfData && sfData.type==='number' ? 'block' : 'none'}; margin-top: 5px; background:#e8f5e9; padding:8px; border-radius:4px; border-left: 2px solid #2e7d32;">
@@ -2821,6 +2839,10 @@ const html = `
 value="${ssfData ? (ssfData.options || '') : ''}">
 </div>
 
+<div id="ssfdef_container_${ssfId}" style="margin-top: 5px; background:#f5eef8; padding:6px; border-radius:4px; border-left: 2px solid #8e44ad;">
+<input type="text" placeholder="डिफॉल्ट व्हॅल्यू..." class="ssfdefault" style="width: 100%; font-size:12px; padding:4px;" value="${ssfData && ssfData.defaultValue !== undefined ? ssfData.defaultValue : ''}">
+</div>
+
 <div id="ssfrng_container_${ssfId}" style="display:${ssfData && ssfData.type==='number' ? 'block' : 'none'}; margin-top: 5px; background:#e8f5e9; padding:6px; border-radius:4px; border-left: 2px solid #2e7d32;">
 <input type="text" placeholder="संख्या मर्यादा (उदा. 15-45)" class="ssfrange" style="width: 100%; font-size:12px; padding:4px; margin-top:2px;" value="${ssfData ? (ssfData.range || '') : ''}">
 </div>
@@ -2848,7 +2870,8 @@ type: el.querySelector('.ftype').value,
 options: el.querySelector('.foptions') ? el.querySelector('.foptions').value : "",
 range: el.querySelector('.frange') ? el.querySelector('.frange').value : "",
 dependency: el.querySelector('.fdepend') ? el.querySelector('.fdepend').value : "",
-isRequired: el.querySelector('.freq').checked
+isRequired: el.querySelector('.freq').checked,
+defaultValue: el.querySelector('.fdefault') ? el.querySelector('.fdefault').value : ""
 };
 if (fieldObj.type === 'group') {
 fieldObj.subFields = [];
@@ -2860,7 +2883,8 @@ type: sfEl.querySelector('.sftype').value,
 options: sfEl.querySelector('.sfopts') ? sfEl.querySelector('.sfopts').value : "",
 range: sfEl.querySelector('.sfrange') ? sfEl.querySelector('.sfrange').value : "",
 dependency: sfEl.querySelector('.sfdepend') ? sfEl.querySelector('.sfdepend').value : "",
-isRequired: sfEl.querySelector('.freq').checked
+isRequired: sfEl.querySelector('.freq').checked,
+defaultValue: sfEl.querySelector('.sfdefault') ? sfEl.querySelector('.sfdefault').value : ""
 };
 if(sfObj.type === 'group') {
 sfObj.subFields = [];
@@ -2872,7 +2896,8 @@ type: ssfEl.querySelector('.ssftype').value,
 options: ssfEl.querySelector('.ssfopts') ? ssfEl.querySelector('.ssfopts').value : "",
 range: ssfEl.querySelector('.ssfrange') ? ssfEl.querySelector('.ssfrange').value : "",
 dependency: ssfEl.querySelector('.ssfdepend') ? ssfEl.querySelector('.ssfdepend').value : "",
-isRequired: ssfEl.querySelector('.freq').checked
+isRequired: ssfEl.querySelector('.freq').checked,
+defaultValue: ssfEl.querySelector('.ssfdefault') ? ssfEl.querySelector('.ssfdefault').value : ""
 });
 });
 }
