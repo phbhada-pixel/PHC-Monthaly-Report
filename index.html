@@ -307,7 +307,7 @@ input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 
 <script>
 // 🌟 Configuration 🌟
-const GAS_URL = "https://script.google.com/macros/s/AKfycbynqi8xrHlif5PxyRZklUf61kFB4MC6He7ptaEn8sPrA54biz-ToijER10utNP7mF68/exec";
+const GAS_URL = "तुमची_नवीन_कॉपी_केलेली_लिंक_येथे_पेस्ट_करा"; // ⚠️ येथे तुमची स्वतःची Apps Script ची लिंक टाका!
 
 const CONFIG = {
 hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)", "कर्मचाऱ्याचे नाव"]
@@ -382,15 +382,14 @@ function parseCustomDate(dateStr) {
     return NaN;
 }
 
-// 🟢 NEW: Time Lock Check Function (Next month 10th limit)
 function isMonthLocked(mStr, yStr) {
-    if (user && user.role === "Admin") return false; // ॲडमिनला कधीही बदल करता येईल
+    if (user && user.role === "Admin") return false; 
     const months = ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"];
     let mIdx = months.indexOf(mStr);
     if (mIdx === -1) return false;
     let year = parseInt(yStr);
 
-    let lockDate = new Date(year, mIdx + 1, 11, 0, 0, 0); // पुढील महिन्याची ११ तारीख (म्हणजे १० तारीख संपल्यावर)
+    let lockDate = new Date(year, mIdx + 1, 11, 0, 0, 0); 
     let now = new Date();
 
     return now >= lockDate;
@@ -961,6 +960,7 @@ document.getElementById('dashboardWrapper').classList.remove('hidden');
 document.getElementById('uName').innerText = user.name + " (" + user.role + ")";
 document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
 
+// 🟢 FIX: Allow Admin, Manager, Viewer to see the adminRoleFilterDiv
 if(user.role === "Admin") {
     document.getElementById('tabEntry').classList.remove('hidden');
     document.getElementById('tabEdit').classList.remove('hidden');
@@ -971,6 +971,7 @@ if(user.role === "Admin") {
     document.getElementById('tabEntry').classList.add('hidden');
     document.getElementById('tabEdit').classList.add('hidden');
     document.getElementById('tabAdmin').classList.add('hidden');
+    document.getElementById('adminRoleFilterDiv').style.display = "flex"; // 🟢 NEW
     switchTab('reports');
 } else {
     document.getElementById('tabEntry').classList.remove('hidden');
@@ -1213,7 +1214,6 @@ document.getElementById('mainSaveBtn').style.display = 'none';
 
 if(!fId || !vId) return;
 
-// 🟢 NEW: Time Lock Check (Next month 10th limit)
 if (isMonthLocked(month, year)) {
     area.innerHTML = "<p style='color:red; text-align:center; font-weight:bold; font-size:18px; padding:20px; border:2px solid red; border-radius:8px; background:#fff;'>⏳ क्षमस्व! या महिन्याची माहिती भरण्याची किंवा बदलण्याची मुदत (पुढील महिन्याची १० तारीख) संपली आहे.</p>";
     return;
