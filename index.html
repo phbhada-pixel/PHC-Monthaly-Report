@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PHC Advance Management</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
 :root { --primary: #00705a; --secondary: #0056b3; --bg: #f4f7f6; }
@@ -34,8 +35,8 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 
 .table-responsive { width: 100%; overflow-x: auto; margin-top: 15px; }
 .report-table { width: 100%; border-collapse: collapse; min-width: 600px; background: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid #ddd; }
-.report-table th { padding: 10px; text-align: center; white-space: nowrap; border: 1px solid #ddd; }
-.report-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 14px; color: #333; text-align: center; }
+.report-table th { padding: 10px; text-align: center; white-space: nowrap; border: 1px solid #ddd; font-size: 13px; background-color: #00705a; color: white; }
+.report-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 13px; color: #333; text-align: center; }
 .report-table tr:nth-child(even) { background-color: #f9f9f9; }
 .report-table tr:hover { background-color: #f1f1f1; }
 
@@ -90,6 +91,24 @@ button:disabled { background: #ccc !important; color: #666 !important; cursor: n
 input::placeholder { color: #999; }
 input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 .req-star { color: red; font-weight: bold; margin-left: 3px; font-size: 16px; }
+
+/* 🟢 PDF Print Styling */
+.pdf-group-header {
+    background: #f8f9fa;
+    color: #c0392b;
+    padding: 10px;
+    font-weight: bold;
+    border-bottom: 2px solid #c0392b;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    text-align: left;
+    font-size: 16px;
+}
+.pdf-container {
+    background: white;
+    padding: 20px;
+    font-family: 'Segoe UI', sans-serif;
+}
 </style>
 </head>
 <body>
@@ -253,7 +272,7 @@ input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 </div>
 <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत आहे, कृपया थांबा...</div>
 <div id="reportContentArea" class="hidden" style="margin-top: 20px;">
-<div style="text-align: right; margin-bottom: 10px;">
+<div id="downloadButtonsArea" style="text-align: right; margin-bottom: 10px;">
 <button onclick="downloadConsolidatedExcel()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 Excel (.xlsx) डाउनलोड करा</button>
 </div>
 <div class="table-responsive" id="reportTableContainer"></div>
@@ -316,7 +335,7 @@ const CONFIG = {
 hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)", "कर्मचाऱ्याचे नाव"]
 };
 
-let masterData = { forms: [], villages: [], filledStats: [], users: [] }; // added users array
+let masterData = { forms: [], villages: [], filledStats: [], users: [] }; 
 let user = null;
 let currentReports = [];
 let isSaving = false;
@@ -562,13 +581,10 @@ function evaluateRanges(containerId) {
 
         if(isError) {
             input.style.border = "2px solid red";
-            input.value = ""; 
             input.classList.add('error-input');
-            input.setAttribute("placeholder", "अवैध संख्या!");
         } else {
             input.style.border = "1px solid #ccc";
             input.classList.remove('error-input');
-            input.removeAttribute("placeholder");
         }
     });
 }
@@ -1099,7 +1115,7 @@ function updateFormDropdowns() {
         selForm.innerHTML += '<option id="opt_all_stats" value="ALL_STATS" style="font-weight:bold; color:#d35400;">📝 सर्व आकडेवारी अहवाल एकत्रित भरा (All Stats)</option>';
     }
     if(editForm) editForm.innerHTML = '<option value="">-- निवडा --</option>';
-    if(repForm) repForm.innerHTML = '<option value="">-- निवडा --</option><option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
+    if(repForm) repForm.innerHTML = '<option value="ALL" style="font-weight:bold; color:var(--primary);">सर्व अहवाल एकत्रित (All Forms)</option>';
 
     if (!masterData || !masterData.forms) return;
 
@@ -1777,6 +1793,125 @@ isSaving = false;
 }
 }
 
+// 🟢 NEW: Pending Report Generation
+function generatePendingReport() {
+    const selMonth = document.getElementById('reportMonth').value;
+    const selYear = document.getElementById('reportYear').value;
+    const reportFormSelect = document.getElementById('reportFormSelect').value;
+    
+    if (selMonth === "सर्व" || selYear === "सर्व") {
+        alert("अपूर्ण अहवाल पाहण्यासाठी कृपया विशिष्ट 'महिना' आणि 'वर्ष' निवडा!");
+        return;
+    }
+
+    if (!masterData.users || masterData.users.length === 0) {
+        alert("कर्मचाऱ्यांची माहिती लोड होऊ शकली नाही. कृपया पेज रिफ्रेश करा.");
+        return;
+    }
+
+    let groupedData = {}; // { "Form Name": [list of pending info] }
+    let filterRole = document.getElementById('reportRoleFilter') ? document.getElementById('reportRoleFilter').value : "सर्व";
+
+    let formsToCheck = masterData.forms.filter(f => !isFormInactive(f) && String(f.FormType).trim() !== 'List');
+    
+    if(reportFormSelect !== "ALL" && reportFormSelect !== "") {
+        formsToCheck = formsToCheck.filter(f => f.FormID === reportFormSelect);
+    }
+
+    formsToCheck.forEach(f => {
+        let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
+        let isAllForm = allowedRoles.includes("ALL");
+        groupedData[f.FormName] = [];
+
+        masterData.users.forEach(u => {
+            if (filterRole !== "सर्व" && filterRole !== "ALL" && u.role !== filterRole) return;
+            if (isAllForm || allowedRoles.includes(u.role)) {
+                let userVillages = masterData.villages.filter(v => String(v.SubCenterID).trim().toLowerCase() === String(u.subcenter).trim().toLowerCase());
+                userVillages.forEach(v => {
+                    let isFilled = masterData.filledStats.some(h => {
+                        return h.formID === f.FormID && 
+                               String(h.village).trim() === String(v.VillageName).trim() && 
+                               String(h.month).trim() === selMonth && 
+                               String(h.year).trim() === selYear;
+                    });
+                    if (!isFilled) {
+                        groupedData[f.FormName].push({
+                            empName: u.name,
+                            role: u.role,
+                            subcenter: u.subcenter,
+                            village: v.VillageName
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    let container = document.getElementById('reportTableContainer');
+    let downArea = document.getElementById('downloadButtonsArea');
+    downArea.innerHTML = `<button onclick="downloadPendingPDF()" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 अहवाल PDF मध्ये डाउनलोड करा</button>`;
+    
+    let html = `<div id="pdfExportArea" class="pdf-container">`;
+    html += `<h2 style="text-align:center; color:#c0392b; border-bottom: 2px solid #ccc; padding-bottom:10px;">अपूर्ण अहवाल यादी (${selMonth} ${selYear})</h2>`;
+    
+    let hasData = false;
+    for(let fName in groupedData) {
+        if(groupedData[fName].length > 0) {
+            hasData = true;
+            html += `<div class="pdf-group-header">📄 फॉर्म: ${fName}</div>`;
+            html += `<table class="report-table" style="width:100%; border-collapse:collapse; margin-bottom:30px;">`;
+            html += `<thead style="background:#f4f7f6;"><tr>
+                <th style="border: 1px solid #ccc; padding: 8px;">अ.क्र.</th>
+                <th style="border: 1px solid #ccc; padding: 8px;">उपकेंद्र</th>
+                <th style="border: 1px solid #ccc; padding: 8px;">कर्मचारी</th>
+                <th style="border: 1px solid #ccc; padding: 8px;">पद</th>
+                <th style="border: 1px solid #ccc; padding: 8px;">गाव</th>
+            </tr></thead><tbody>`;
+            
+            // Sort by Subcenter -> Village
+            groupedData[fName].sort((a,b) => {
+                if(a.subcenter !== b.subcenter) return a.subcenter.localeCompare(b.subcenter);
+                return a.village.localeCompare(b.village);
+            });
+
+            groupedData[fName].forEach((p, idx) => {
+                html += `<tr>
+                    <td style="border: 1px solid #ccc; padding: 8px;">${idx + 1}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px;">${p.subcenter}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px;">${p.empName}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px;">${p.role}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px; font-weight:bold;">${p.village}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+        }
+    }
+
+    if(!hasData) {
+        html = `<h3 style="text-align:center; color:green; padding:30px;">🎉 उत्कृष्ट! ${selMonth} ${selYear} मधील सर्व कर्मचाऱ्यांनी त्यांचे अहवाल १००% पूर्ण भरले आहेत.</h3>`;
+        downArea.innerHTML = "";
+    }
+    
+    html += `</div>`;
+    container.innerHTML = html;
+    document.getElementById('reportContentArea').classList.remove('hidden');
+}
+
+// 🟢 NEW: Direct PDF Download
+function downloadPendingPDF() {
+    const element = document.getElementById('pdfExportArea');
+    const selMonth = document.getElementById('reportMonth').value;
+    const selYear = document.getElementById('reportYear').value;
+    const opt = {
+        margin:       10,
+        filename:     `अपूर्ण_अहवाल_${selMonth}_${selYear}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
+}
+
 function getTotalsRow(data, headers, showIndices) {
 let totals = Array(headers.length).fill(0);
 let isNumericCol = Array(headers.length).fill(false);
@@ -1805,152 +1940,6 @@ totals[c] = colSum;
 }
 }
 return { totals, isNumericCol };
-}
-
-function getProgressiveTargetMonthsAndYears(selM, selY) {
-    const months = ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"];
-    const fyStartMonthIdx = 3; 
-    let selectedMonthIdx = months.indexOf(selM);
-    let sYear = parseInt(selY);
-
-    let result = [];
-    if (selectedMonthIdx >= fyStartMonthIdx) {
-        for(let i = fyStartMonthIdx; i <= selectedMonthIdx; i++) {
-            result.push({m: months[i], y: String(sYear)});
-        }
-    } else {
-        for(let i = fyStartMonthIdx; i <= 11; i++) {
-            result.push({m: months[i], y: String(sYear - 1)});
-        }
-        for(let i = 0; i <= selectedMonthIdx; i++) {
-            result.push({m: months[i], y: String(sYear)});
-        }
-    }
-    return result;
-}
-
-// 🟢 NEW: Pending Report Function
-function generatePendingReport() {
-    const selMonth = document.getElementById('reportMonth').value;
-    const selYear = document.getElementById('reportYear').value;
-    
-    if (selMonth === "सर्व" || selYear === "सर्व") {
-        alert("अपूर्ण अहवाल पाहण्यासाठी कृपया विशिष्ट 'महिना' आणि 'वर्ष' निवडा!");
-        return;
-    }
-
-    if (!masterData.users || masterData.users.length === 0) {
-        alert("कर्मचाऱ्यांची माहिती लोड होऊ शकली नाही. कृपया पेज रिफ्रेश करा.");
-        return;
-    }
-
-    let pendingList = [];
-    let filterRole = document.getElementById('reportRoleFilter') ? document.getElementById('reportRoleFilter').value : "सर्व";
-
-    // Loop through forms
-    masterData.forms.forEach(f => {
-        let isInactive = isFormInactive(f);
-        if (isInactive) return; // Skip inactive forms
-        
-        let formTypeStr = String(f.FormType).trim();
-        // Skip List forms for subcenter-wise village check since List forms are generally continuous registers
-        if(formTypeStr === 'List') return; 
-
-        let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
-        let isAllForm = allowedRoles.includes("ALL");
-
-        // Loop through all safe users (ANM, MPW, CHO)
-        masterData.users.forEach(u => {
-            if (filterRole !== "सर्व" && filterRole !== "ALL" && u.role !== filterRole) return;
-
-            // Does this user have access to this form?
-            if (isAllForm || allowedRoles.includes(u.role)) {
-                
-                // Find villages for this user's subcenter
-                let userVillages = masterData.villages.filter(v => String(v.SubCenterID).trim().toLowerCase() === String(u.subcenter).trim().toLowerCase());
-                
-                userVillages.forEach(v => {
-                    // Check if this specific village + form + month + year is in filledStats
-                    let isFilled = masterData.filledStats.some(h => {
-                        return h.formID === f.FormID && 
-                               String(h.village).trim() === String(v.VillageName).trim() && 
-                               String(h.month).trim() === selMonth && 
-                               String(h.year).trim() === selYear;
-                    });
-
-                    if (!isFilled) {
-                        pendingList.push({
-                            empName: u.name,
-                            role: u.role,
-                            subcenter: u.subcenter,
-                            village: v.VillageName,
-                            formName: f.FormName
-                        });
-                    }
-                });
-            }
-        });
-    });
-
-    if (pendingList.length === 0) {
-        alert(`🎉 उत्कृष्ट! ${selMonth} ${selYear} मधील सर्व कर्मचाऱ्यांनी त्यांचे अहवाल १००% पूर्ण भरले आहेत.`);
-        return;
-    }
-
-    // Render Pending Table
-    let container = document.getElementById('reportTableContainer');
-    
-    // Sort logic: Subcenter -> Role -> Employee -> Village
-    pendingList.sort((a, b) => {
-        if(a.subcenter !== b.subcenter) return a.subcenter.localeCompare(b.subcenter);
-        if(a.role !== b.role) return a.role.localeCompare(b.role);
-        if(a.empName !== b.empName) return a.empName.localeCompare(b.empName);
-        return a.village.localeCompare(b.village);
-    });
-
-    let html = `<div style="background:white; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); margin-bottom:20px; border:2px solid #e74c3c;">`;
-    html += `<h3 style="color:#c0392b; border-bottom:2px solid #e74c3c; padding-bottom:10px;">⚠️ अपूर्ण अहवाल यादी (Pending List) - ${selMonth} ${selYear}</h3>`;
-    
-    html += `<div class="table-responsive"><table class="report-table" id="pendingTableExport">`;
-    html += `<thead style="background:#e74c3c; color:white;"><tr>
-        <th>अ.क्र.</th>
-        <th>उपकेंद्र</th>
-        <th>कर्मचाऱ्याचे नाव</th>
-        <th>पद (Role)</th>
-        <th>गाव</th>
-        <th>कोणता फॉर्म बाकी आहे?</th>
-    </tr></thead><tbody>`;
-
-    pendingList.forEach((p, idx) => {
-        html += `<tr>
-            <td style="font-weight:bold;">${idx + 1}</td>
-            <td>${p.subcenter}</td>
-            <td>${p.empName}</td>
-            <td>${p.role}</td>
-            <td>${p.village}</td>
-            <td style="color:#c0392b; font-weight:bold;">${p.formName}</td>
-        </tr>`;
-    });
-
-    html += `</tbody></table></div></div>`;
-    
-    // Add custom download button for this specific table
-    let downHtml = `<div style="text-align: right; margin-bottom: 10px;">
-        <button onclick="downloadPendingExcel()" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 अपूर्ण यादी Excel मध्ये डाउनलोड करा</button>
-    </div>`;
-
-    container.innerHTML = downHtml + html;
-    document.getElementById('reportContentArea').classList.remove('hidden');
-}
-
-// 🟢 NEW: Custom Excel Download for Pending List
-function downloadPendingExcel() {
-    let table = document.getElementById("pendingTableExport");
-    if(!table) return;
-    let wb = XLSX.utils.table_to_book(table, {sheet:"Pending Report"});
-    let selMonth = document.getElementById('reportMonth').value;
-    let selYear = document.getElementById('reportYear').value;
-    XLSX.writeFile(wb, `अपूर्ण_अहवाल_${selMonth}_${selYear}.xlsx`);
 }
 
 async function fetchReportData() {
@@ -1990,7 +1979,7 @@ d.reports.forEach(rep => {
     let formTypeStr = formObj ? String(formObj.FormType).trim() : "";
     let isProgressive = formTypeStr.includes('ProgressiveStats');
     let isVertical = formTypeStr.includes('Vertical');
-    let isList = formTypeStr.includes('List'); // 🟢 Identify if it's a List form
+    let isList = formTypeStr.includes('List'); 
 
     let monthIdx = headers.indexOf("महिना");
     let yearIdx = headers.indexOf("वर्ष");
@@ -2149,7 +2138,7 @@ d.reports.forEach(rep => {
     }
 
     fData = fData.concat(dataRows);
-    finalReports.push({ formName: rep.formName, data: fData, isList: isList }); // 🟢 Passed isList Flag
+    finalReports.push({ formName: rep.formName, data: fData, isList: isList }); 
 });
 
 if(finalReports.length > 0) {
@@ -2168,11 +2157,10 @@ alert("एरर: " + e.message);
 
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
-// Reset view area (Keep download button)
-let downHtml = `<div style="text-align: right; margin-bottom: 10px;">
-    <button onclick="downloadConsolidatedExcel()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 Excel (.xlsx) डाउनलोड करा</button>
-</div>`;
-let html = downHtml;
+let downArea = document.getElementById('downloadButtonsArea');
+downArea.innerHTML = `<button onclick="downloadConsolidatedExcel()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 Excel (.xlsx) डाउनलोड करा</button>`;
+
+let html = "";
 let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year !== 'सर्व' ? year : ''}`;
 
 reports.forEach(rep => {
@@ -2189,7 +2177,7 @@ const formType = formObj ? String(formObj.FormType).trim() : "";
 const isStats = formType.includes('Stats');
 const isProgressive = formType.includes('ProgressiveStats');
 const isVertical = formType.includes('Vertical'); 
-const isList = formType.includes('List'); // 🟢 Check if it's a List form
+const isList = formType.includes('List'); 
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
@@ -2199,12 +2187,10 @@ let villageIdx = headers.indexOf("गाव");
 let dataRows = data.slice(1);
 let groups = {};
 
-// 🟢 NEW: If it's a List Form, put everyone in one single group
 if(dataRows.length === 0) { 
     groups["All"] = []; 
 } else if (isList) {
     groups["संपूर्ण तालुक्याची यादी (All Subcenters)###एकत्रित"] = dataRows;
-    // Sort combined list logically
     groups["संपूर्ण तालुक्याची यादी (All Subcenters)###एकत्रित"].sort((a,b) => {
         let scA = subCenterIdx > -1 ? String(a[subCenterIdx]||"") : "";
         let scB = subCenterIdx > -1 ? String(b[subCenterIdx]||"") : "";
@@ -2347,7 +2333,6 @@ groupKeys.forEach((gKey) => {
         
         let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
         r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
-        // 🟢 Include Subcenter column for List type in HTML view
         if(isList) {
             r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:45px; z-index:2;">उपकेंद्र</th>`;
         }
@@ -2439,7 +2424,7 @@ const formType = formObj ? String(formObj.FormType).trim() : "";
 const isStats = formType.includes('Stats');
 const isProgressive = formType.includes('ProgressiveStats');
 const isVertical = formType.includes('Vertical');
-const isList = formType.includes('List'); // 🟢 Check if it's a List form
+const isList = formType.includes('List'); 
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
@@ -2449,7 +2434,6 @@ let villageIdx = headers.indexOf("गाव");
 let dataRows = data.slice(1);
 let groups = {};
 
-// 🟢 NEW: Single Group for Excel List
 if(dataRows.length === 0) { 
     groups["All"] = []; 
 } else if (isList) {
@@ -2620,7 +2604,7 @@ groupKeys.forEach(gKey => {
             }
         }
 
-        colCount = showIndices.length + (isList ? 3 : 2); // 🟢 Adjust for extra Subcenter column
+        colCount = showIndices.length + (isList ? 3 : 2); 
         merges[0] = { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } };
 
         if(dataRows.length > 0) {
@@ -2639,7 +2623,6 @@ groupKeys.forEach(gKey => {
         let cOffset = 0;
         headerRow1[cOffset] = "अ.क्र."; merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + maxDepth - 1, c: cOffset } }); cOffset++;
         
-        // 🟢 Subcenter column for Excel
         if(isList) {
             headerRow1[cOffset] = "उपकेंद्र"; merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + maxDepth - 1, c: cOffset } }); cOffset++;
         }
@@ -2699,7 +2682,7 @@ groupKeys.forEach(gKey => {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
                 let totalRow = ["एकूण", ""];
-                if(isList) totalRow.push(""); // Align if subcenter is there (though stats usually aren't list)
+                if(isList) totalRow.push(""); 
                 merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: isList ? 2 : 1 } });
                 showIndices.forEach(idx => {
                     if(isNumericCol[idx]) totalRow.push(totals[idx]);
