@@ -247,7 +247,10 @@ input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 </select>
 </div>
 </div>
-<button class="btn-report" onclick="fetchReportData()">अहवाल तयार करा 📊</button>
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+<button class="btn-report" style="flex:1;" onclick="fetchReportData()">अहवाल तयार करा 📊</button>
+<button class="btn-report" style="flex:1; background:#e74c3c;" onclick="generatePendingReport()">⚠️ अपूर्ण अहवाल (Pending) तपासा</button>
+</div>
 <div id="reportLoader" style="text-align:center; color:orange; margin-top:10px; display:none; font-weight:bold;">डेटा लोड होत आहे, कृपया थांबा...</div>
 <div id="reportContentArea" class="hidden" style="margin-top: 20px;">
 <div style="text-align: right; margin-bottom: 10px;">
@@ -307,13 +310,13 @@ input.error-input::placeholder { color: #ff4d4d; font-weight: bold; }
 
 <script>
 // 🌟 Configuration 🌟
-const GAS_URL = "https://script.google.com/macros/s/AKfycbynqi8xrHlif5PxyRZklUf61kFB4MC6He7ptaEn8sPrA54biz-ToijER10utNP7mF68/exec"; // ⚠️ येथे तुमची स्वतःची Apps Script ची लिंक टाका!
+const GAS_URL = "https://script.google.com/macros/s/AKfycbynqi8xrHlif5PxyRZklUf61kFB4MC6He7ptaEn8sPrA54biz-ToijER10utNP7mF68/exec";
 
 const CONFIG = {
 hiddenColumns: ["तारीख", "मोबाईल क्र.", "उपकेंद्र", "महिना", "वर्ष", "मूळ डेटा (JSON)", "कर्मचाऱ्याचे नाव"]
 };
 
-let masterData = { forms: [], villages: [], filledStats: [] };
+let masterData = { forms: [], villages: [], filledStats: [], users: [] }; // added users array
 let user = null;
 let currentReports = [];
 let isSaving = false;
@@ -559,10 +562,13 @@ function evaluateRanges(containerId) {
 
         if(isError) {
             input.style.border = "2px solid red";
+            input.value = ""; 
             input.classList.add('error-input');
+            input.setAttribute("placeholder", "अवैध संख्या!");
         } else {
             input.style.border = "1px solid #ccc";
             input.classList.remove('error-input');
+            input.removeAttribute("placeholder");
         }
     });
 }
@@ -960,7 +966,6 @@ document.getElementById('dashboardWrapper').classList.remove('hidden');
 document.getElementById('uName').innerText = user.name + " (" + user.role + ")";
 document.getElementById('uSub').innerText = "उपकेंद्र: " + user.subcenter;
 
-// 🟢 FIX: Allow Admin, Manager, Viewer to see the adminRoleFilterDiv
 if(user.role === "Admin") {
     document.getElementById('tabEntry').classList.remove('hidden');
     document.getElementById('tabEdit').classList.remove('hidden');
@@ -971,7 +976,7 @@ if(user.role === "Admin") {
     document.getElementById('tabEntry').classList.add('hidden');
     document.getElementById('tabEdit').classList.add('hidden');
     document.getElementById('tabAdmin').classList.add('hidden');
-    document.getElementById('adminRoleFilterDiv').style.display = "flex"; // 🟢 NEW
+    document.getElementById('adminRoleFilterDiv').style.display = "flex"; 
     switchTab('reports');
 } else {
     document.getElementById('tabEntry').classList.remove('hidden');
@@ -1164,7 +1169,7 @@ const month = document.getElementById('selMonth').value;
 const year = document.getElementById('selYear').value;
 
 vSel.innerHTML = '<option value="">-- गाव निवडा --</option>';
-if(!user || !fId) { document.getElementById('dynamicFormArea').innerHTML = ""; return; }
+if(!user || !fId) return;
 
 vSel.innerHTML += '<option value="ALL_VILLAGES" style="font-weight:bold; color:#0056b3;">🏢 सर्व गावे एकत्रित भरा (Bulk Entry)</option>';
 
@@ -1824,6 +1829,130 @@ function getProgressiveTargetMonthsAndYears(selM, selY) {
     return result;
 }
 
+// 🟢 NEW: Pending Report Function
+function generatePendingReport() {
+    const selMonth = document.getElementById('reportMonth').value;
+    const selYear = document.getElementById('reportYear').value;
+    
+    if (selMonth === "सर्व" || selYear === "सर्व") {
+        alert("अपूर्ण अहवाल पाहण्यासाठी कृपया विशिष्ट 'महिना' आणि 'वर्ष' निवडा!");
+        return;
+    }
+
+    if (!masterData.users || masterData.users.length === 0) {
+        alert("कर्मचाऱ्यांची माहिती लोड होऊ शकली नाही. कृपया पेज रिफ्रेश करा.");
+        return;
+    }
+
+    let pendingList = [];
+    let filterRole = document.getElementById('reportRoleFilter') ? document.getElementById('reportRoleFilter').value : "सर्व";
+
+    // Loop through forms
+    masterData.forms.forEach(f => {
+        let isInactive = isFormInactive(f);
+        if (isInactive) return; // Skip inactive forms
+        
+        let formTypeStr = String(f.FormType).trim();
+        // Skip List forms for subcenter-wise village check since List forms are generally continuous registers
+        if(formTypeStr === 'List') return; 
+
+        let allowedRoles = f.AllowedRoles ? f.AllowedRoles.split(',').map(r=>String(r).trim().toUpperCase()) : ["ALL"];
+        let isAllForm = allowedRoles.includes("ALL");
+
+        // Loop through all safe users (ANM, MPW, CHO)
+        masterData.users.forEach(u => {
+            if (filterRole !== "सर्व" && filterRole !== "ALL" && u.role !== filterRole) return;
+
+            // Does this user have access to this form?
+            if (isAllForm || allowedRoles.includes(u.role)) {
+                
+                // Find villages for this user's subcenter
+                let userVillages = masterData.villages.filter(v => String(v.SubCenterID).trim().toLowerCase() === String(u.subcenter).trim().toLowerCase());
+                
+                userVillages.forEach(v => {
+                    // Check if this specific village + form + month + year is in filledStats
+                    let isFilled = masterData.filledStats.some(h => {
+                        return h.formID === f.FormID && 
+                               String(h.village).trim() === String(v.VillageName).trim() && 
+                               String(h.month).trim() === selMonth && 
+                               String(h.year).trim() === selYear;
+                    });
+
+                    if (!isFilled) {
+                        pendingList.push({
+                            empName: u.name,
+                            role: u.role,
+                            subcenter: u.subcenter,
+                            village: v.VillageName,
+                            formName: f.FormName
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    if (pendingList.length === 0) {
+        alert(`🎉 उत्कृष्ट! ${selMonth} ${selYear} मधील सर्व कर्मचाऱ्यांनी त्यांचे अहवाल १००% पूर्ण भरले आहेत.`);
+        return;
+    }
+
+    // Render Pending Table
+    let container = document.getElementById('reportTableContainer');
+    
+    // Sort logic: Subcenter -> Role -> Employee -> Village
+    pendingList.sort((a, b) => {
+        if(a.subcenter !== b.subcenter) return a.subcenter.localeCompare(b.subcenter);
+        if(a.role !== b.role) return a.role.localeCompare(b.role);
+        if(a.empName !== b.empName) return a.empName.localeCompare(b.empName);
+        return a.village.localeCompare(b.village);
+    });
+
+    let html = `<div style="background:white; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); margin-bottom:20px; border:2px solid #e74c3c;">`;
+    html += `<h3 style="color:#c0392b; border-bottom:2px solid #e74c3c; padding-bottom:10px;">⚠️ अपूर्ण अहवाल यादी (Pending List) - ${selMonth} ${selYear}</h3>`;
+    
+    html += `<div class="table-responsive"><table class="report-table" id="pendingTableExport">`;
+    html += `<thead style="background:#e74c3c; color:white;"><tr>
+        <th>अ.क्र.</th>
+        <th>उपकेंद्र</th>
+        <th>कर्मचाऱ्याचे नाव</th>
+        <th>पद (Role)</th>
+        <th>गाव</th>
+        <th>कोणता फॉर्म बाकी आहे?</th>
+    </tr></thead><tbody>`;
+
+    pendingList.forEach((p, idx) => {
+        html += `<tr>
+            <td style="font-weight:bold;">${idx + 1}</td>
+            <td>${p.subcenter}</td>
+            <td>${p.empName}</td>
+            <td>${p.role}</td>
+            <td>${p.village}</td>
+            <td style="color:#c0392b; font-weight:bold;">${p.formName}</td>
+        </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+    
+    // Add custom download button for this specific table
+    let downHtml = `<div style="text-align: right; margin-bottom: 10px;">
+        <button onclick="downloadPendingExcel()" style="background:#e74c3c; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 अपूर्ण यादी Excel मध्ये डाउनलोड करा</button>
+    </div>`;
+
+    container.innerHTML = downHtml + html;
+    document.getElementById('reportContentArea').classList.remove('hidden');
+}
+
+// 🟢 NEW: Custom Excel Download for Pending List
+function downloadPendingExcel() {
+    let table = document.getElementById("pendingTableExport");
+    if(!table) return;
+    let wb = XLSX.utils.table_to_book(table, {sheet:"Pending Report"});
+    let selMonth = document.getElementById('reportMonth').value;
+    let selYear = document.getElementById('reportYear').value;
+    XLSX.writeFile(wb, `अपूर्ण_अहवाल_${selMonth}_${selYear}.xlsx`);
+}
+
 async function fetchReportData() {
 const formID = document.getElementById('reportFormSelect').value;
 const selMonth = document.getElementById('reportMonth').value;
@@ -1861,6 +1990,7 @@ d.reports.forEach(rep => {
     let formTypeStr = formObj ? String(formObj.FormType).trim() : "";
     let isProgressive = formTypeStr.includes('ProgressiveStats');
     let isVertical = formTypeStr.includes('Vertical');
+    let isList = formTypeStr.includes('List'); // 🟢 Identify if it's a List form
 
     let monthIdx = headers.indexOf("महिना");
     let yearIdx = headers.indexOf("वर्ष");
@@ -2019,7 +2149,7 @@ d.reports.forEach(rep => {
     }
 
     fData = fData.concat(dataRows);
-    finalReports.push({ formName: rep.formName, data: fData });
+    finalReports.push({ formName: rep.formName, data: fData, isList: isList }); // 🟢 Passed isList Flag
 });
 
 if(finalReports.length > 0) {
@@ -2038,7 +2168,11 @@ alert("एरर: " + e.message);
 
 function renderMultipleTables(reports, month, year) {
 let container = document.getElementById('reportTableContainer');
-let html = "";
+// Reset view area (Keep download button)
+let downHtml = `<div style="text-align: right; margin-bottom: 10px;">
+    <button onclick="downloadConsolidatedExcel()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">📥 Excel (.xlsx) डाउनलोड करा</button>
+</div>`;
+let html = downHtml;
 let periodText = (month === 'सर्व' && year === 'सर्व') ? 'सर्व महिने' : `${month} ${year !== 'सर्व' ? year : ''}`;
 
 reports.forEach(rep => {
@@ -2055,6 +2189,7 @@ const formType = formObj ? String(formObj.FormType).trim() : "";
 const isStats = formType.includes('Stats');
 const isProgressive = formType.includes('ProgressiveStats');
 const isVertical = formType.includes('Vertical'); 
+const isList = formType.includes('List'); // 🟢 Check if it's a List form
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
@@ -2063,8 +2198,22 @@ let villageIdx = headers.indexOf("गाव");
 
 let dataRows = data.slice(1);
 let groups = {};
-if(dataRows.length === 0) { groups["All"] = []; } 
-else {
+
+// 🟢 NEW: If it's a List Form, put everyone in one single group
+if(dataRows.length === 0) { 
+    groups["All"] = []; 
+} else if (isList) {
+    groups["संपूर्ण तालुक्याची यादी (All Subcenters)###एकत्रित"] = dataRows;
+    // Sort combined list logically
+    groups["संपूर्ण तालुक्याची यादी (All Subcenters)###एकत्रित"].sort((a,b) => {
+        let scA = subCenterIdx > -1 ? String(a[subCenterIdx]||"") : "";
+        let scB = subCenterIdx > -1 ? String(b[subCenterIdx]||"") : "";
+        if(scA !== scB) return scA.localeCompare(scB);
+        let vA = villageIdx > -1 ? String(a[villageIdx]||"") : "";
+        let vB = villageIdx > -1 ? String(b[villageIdx]||"") : "";
+        return vA.localeCompare(vB);
+    });
+} else {
     dataRows.forEach(row => {
         let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
         let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
@@ -2085,7 +2234,7 @@ groupKeys.forEach((gKey) => {
     let gRows = groups[gKey];
     let [sc, ename] = gKey.split("###");
 
-    if(villageIdx > -1) {
+    if(!isList && villageIdx > -1) {
         gRows.sort((a, b) => String(a[villageIdx]||"").localeCompare(String(b[villageIdx]||"")));
     }
 
@@ -2198,7 +2347,11 @@ groupKeys.forEach((gKey) => {
         
         let r1Html = "<tr>", r2Html = "<tr>", r3Html = "<tr>";
         r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:0; z-index:2;">अ.क्र.</th>`;
-        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:45px; z-index:2;">गाव</th>`;
+        // 🟢 Include Subcenter column for List type in HTML view
+        if(isList) {
+            r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:45px; z-index:2;">उपकेंद्र</th>`;
+        }
+        r1Html += `<th rowspan="${maxDepth}" style="background:#f4b400; color:#000; border:1px solid #ddd; vertical-align:middle; text-align:center; position:sticky; left:${isList ? '120px' : '45px'}; z-index:2;">गाव</th>`;
 
         tree.forEach(n1 => {
             let rs1 = n1.children.length === 0 ? maxDepth : 1;
@@ -2228,7 +2381,10 @@ groupKeys.forEach((gKey) => {
         } else {
             gRows.forEach((row, i) => {
                 html += `<tr><td class="sticky-col" style="background:#fdfdfd; left:0;">${i+1}</td>`;
-                html += `<td class="sticky-col" style="background:#fdfdfd; left:45px;">${row[villageIdx] || "-"}</td>`;
+                if(isList) {
+                    html += `<td class="sticky-col" style="background:#fdfdfd; left:45px;">${subCenterIdx > -1 ? row[subCenterIdx] : "-"}</td>`;
+                }
+                html += `<td class="sticky-col" style="background:#fdfdfd; left:${isList ? '120px' : '45px'};">${row[villageIdx] || "-"}</td>`;
                 showIndices.forEach(idx => { 
                     let cellVal = row[idx] !== undefined && row[idx] !== "" ? String(row[idx]) : "-";
                     if (/^\d{4}-\d{2}-\d{2}/.test(cellVal)) {
@@ -2243,7 +2399,7 @@ groupKeys.forEach((gKey) => {
             if(isStats && gRows.length > 0) {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
-                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td colspan="2" class="sticky-col" style="background:#d4edda; left:0; text-align:center;">एकूण</td>`;
+                html += `<tr style="background:#d4edda; font-weight:bold; color:#155724;"><td colspan="${isList ? 3 : 2}" class="sticky-col" style="background:#d4edda; left:0; text-align:center;">एकूण</td>`;
                 showIndices.forEach(idx => {
                     if(isNumericCol[idx]) html += `<td>${totals[idx]}</td>`;
                     else html += `<td>-</td>`;
@@ -2283,6 +2439,7 @@ const formType = formObj ? String(formObj.FormType).trim() : "";
 const isStats = formType.includes('Stats');
 const isProgressive = formType.includes('ProgressiveStats');
 const isVertical = formType.includes('Vertical');
+const isList = formType.includes('List'); // 🟢 Check if it's a List form
 
 let subCenterIdx = headers.indexOf("उपकेंद्र");
 let nameIdx = headers.indexOf("कर्मचाऱ्याचे नाव");
@@ -2291,8 +2448,21 @@ let villageIdx = headers.indexOf("गाव");
 
 let dataRows = data.slice(1);
 let groups = {};
-if(dataRows.length === 0) { groups["All"] = []; } 
-else {
+
+// 🟢 NEW: Single Group for Excel List
+if(dataRows.length === 0) { 
+    groups["All"] = []; 
+} else if (isList) {
+    groups["संपूर्ण तालुक्याची यादी (All Subcenters)###एकत्रित"] = dataRows;
+    groups["संपूर्ण तालुक्याची यादी (All Subcenters)###एकत्रित"].sort((a,b) => {
+        let scA = subCenterIdx > -1 ? String(a[subCenterIdx]||"") : "";
+        let scB = subCenterIdx > -1 ? String(b[subCenterIdx]||"") : "";
+        if(scA !== scB) return scA.localeCompare(scB);
+        let vA = villageIdx > -1 ? String(a[villageIdx]||"") : "";
+        let vB = villageIdx > -1 ? String(b[villageIdx]||"") : "";
+        return vA.localeCompare(vB);
+    });
+} else {
     dataRows.forEach(row => {
         let sc = subCenterIdx > -1 ? String(row[subCenterIdx] || "").trim() : "Unknown";
         let mob = mobIdx > -1 ? String(row[mobIdx] || "").trim() : "Unknown";
@@ -2322,7 +2492,7 @@ groupKeys.forEach(gKey => {
     let gRows = groups[gKey];
     let [sc, ename] = gKey.split("###");
 
-    if(villageIdx > -1) {
+    if(!isList && villageIdx > -1) {
         gRows.sort((a, b) => String(a[villageIdx]||"").localeCompare(String(b[villageIdx]||"")));
     }
 
@@ -2450,7 +2620,7 @@ groupKeys.forEach(gKey => {
             }
         }
 
-        colCount = showIndices.length + 2;
+        colCount = showIndices.length + (isList ? 3 : 2); // 🟢 Adjust for extra Subcenter column
         merges[0] = { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } };
 
         if(dataRows.length > 0) {
@@ -2465,10 +2635,17 @@ groupKeys.forEach(gKey => {
         let headerRow1 = Array(colCount).fill("");
         let headerRow2 = Array(colCount).fill("");
         let headerRow3 = Array(colCount).fill("");
-        headerRow1[0] = "अ.क्र."; merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR + maxDepth - 1, c: 0 } });
-        headerRow1[1] = "गाव"; merges.push({ s: { r: currentR, c: 1 }, e: { r: currentR + maxDepth - 1, c: 1 } });
         
-        let cOffset = 2;
+        let cOffset = 0;
+        headerRow1[cOffset] = "अ.क्र."; merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + maxDepth - 1, c: cOffset } }); cOffset++;
+        
+        // 🟢 Subcenter column for Excel
+        if(isList) {
+            headerRow1[cOffset] = "उपकेंद्र"; merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + maxDepth - 1, c: cOffset } }); cOffset++;
+        }
+        
+        headerRow1[cOffset] = "गाव"; merges.push({ s: { r: currentR, c: cOffset }, e: { r: currentR + maxDepth - 1, c: cOffset } }); cOffset++;
+        
         tree.forEach(n1 => {
             headerRow1[cOffset] = n1.label;
             let rs1 = n1.children.length === 0 ? maxDepth : 1;
@@ -2502,7 +2679,10 @@ groupKeys.forEach(gKey => {
             currentR++;
         } else {
             gRows.forEach((row, i) => {
-                let rowData = [i+1, row[villageIdx] || "-"];
+                let rowData = [i+1];
+                if(isList) { rowData.push(subCenterIdx > -1 ? row[subCenterIdx] : "-"); }
+                rowData.push(row[villageIdx] || "-");
+                
                 showIndices.forEach(idx => {
                     let cellValue = row[idx] !== undefined && row[idx] !== "" ? String(row[idx]) : "-";
                     if (/^\d{4}-\d{2}-\d{2}/.test(cellValue)) {
@@ -2515,11 +2695,12 @@ groupKeys.forEach(gKey => {
                 currentR++;
             });
 
-            if(isStats) {
+            if(isStats && gRows.length > 0) {
                 let pseudoData = [headers].concat(gRows);
                 let { totals, isNumericCol } = getTotalsRow(pseudoData, headers, showIndices);
                 let totalRow = ["एकूण", ""];
-                merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: 1 } });
+                if(isList) totalRow.push(""); // Align if subcenter is there (though stats usually aren't list)
+                merges.push({ s: { r: currentR, c: 0 }, e: { r: currentR, c: isList ? 2 : 1 } });
                 showIndices.forEach(idx => {
                     if(isNumericCol[idx]) totalRow.push(totals[idx]);
                     else totalRow.push("-");
@@ -2576,6 +2757,10 @@ XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
 
 let fileName = `मासिक_अहवाल_${user.subcenter}_${periodText}.xlsx`;
 XLSX.writeFile(wb, fileName);
+}
+
+function indexOf(item, array) {
+    return array.indexOf(item);
 }
 
 function toggleRoles(checkbox) {
