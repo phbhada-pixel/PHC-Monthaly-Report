@@ -261,7 +261,19 @@
                 masterData.employees = empData || [];
 
                 const { data: formData } = await supabaseClient.from('dynamic_forms').select('*').eq('is_active', true);
-                masterData.forms = formData || [];
+                
+                // 🟢 सुधारणा: कर्मचाऱ्याच्या पदानुसार (Role) फॉर्म्स फिल्टर करणे
+                let userRoleStr = String(user.role).trim().toUpperCase();
+                let isAdminRole = (userRoleStr === 'ADMIN' || userRoleStr === 'TALUKA_ADMIN' || userRoleStr === 'PHC_ADMIN');
+
+                let filteredForms = (formData || []).filter(form => {
+                    let allowedRoles = form.allowed_roles ? String(form.allowed_roles).trim().toUpperCase() : "ALL";
+                    if (isAdminRole || allowedRoles === "ALL") return true;
+                    // जर कर्मचाऱ्याचे पद फॉर्मच्या 'allowed_roles' मध्ये असेल तरच तो फॉर्म दिसेल
+                    return allowedRoles.split(',').includes(userRoleStr);
+                });
+
+                masterData.forms = filteredForms;
 
                 let select = document.getElementById('reportFormSelect');
                 let optionsDiv = document.getElementById('multiSelectOptions');
