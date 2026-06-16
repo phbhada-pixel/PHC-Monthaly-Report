@@ -1087,14 +1087,21 @@
                     sheetData.push([`सलग अहवाल: ${rep.formName} | कालावधी: ${rep.periodText}`]);
                     sheetData.push([]); 
 
-                    let totalBaseCols = groupType === 'SubCenterFlat' ? 3 : 2;
+                    // 🟢 सुधारणा: Excel मधील मूळ रकाने वाढवले (3 ऐवजी 4)
+                    let totalBaseCols = groupType === 'SubCenterFlat' ? 4 : 2; 
                     let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
 
                     merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalColumnsCount - 1 } });
                     merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: totalColumnsCount - 1 } });
 
                     let startR = 3;
-                    let r1 = ["अ.क्र.", "उपकेंद्र"]; if(groupType === 'SubCenterFlat') r1.push("गाव/कार्यक्षेत्र");
+                    let r1 = ["अ.क्र.", "उपकेंद्र"]; 
+                    if(groupType === 'SubCenterFlat') {
+                        r1.push("गाव/कार्यक्षेत्र");
+                        // 🟢 सुधारणा: Excel Header मध्ये 'कर्मचारी' जोडला
+                        r1.push("कर्मचारी");
+                    }
+                    
                     let r2 = []; let r3 = []; let r4 = rep.isProg ? [] : null;
 
                     for(let x=0; x<totalBaseCols; x++) { r2.push(""); r3.push(""); if(rep.isProg) r4.push(""); }
@@ -1164,7 +1171,12 @@
 
                     dataRowsToRender.forEach((r, rIdx) => {
                         let rowData = [rIdx + 1, r.subcenter];
-                        if(groupType === 'SubCenterFlat') rowData.push(r.village);
+                        if(groupType === 'SubCenterFlat') {
+                            rowData.push(r.village);
+                            // 🟢 सुधारणा: Excel Row मध्ये कर्मचाऱ्याचे नाव जोडले
+                            rowData.push(r.employee);
+                        }
+                        
                         columns.forEach(c => {
                             let val = r.values[c.id];
                             if(typeof val === 'object' && val !== null) { 
@@ -1177,7 +1189,7 @@
                         sheetData.push(rowData);
                     });
 
-                    if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
+                    if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
                         let pRow = ["एकूण Total"];
                         for(let x=1; x<totalBaseCols; x++) pRow.push("");
@@ -1305,7 +1317,7 @@
                         sheetData.push(Array(totalColumnsCount).fill(""));
                     });
 
-                    if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
+                    if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
                         let pRow = ["एकूण Total", ""];
                         columns.forEach(c => {
@@ -1358,7 +1370,12 @@
                 }
 
                 let wscols = [{ wch: 6 }, { wch: 25 }];
-                if(groupType === 'SubCenterFlat') wscols.push({ wch: 20 });
+                if(groupType === 'SubCenterFlat') {
+                    wscols.push({ wch: 20 }); 
+                    // 🟢 सुधारणा: Excel मध्ये 'कर्मचारी' रकान्यासाठी रुंदी वाढवली
+                    wscols.push({ wch: 25 }); 
+                }
+                
                 if (groupType === "SubCenterConsolidated") { wscols[1] = { wch: 45 }; }
                 for(let c=wscols.length; c<finalColLimit; c++) wscols.push({ wch: 14 });
                 ws["!cols"] = wscols;
@@ -1369,7 +1386,6 @@
             let dlName = `अहवाल_${document.getElementById('periodType').value === 'custom' ? 'Custom' : document.getElementById('reportMonth').value}_${document.getElementById('reportYear').value}.xlsx`;
             XLSX.writeFile(wb, dlName);
         }
-
         function generatePendingReport() {
             let periodType = document.getElementById('periodType').value;
             if (periodType === 'custom') {
