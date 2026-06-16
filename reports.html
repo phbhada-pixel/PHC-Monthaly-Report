@@ -361,7 +361,8 @@
         }
 
         async function fetchReportData() {
-            let selectedIDs = getSelectedReportIDs(); if(selectedIDs.length === 0) { alert("कृपया किमान एक अहवाल निवडा!"); return; }
+            let selectedIDs = getSelectedReportIDs(); 
+            if(selectedIDs.length === 0) { alert("कृपया किमान एक अहवाल निवडा!"); return; }
 
             let formsToProcess = selectedIDs.includes("ALL") ? masterData.forms : masterData.forms.filter(f => selectedIDs.includes(f.id));
             let mixedTypes = new Set(formsToProcess.map(f => f.form_type));
@@ -375,10 +376,10 @@
             if (periodType === 'monthly') {
                 const selMonth = document.getElementById('reportMonth').value; 
                 selMonthNum = monthNamesMarathi[selMonth]; 
-                selYear = document.getElementById('reportYear').value;
+                selYear = parseInt(document.getElementById('reportYear').value);
                 
-                query = query.eq('report_year', parseInt(selYear));
-                if (selMonthNum < 4) query = query.or(`and(report_year.eq.${parseInt(selYear)}),and(report_year.eq.${parseInt(selYear-1)},report_month.gte.4)`);
+                // 🟢 सुधारणा १: प्रगत बेरजेसाठी चालू आणि मागील असे दोन्ही वर्षांचे रेकॉर्ड्स एकत्र घ्या (Supabase एरर टाळण्यासाठी)
+                query = query.in('report_year', [selYear, selYear - 1]);
                 periodText = `${selMonth} ${selYear}`;
                 
                 if (mixedTypes.has('fortnightly')) {
@@ -423,14 +424,20 @@
 
                 const { data: dbData, error } = await query; 
                 document.getElementById('reportLoader').classList.add('hidden');
-                if (error || !dbData || dbData.length === 0) { alert("या कालावधीत किंवा निवडलेल्या फिल्टरमध्ये कोणताही डेटा उपलब्ध नाही."); return; }
+                
+                // 🟢 सुधारणा २: डेटाबेस एरर अधिक स्पष्ट केला आहे
+                if (error || !dbData || dbData.length === 0) { 
+                    alert(`⚠️ डेटाबेसमध्ये ${selYear} सालाचा कोणताही डेटा सापडला नाही. कृपया डेटा भरताना 'वर्ष' बरोबर निवडले होते का ते तपासा.`); 
+                    return; 
+                }
 
                 windowDbData = dbData; 
-
                 let finalReports = [];
 
                 formsToProcess.forEach(formObj => {
-                    let formResp = dbData.filter(r => r.form_id === formObj.id); if(formResp.length === 0) return;
+                    let formResp = dbData.filter(r => r.form_id === formObj.id); 
+                    if(formResp.length === 0) return;
+                    
                     const allFields = formObj.schema_json.fields;
                     const validDataFields = allFields.filter(f => f.type !== 'group_header');
                     const isProgressive = formObj.form_type === 'progressive';
@@ -441,14 +448,15 @@
                     });
 
                     let fData = [];
-                    
                     let currentMonthResp = [];
+                    
                     if (periodType === 'monthly') {
                         currentMonthResp = formResp.filter(r => {
-                            let isMatch = r.report_month === parseInt(selMonthNum) && r.report_year === parseInt(selYear);
+                            // 🟢 सुधारणा ३: Number() वापरून String आणि Number मधील तफावत दूर केली. 
+                            let isMatch = Number(r.report_month) === Number(selMonthNum) && Number(r.report_year) === Number(selYear);
                             if (isMatch && formObj.form_type === 'fortnightly') {
                                 let fn = document.getElementById('reportFortnight').value;
-                                isMatch = r.report_fortnight === parseInt(fn);
+                                isMatch = Number(r.report_fortnight) === Number(fn);
                             }
                             return isMatch;
                         });
@@ -491,15 +499,9 @@
                         }
 
                         let row = { 
-                            response_id: res.id,
-                            report_month: res.report_month,
-                            report_year: res.report_year,
-                            month: periodText, 
-                            year: '', 
-                            subcenter: scName, 
-                            village: vName, 
-                            employee: empObj?empObj.full_name:'-', 
-                            values: {} 
+                            response_id: res.id, report_month: res.report_month, report_year: res.report_year,
+                            month: periodText, year: '', subcenter: scName, village: vName, 
+                            employee: empObj?empObj.full_name:'-', values: {} 
                         };
 
                         validDataFields.forEach(f => {
@@ -513,7 +515,7 @@
                                 if (isProgressive && f.type === 'number') {
                                     let sumProg = 0;
                                     getProgressiveMonthsList(selMonthNum, selYear).forEach(p => {
-                                        let pastRes = formResp.find(r => r.village_id === res.village_id && r.report_month === p.month && r.report_year === p.year);
+                                        let pastRes = formResp.find(r => r.village_id === res.village_id && Number(r.report_month) === p.month && Number(r.report_year) === p.year);
                                         if(pastRes && pastRes.response_data && pastRes.response_data[f.id]) {
                                             sumProg += parseFloat(pastRes.response_data[f.id].value) || 0;
                                         }
@@ -533,8 +535,7 @@
                                         if (!af.formula || String(af.formula).trim() === "") {
                                             let ph = `[${af.id.toLowerCase()}]`;
                                             if(formulaStr.includes(ph)) {
-                                                let val = 0;
-                                                let afVal = row.values[af.id];
+                                                let val = 0; let afVal = row.values[af.id];
                                                 if (typeof afVal === 'object' && afVal !== null) { val = parseFloat(afVal[type]) || 0; } 
                                                 else { val = parseFloat(afVal) || 0; }
                                                 formulaStr = formulaStr.replaceAll(ph, val);
@@ -571,11 +572,10 @@
                     renderMultipleTables(finalReports, groupType); 
                     document.getElementById('reportContentArea').classList.remove('hidden'); 
                 } else { 
-                    alert("या कालावधीसाठी तुमच्या अधिकारात किंवा निवडलेल्या फिल्टरमध्ये कोणताही डेटा उपलब्ध नाही."); 
+                    alert(`⚠️ डेटाबेसमध्ये ${periodText} या कालावधीचा डेटा आहे, परंतु तो निवडलेल्या उपकेंद्र/कर्मचाऱ्याशी जुळत नाही. कृपया फिल्टर तपासा.`); 
                 }
             } catch(e) { alert("एरर: " + e.message); }
         }
-
         function getFieldHierarchyChain(fields, fieldObj) {
             let chain = []; let current = fieldObj;
             while (current && current.parent_id) {
