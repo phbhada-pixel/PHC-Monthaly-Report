@@ -482,6 +482,23 @@
                     }
 
                     currentMonthResp.forEach(res => {
+                        
+                        // 🟢 नवीन बदल: जर फॉर्म 'यादी' (list) प्रकारचा असेल, तर निरंक (NIL) रेकॉर्ड्स वगळा
+                        if (formObj.form_type === 'list') {
+                            if (res.response_data && res.response_data.is_nil === true) return;
+
+                            let isStringNil = false;
+                            for (let key in res.response_data) {
+                                if (res.response_data[key] && typeof res.response_data[key].value === 'string') {
+                                    let v = res.response_data[key].value.trim().toLowerCase();
+                                    if (v === 'निरंक' || v.includes('निरंक') || v.includes('nil report') || v === 'nil') {
+                                        isStringNil = true; break;
+                                    }
+                                }
+                            }
+                            if (isStringNil) return;
+                        }
+
                         if (user.role !== 'admin' && user.role !== 'taluka_admin' && user.role !== 'phc_admin') {
                             if (res.employee_id !== user.id) return;
                         }
