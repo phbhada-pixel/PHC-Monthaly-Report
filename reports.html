@@ -1084,8 +1084,12 @@
                         });
                         dataRowsToRender = subCenterAggregatedRows;
                     } else if (groupType === "SubCenterFlat") {
-                        dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.village.localeCompare(b.village));
-                    }
+    dataRowsToRender = rows.sort((a,b) => 
+        a.subcenter.localeCompare(b.subcenter) || 
+        a.employee.localeCompare(b.employee) || 
+        a.village.localeCompare(b.village)
+    );
+}
 
                     sheetData.push(["तालुका आरोग्य प्रणाली अहवाल"]);
                     sheetData.push([`सलग अहवाल: ${rep.formName} | कालावधी: ${rep.periodText}`]);
