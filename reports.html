@@ -372,21 +372,20 @@
             
             let periodText = "";
             let selMonthNum = 0, selYear = 0;
+            let selMonthName = ""; 
 
             if (periodType === 'monthly') {
-                const selMonth = document.getElementById('reportMonth').value; 
-                selMonthNum = monthNamesMarathi[selMonth]; 
+                selMonthName = document.getElementById('reportMonth').value; 
+                selMonthNum = monthNamesMarathi[selMonthName]; 
                 selYear = parseInt(document.getElementById('reportYear').value);
                 
-                // 🟢 सुधारणा १: प्रगत बेरजेसाठी चालू आणि मागील असे दोन्ही वर्षांचे रेकॉर्ड्स एकत्र घ्या (Supabase एरर टाळण्यासाठी)
-                query = query.in('report_year', [selYear, selYear - 1]);
-                periodText = `${selMonth} ${selYear}`;
+                query = query.in('report_year', [selYear, selYear - 1, String(selYear), String(selYear - 1)]);
+                periodText = `${selMonthName} ${selYear}`;
                 
                 if (mixedTypes.has('fortnightly')) {
                     let fn = document.getElementById('reportFortnight').value;
                     periodText += ` (पंधरवाडा: ${fn === '1' ? '१ ते १५' : '१६ ते अखेर'})`;
                 }
-
             } else {
                 let sDate = document.getElementById('startDate').value;
                 let eDate = document.getElementById('endDate').value;
@@ -425,9 +424,8 @@
                 const { data: dbData, error } = await query; 
                 document.getElementById('reportLoader').classList.add('hidden');
                 
-                // 🟢 सुधारणा २: डेटाबेस एरर अधिक स्पष्ट केला आहे
                 if (error || !dbData || dbData.length === 0) { 
-                    alert(`⚠️ डेटाबेसमध्ये ${selYear} सालाचा कोणताही डेटा सापडला नाही. कृपया डेटा भरताना 'वर्ष' बरोबर निवडले होते का ते तपासा.`); 
+                    alert(`⚠️ डेटाबेसमध्ये ${selYear} सालाचा कोणताही डेटा सापडला नाही.`); 
                     return; 
                 }
 
@@ -452,11 +450,21 @@
                     
                     if (periodType === 'monthly') {
                         currentMonthResp = formResp.filter(r => {
-                            // 🟢 सुधारणा ३: Number() वापरून String आणि Number मधील तफावत दूर केली. 
-                            let isMatch = Number(r.report_month) === Number(selMonthNum) && Number(r.report_year) === Number(selYear);
+                            let dbMonth = String(r.report_month).trim();
+                            let dbYear = String(r.report_year).trim();
+                            
+                            // 🟢 महिना आणि वर्ष अचूक मॅच करणे (अंक आणि अक्षर दोन्ही प्रकार हाताळणे)
+                            let isMatch = (dbMonth === String(selMonthNum) || dbMonth === selMonthName) && 
+                                          (dbYear === String(selYear));
+
                             if (isMatch && formObj.form_type === 'fortnightly') {
                                 let fn = document.getElementById('reportFortnight').value;
-                                isMatch = Number(r.report_fortnight) === Number(fn);
+                                let dbFn = String(r.report_fortnight).trim();
+                                
+                                // जर डेटाबेस मध्ये पंधरवाडा सेव्ह झाला नसेल तर तो डेटा वगळू नये म्हणून सूट
+                                if (dbFn !== "null" && dbFn !== "undefined" && dbFn !== "") {
+                                    isMatch = (dbFn === fn);
+                                }
                             }
                             return isMatch;
                         });
@@ -465,18 +473,7 @@
                     }
 
                     currentMonthResp.forEach(res => {
-                        if (res.response_data && res.response_data.is_nil === true) return;
-
-                        let isStringNil = false;
-                        for (let key in res.response_data) {
-                            if (res.response_data[key] && typeof res.response_data[key].value === 'string') {
-                                let v = res.response_data[key].value.trim().toLowerCase();
-                                if (v === 'निरंक' || v.includes('निरंक') || v.includes('nil report') || v === 'nil') {
-                                    isStringNil = true; break;
-                                }
-                            }
-                        }
-                        if (isStringNil) return;
+                        // 🟢 'निरंक' अहवाल वगळण्याची जुनी अट इथून पूर्णपणे काढून टाकली आहे.
 
                         if (user.role !== 'admin' && user.role !== 'taluka_admin' && user.role !== 'phc_admin') {
                             if (res.employee_id !== user.id) return;
@@ -506,17 +503,24 @@
 
                         validDataFields.forEach(f => {
                             if (!f.formula || String(f.formula).trim() === "") {
-                                let monthlyVal = res.response_data[f.id] ? res.response_data[f.id].value : '';
+                                let monthlyVal = '';
+                                
+                                // 🟢 निरंक रिपोर्ट असेल तर 'निरंक' शब्द दिसेल
+                                if(res.response_data && res.response_data.is_nil) {
+                                    monthlyVal = 'निरंक';
+                                } else if(res.response_data && res.response_data[f.id]) {
+                                    monthlyVal = res.response_data[f.id].value;
+                                }
 
-                                if (f.type === 'date' && monthlyVal && String(monthlyVal).trim() !== '') {
+                                if (f.type === 'date' && monthlyVal && String(monthlyVal).trim() !== '' && monthlyVal !== 'निरंक') {
                                     monthlyVal = formatDateToDDMMYYYY(monthlyVal);
                                 }
 
                                 if (isProgressive && f.type === 'number') {
                                     let sumProg = 0;
                                     getProgressiveMonthsList(selMonthNum, selYear).forEach(p => {
-                                        let pastRes = formResp.find(r => r.village_id === res.village_id && Number(r.report_month) === p.month && Number(r.report_year) === p.year);
-                                        if(pastRes && pastRes.response_data && pastRes.response_data[f.id]) {
+                                        let pastRes = formResp.find(r => r.village_id === res.village_id && (Number(r.report_month) === p.month || r.report_month === monthNamesNumeric[p.month]) && Number(r.report_year) === p.year);
+                                        if(pastRes && pastRes.response_data && pastRes.response_data[f.id] && !pastRes.response_data.is_nil) {
                                             sumProg += parseFloat(pastRes.response_data[f.id].value) || 0;
                                         }
                                     });
