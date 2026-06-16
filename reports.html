@@ -731,9 +731,13 @@
                             subCenterAggregatedRows.push(scNewRow);
                         });
                         dataRowsToRender = subCenterAggregatedRows;
-                    } else if (groupType === "SubCenterFlat") {
-                        dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.village.localeCompare(b.village));
-                    }
+                   } else if (groupType === "SubCenterFlat") {
+    dataRowsToRender = rows.sort((a,b) => 
+        a.subcenter.localeCompare(b.subcenter) || 
+        a.employee.localeCompare(b.employee) || 
+        a.village.localeCompare(b.village)
+    );
+}
 
                     let l1Row = `<tr><th rowspan="${rep.isProg?4:3}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?4:3}" class="border p-2">उपकेंद्र</th>`;
                     if (groupType === 'SubCenterFlat') {
