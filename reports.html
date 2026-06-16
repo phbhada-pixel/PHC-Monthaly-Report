@@ -711,6 +711,7 @@
                     });
 
                     html += `<div class="table-responsive"><table class="report-table"><thead>${l1Row + l2Row + l3Row}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+                
                 } else if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
                     let dataRowsToRender = rows;
 
@@ -735,7 +736,12 @@
                     }
 
                     let l1Row = `<tr><th rowspan="${rep.isProg?4:3}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?4:3}" class="border p-2">उपकेंद्र</th>`;
-                    if (groupType === 'SubCenterFlat') l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
+                    if (groupType === 'SubCenterFlat') {
+                        // 🟢 सुधारणा: 'कर्मचारी' रकाना जोडला
+                        l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
+                        l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2">कर्मचारी</th>`;
+                    }
+                    
                     let l2Row = `<tr>`; let l3Row = `<tr>`; let l4Row = rep.isProg ? `<tr>` : ``;
 
                     let i = 0;
@@ -784,7 +790,11 @@
                         }
 
                         tbodyHtml += `<tr class="hover:bg-gray-50 text-xs"><td class="border p-2 text-center font-bold">${rIdx+1}</td><td class="border p-2 font-bold text-gray-800 text-left">${r.subcenter}</td>`;
-                        if(groupType === 'SubCenterFlat') tbodyHtml += `<td class="border p-2 font-bold text-gray-800 text-left">${r.village} ${actionHtml}</td>`;
+                        if(groupType === 'SubCenterFlat') {
+                            // 🟢 सुधारणा: कर्मचाऱ्याचे नाव रकान्यात टाकले
+                            tbodyHtml += `<td class="border p-2 font-bold text-gray-800 text-left">${r.village} ${actionHtml}</td>`;
+                            tbodyHtml += `<td class="border p-2 font-medium text-gray-700 text-left">${r.employee}</td>`;
+                        }
                         
                         columns.forEach(c => {
                             let val = r.values[c.id];
@@ -796,7 +806,7 @@
 
                     if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
-                        let colspanTotal = groupType === 'SubCenterFlat' ? 3 : 2;
+                        let colspanTotal = groupType === 'SubCenterFlat' ? 4 : 2; // 🟢 सुधारणा: colspan बदलला (3 ऐवजी 4)
                         tbodyHtml += `<tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2 text-left" colspan="${colspanTotal}">एकूण Total</td>`;
                         columns.forEach(c => {
                             let pVal = phcTotals[c.id];
@@ -807,6 +817,7 @@
                     }
 
                     html += `<div class="table-responsive"><table class="report-table"><thead>${l1Row + l2Row + l3Row + l4Row}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+                
                 } else {
                     let employeeGroups = {};
                     rows.forEach(r => { let key = `${r.subcenter}###${r.employee}`; if(!employeeGroups[key]) employeeGroups[key] = []; employeeGroups[key].push(r); });
@@ -850,7 +861,6 @@
                                 }
                                 i = j;
                             } else {
-                                // 🟢 🟢 🟢 या ठिकाणचा एरर कोड दुरुस्त केला आहे 🟢 🟢 🟢
                                 let mult = (rep.isProg && c.type === 'number') ? 2 : 1;
                                 if(mult === 2) { l1Row += `<th colspan="2" rowspan="3" class="border p-2 text-xs">${c.l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
                                 else { l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 text-xs">${c.l3}</th>`; }
