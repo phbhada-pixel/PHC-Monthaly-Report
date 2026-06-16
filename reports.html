@@ -368,7 +368,8 @@
             let mixedTypes = new Set(formsToProcess.map(f => f.form_type));
             
             let periodType = document.getElementById('periodType').value;
-            let query = supabaseClient.from('form_responses').select('*');
+            // 🟢 सुधारणा १: डेटाबेस कडून जास्तीत जास्त रेकॉर्ड्स ओढून घेणे (कोणताही डेटा सुटू नये म्हणून)
+            let query = supabaseClient.from('form_responses').select('*').limit(10000); 
             
             let periodText = "";
             let selMonthNum = 0, selYear = 0;
@@ -378,8 +379,6 @@
                 selMonthName = document.getElementById('reportMonth').value; 
                 selMonthNum = monthNamesMarathi[selMonthName]; 
                 selYear = parseInt(document.getElementById('reportYear').value);
-                
-                query = query.in('report_year', [selYear, selYear - 1, String(selYear), String(selYear - 1)]);
                 periodText = `${selMonthName} ${selYear}`;
                 
                 if (mixedTypes.has('fortnightly')) {
@@ -402,18 +401,6 @@
                 groupType = 'Village';
             }
 
-            if (periodType === 'custom') {
-                let nonListForms = formsToProcess.filter(f => f.form_type !== 'list');
-                if (nonListForms.length > 0 && !selectedIDs.includes("ALL")) {
-                    alert("⚠️ 'कस्टम तारीख' फिल्टर फक्त 'यादी (List)' प्रकारच्या फॉर्मसाठीच लागू आहे. कृपया इतर फॉर्म्स निवडू नका.");
-                    return;
-                }
-                formsToProcess = formsToProcess.filter(f => f.form_type === 'list');
-                if(formsToProcess.length === 0) {
-                    alert("सध्या तुम्ही निवडलेल्यांमध्ये कोणतेही 'यादी (List)' प्रकारचे फॉर्म उपलब्ध नाहीत."); return;
-                }
-            }
-
             document.getElementById('reportLoader').classList.remove('hidden'); 
             document.getElementById('reportContentArea').classList.add('hidden'); 
             document.getElementById('reportTableContainer').innerHTML = "";
@@ -425,7 +412,7 @@
                 document.getElementById('reportLoader').classList.add('hidden');
                 
                 if (error || !dbData || dbData.length === 0) { 
-                    alert(`⚠️ डेटाबेसमध्ये ${selYear} सालाचा कोणताही डेटा सापडला नाही.`); 
+                    alert(`⚠️ डेटाबेसमध्ये कोणताही डेटा सापडला नाही. तुमचे इंटरनेट तपासा.`); 
                     return; 
                 }
 
@@ -436,7 +423,7 @@
                     let formResp = dbData.filter(r => r.form_id === formObj.id); 
                     if(formResp.length === 0) return;
                     
-                    const allFields = formObj.schema_json.fields;
+                    const allFields = formObj.schema_json.fields || [];
                     const validDataFields = allFields.filter(f => f.type !== 'group_header');
                     const isProgressive = formObj.form_type === 'progressive';
 
@@ -450,31 +437,39 @@
                     
                     if (periodType === 'monthly') {
                         currentMonthResp = formResp.filter(r => {
-                            let dbMonth = String(r.report_month).trim();
-                            let dbYear = String(r.report_year).trim();
+                            // 🟢 सुधारणा २: महिना आणि वर्षाचे सर्व्ह फॉरमॅट्स हाताळणे
+                            let rMonth = String(r.report_month).trim().toLowerCase();
+                            let rYear = parseInt(r.report_year);
+                            let createdDt = new Date(r.created_at);
                             
-                            // 🟢 महिना आणि वर्ष अचूक मॅच करणे (अंक आणि अक्षर दोन्ही प्रकार हाताळणे)
-                            let isMatch = (dbMonth === String(selMonthNum) || dbMonth === selMonthName) && 
-                                          (dbYear === String(selYear));
+                            // जर डेटा भरताना वर्ष किंवा महिना सेव्ह झाला नसेल, तर फॉर्म भरल्याच्या तारखेवरून तो घेण्याची सोय (Fallback)
+                            if (isNaN(rYear)) rYear = createdDt.getFullYear();
+                            if (rMonth === "null" || rMonth === "" || rMonth === "undefined") rMonth = String(createdDt.getMonth() + 1);
 
-                            if (isMatch && formObj.form_type === 'fortnightly') {
-                                let fn = document.getElementById('reportFortnight').value;
-                                let dbFn = String(r.report_fortnight).trim();
-                                
-                                // जर डेटाबेस मध्ये पंधरवाडा सेव्ह झाला नसेल तर तो डेटा वगळू नये म्हणून सूट
-                                if (dbFn !== "null" && dbFn !== "undefined" && dbFn !== "") {
-                                    isMatch = (dbFn === fn);
+                            let matchY = (rYear === selYear);
+                            let matchM = (
+                                rMonth == selMonthNum || 
+                                rMonth === `0${selMonthNum}` || 
+                                rMonth === selMonthName.toLowerCase() || 
+                                rMonth === monthNamesNumeric[selMonthNum]?.toLowerCase()
+                            );
+
+                            let matchFn = true;
+                            if (formObj.form_type === 'fortnightly') {
+                                let fnVal = document.getElementById('reportFortnight').value;
+                                let rFn = String(r.report_fortnight).trim();
+                                if (rFn !== "null" && rFn !== "" && rFn !== "undefined") {
+                                    matchFn = (rFn == fnVal || rFn === `0${fnVal}`);
                                 }
                             }
-                            return isMatch;
+                            
+                            return matchY && matchM && matchFn;
                         });
                     } else {
                         currentMonthResp = formResp; 
                     }
 
                     currentMonthResp.forEach(res => {
-                        // 🟢 'निरंक' अहवाल वगळण्याची जुनी अट इथून पूर्णपणे काढून टाकली आहे.
-
                         if (user.role !== 'admin' && user.role !== 'taluka_admin' && user.role !== 'phc_admin') {
                             if (res.employee_id !== user.id) return;
                         }
@@ -505,7 +500,6 @@
                             if (!f.formula || String(f.formula).trim() === "") {
                                 let monthlyVal = '';
                                 
-                                // 🟢 निरंक रिपोर्ट असेल तर 'निरंक' शब्द दिसेल
                                 if(res.response_data && res.response_data.is_nil) {
                                     monthlyVal = 'निरंक';
                                 } else if(res.response_data && res.response_data[f.id]) {
@@ -519,7 +513,7 @@
                                 if (isProgressive && f.type === 'number') {
                                     let sumProg = 0;
                                     getProgressiveMonthsList(selMonthNum, selYear).forEach(p => {
-                                        let pastRes = formResp.find(r => r.village_id === res.village_id && (Number(r.report_month) === p.month || r.report_month === monthNamesNumeric[p.month]) && Number(r.report_year) === p.year);
+                                        let pastRes = formResp.find(r => r.village_id === res.village_id && (Number(r.report_month) === p.month || String(r.report_month).trim() === monthNamesNumeric[p.month]) && Number(r.report_year) === p.year);
                                         if(pastRes && pastRes.response_data && pastRes.response_data[f.id] && !pastRes.response_data.is_nil) {
                                             sumProg += parseFloat(pastRes.response_data[f.id].value) || 0;
                                         }
@@ -576,11 +570,10 @@
                     renderMultipleTables(finalReports, groupType); 
                     document.getElementById('reportContentArea').classList.remove('hidden'); 
                 } else { 
-                    alert(`⚠️ डेटाबेसमध्ये ${periodText} या कालावधीचा डेटा आहे, परंतु तो निवडलेल्या उपकेंद्र/कर्मचाऱ्याशी जुळत नाही. कृपया फिल्टर तपासा.`); 
+                    alert(`⚠️ तुम्ही निवडलेल्या कालावधीचा डेटा फिल्टरमुळे लपवला जात आहे.\n\nकृपया खात्री करा की तुम्ही निवडलेले 'उपकेंद्र' आणि 'वर्ष' अचूक आहेत. (भरलेला डेटा सिस्टीममध्ये सुरक्षित आहे)`); 
                 }
             } catch(e) { alert("एरर: " + e.message); }
-        }
-        function getFieldHierarchyChain(fields, fieldObj) {
+        }        function getFieldHierarchyChain(fields, fieldObj) {
             let chain = []; let current = fieldObj;
             while (current && current.parent_id) {
                 let parent = fields.find(f => f.id === current.parent_id);
