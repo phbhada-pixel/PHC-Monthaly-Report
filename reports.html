@@ -134,7 +134,6 @@
         <div id="reportTableContainer"></div>
     </div>
 
-    <!-- 🟢 Edit Modal -->
     <div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border-t-8 border-blue-600">
             <div class="p-4 border-b flex justify-between items-center bg-blue-50">
@@ -142,8 +141,7 @@
                 <button onclick="closeEditModal()" class="text-red-500 font-bold text-2xl hover:text-red-700">&times;</button>
             </div>
             <div class="p-6 overflow-y-auto flex-1 bg-gray-50" id="editModalBody">
-                <!-- Inputs will be generated here -->
-            </div>
+                </div>
             <div class="p-4 border-t flex justify-end gap-3 bg-white">
                 <button onclick="closeEditModal()" class="bg-gray-500 text-white px-5 py-2 rounded font-bold shadow">रद्द करा</button>
                 <button onclick="saveEditResponse()" class="bg-green-600 text-white px-5 py-2 rounded font-bold shadow hover:bg-green-700">💾 अपडेट करा</button>
@@ -210,7 +208,6 @@
             await loadInitialMasterData();
         };
 
-        // 🟢 10th Date Lock Function
         function isEditingAllowed(reportMonth, reportYear) {
             if (!reportMonth || !reportYear) return false;
             let today = new Date();
@@ -369,11 +366,6 @@
             let formsToProcess = selectedIDs.includes("ALL") ? masterData.forms : masterData.forms.filter(f => selectedIDs.includes(f.id));
             let mixedTypes = new Set(formsToProcess.map(f => f.form_type));
             
-            if (mixedTypes.has('fortnightly') && (mixedTypes.has('monthly') || mixedTypes.has('progressive') || mixedTypes.has('list') || mixedTypes.has('subcenter'))) {
-                alert("⚠️ पंधरवाडी अहवाल आणि इतर अहवाल एकत्र पाहता येणार नाहीत. कृपया फक्त 'पंधरवाडी' अहवाल निवडा.");
-                return;
-            }
-
             let periodType = document.getElementById('periodType').value;
             let query = supabaseClient.from('form_responses').select('*');
             
@@ -391,7 +383,6 @@
                 
                 if (mixedTypes.has('fortnightly')) {
                     let fn = document.getElementById('reportFortnight').value;
-                    query = query.eq('report_fortnight', parseInt(fn));
                     periodText += ` (पंधरवाडा: ${fn === '1' ? '१ ते १५' : '१६ ते अखेर'})`;
                 }
 
@@ -453,7 +444,14 @@
                     
                     let currentMonthResp = [];
                     if (periodType === 'monthly') {
-                        currentMonthResp = formResp.filter(r => r.report_month === parseInt(selMonthNum) && r.report_year === parseInt(selYear));
+                        currentMonthResp = formResp.filter(r => {
+                            let isMatch = r.report_month === parseInt(selMonthNum) && r.report_year === parseInt(selYear);
+                            if (isMatch && formObj.form_type === 'fortnightly') {
+                                let fn = document.getElementById('reportFortnight').value;
+                                isMatch = r.report_fortnight === parseInt(fn);
+                            }
+                            return isMatch;
+                        });
                     } else {
                         currentMonthResp = formResp; 
                     }
@@ -772,7 +770,6 @@
 
                         let tbodyHtml = '';
                         dataRowsToRender.forEach((r, rIdx) => {
-                            // 🟢 Action Button Logic with 10th Date Check
                             let actionHtml = '';
                             if (user.role === 'phc_admin' && r.response_id && isEditingAllowed(r.report_month, r.report_year)) {
                                 actionHtml = `<div class="mt-1 flex gap-1 justify-start no-print">
@@ -792,7 +789,7 @@
                             tbodyHtml += `</tr>`;
                         });
 
-                        if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                        if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
                             let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
                             let colspanTotal = groupType === 'SubCenterFlat' ? 3 : 2;
                             tbodyHtml += `<tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2 text-left" colspan="${colspanTotal}">एकूण Total</td>`;
@@ -848,9 +845,16 @@
                                     }
                                     i = j;
                                 } else {
-                                    let mult = (rep.isProg && c.type === 'number') ? 2 : 1;
-                                    if(mult === 2) { l1Row += `<th colspan="2" rowspan="3" class="border p-2 text-xs">${c.l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
-                                    else { l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 text-xs">${c.l3}</th>`; }
+                                    let w = (rep.isProg && c.type === 'number') ? 2 : 1;
+                                    r1.push(c.l3);
+                                    if(w === 2) {
+                                        r1.push(""); merges.push({ s: { r: startR, c: r1.length - 2 }, e: { r: startR+2, c: r1.length - 1 } }); 
+                                        r2.push(""); r2.push(""); r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                                    } else {
+                                        let bottomR = rep.isProg ? startR+3 : startR+2;
+                                        merges.push({ s: { r: startR, c: r1.length - 1 }, e: { r: bottomR, c: r1.length - 1 } });
+                                        r2.push(""); r3.push(""); if(rep.isProg) r4.push("");
+                                    }
                                     i++;
                                 }
                             }
@@ -858,7 +862,6 @@
 
                             let tbodyHtml = '';
                             subRows.forEach((r, rIdx) => {
-                                // 🟢 Action Button Logic with 10th Date Check
                                 let actionHtml = '';
                                 if (user.role === 'phc_admin' && r.response_id && isEditingAllowed(r.report_month, r.report_year)) {
                                     actionHtml = `<div class="mt-1 flex gap-1 justify-start no-print">
@@ -890,7 +893,7 @@
                             html += `<div class="table-responsive"><table class="report-table"><thead>${l1Row + l2Row + l3Row + l4Row}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
                         });
 
-                        if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                        if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
                             let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
                             html += `<div class="table-responsive"><table class="report-table"><tbody><tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2" style="width:200px;" colspan="2">एकूण Total</td>`;
                             columns.forEach(c => {
@@ -907,7 +910,6 @@
             container.innerHTML = html;
         }
 
-        // 🟢 Edit / Delete Functions
         async function deleteResponse(responseId) {
             if(!confirm("तुम्हाला खात्री आहे का? हा डेटा कायमचा डिलीट होईल!")) return;
             document.getElementById('reportLoader').classList.remove('hidden');
@@ -1171,7 +1173,7 @@
                         sheetData.push(rowData);
                     });
 
-                    if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                    if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
                         let pRow = ["एकूण Total"];
                         for(let x=1; x<totalBaseCols; x++) pRow.push("");
@@ -1299,7 +1301,7 @@
                         sheetData.push(Array(totalColumnsCount).fill(""));
                     });
 
-                    if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                    if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
                         let pRow = ["एकूण Total", ""];
                         columns.forEach(c => {
