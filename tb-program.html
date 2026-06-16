@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>राष्ट्रीय क्षयरोग नियंत्रण कार्यक्रम - PHC Bhada</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; padding-bottom: 50px; }
+        .navbar-custom { background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 20px; border-bottom: 4px solid #007bff; }
+        .navbar-brand { font-weight: 700; color: #007bff !important; font-size: 1.2rem; line-height: 1.4;}
+        .nav-pills .nav-link { cursor: pointer; font-weight: bold;}
+        .nav-pills .nav-link.active { background-color: #007bff; border-radius: 8px; color: white !important; }
+        .card-custom { background: #ffffff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; border: none; }
+        .section-title { color: #007bff; font-weight: 700; margin-bottom: 15px; border-left: 4px solid #007bff; padding-left: 10px; font-size: 1.1rem;}
+        .report-card { transition: transform 0.2s; cursor: pointer; border: 1px solid #eee; text-align: center; padding: 20px 15px; height: 100%; border-radius: 12px;}
+        .report-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,123,255,0.2); border-color: #007bff;}
+        .report-icon { font-size: 30px; color: #007bff; margin-bottom: 10px; }
+        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .dashed-border { border: 2px dashed #007bff; background: #f8fbff; font-weight: bold;}
+        .dashed-border:hover { background: #eef6ff; }
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+    <h5 class="mt-3 text-primary font-weight-bold" id="loadingText">डेटा लोड होत आहे...</h5>
+</div>
+
+<nav class="navbar bg-white navbar-custom sticky-top py-3">
+    <div class="container d-flex flex-column flex-lg-row justify-content-between align-items-center text-center text-lg-left">
+        <span class="navbar-brand mb-3 mb-lg-0 w-100 w-lg-auto">
+            राष्ट्रीय क्षयरोग नियंत्रण कार्यक्रम <br>
+            <span class="text-dark" style="font-size: 0.9rem;" id="headerUserRole">(लोड होत आहे...)</span>
+        </span>
+        <div class="d-flex flex-column flex-sm-row align-items-center w-100 w-lg-auto justify-content-center justify-content-lg-end">
+            <ul class="nav nav-pills mb-3 mb-sm-0 justify-content-center w-100 w-sm-auto">
+                <li class="nav-item" id="nav-entry-li"><a class="nav-link active px-4 py-2" id="tab-entry" onclick="switchTab('entry')"><i class="fas fa-edit"></i> माहिती भरा</a></li>
+                <li class="nav-item ml-2"><a class="nav-link px-4 py-2" id="tab-reports" onclick="switchTab('reports')"><i class="fas fa-file-alt"></i> अहवाल</a></li>
+            </ul>
+            <button onclick="window.location.href='dashboard.html'" class="btn btn-secondary font-weight-bold shadow-sm ml-sm-3 w-100 w-sm-auto mt-2 mt-sm-0"><i class="fas fa-arrow-left"></i> डॅशबोर्ड</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container" style="max-width: 850px;"> 
+    <!-- ENTRY FORM -->
+    <div id="view-entry" style="margin: auto; display: none;">
+        <h5 class="text-center text-primary mb-4 font-weight-bold p-3 bg-white rounded shadow-sm border" style="line-height: 1.5;">
+            बेडका नमुना, CbNAAT, TruaNAAT, LPA, <br class="d-md-none"> Food Basket, Follow up नोंदणी
+        </h5>
+        <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-center shadow-sm font-weight-bold text-center text-md-left">
+            <span class="mb-2 mb-md-0"><i class="fas fa-calendar-day"></i> आजच्या एकूण नोंदी (Today's Entries):</span>
+            <span class="badge badge-primary p-2" id="todayCountBadge" style="font-size: 1rem;">0</span>
+        </div>
+
+        <form id="entryForm" onsubmit="event.preventDefault(); showPreview();">
+            <div class="card-custom p-3 p-md-4">
+                <div class="section-title">१. ठिकाण व कर्मचारी (Location & Staff)</div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label class="font-weight-bold text-secondary">उपकेंद्र (Subcenter) <span class="text-danger">*</span></label>
+                        <select id="subcenter" class="form-control font-weight-bold text-primary" onchange="updateVillagesAndStaff()" required></select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label class="font-weight-bold text-secondary">नमुना तारीख (Sample Date) <span class="text-danger">*</span></label>
+                        <input type="date" id="sampleDate" class="form-control font-weight-bold" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="font-weight-bold text-secondary">गाव (Village) <span class="text-danger">*</span></label>
+                    <select id="village" class="form-control font-weight-bold" onchange="checkOtherVillage()" required></select>
+                    <input type="text" id="otherVillage" class="form-control mt-2" placeholder="गावाचे नाव टाईप करा" style="display:none;">
+                </div>
+                <div class="form-group">
+                    <label class="font-weight-bold text-secondary">कर्मचाऱ्याचे नाव (Staff Name) <span class="text-danger">*</span></label>
+                    <select id="staffName" class="form-control font-weight-bold text-primary" required></select>
+                </div>
+            </div>
+
+            <div class="section-title ml-2">२. रुग्णाची माहिती (Patient Details)</div>
+            <div id="patientCardsContainer"></div>
+
+            <button type="button" class="btn btn-outline-primary btn-block mb-4 p-3 dashed-border text-lg" onclick="addRow()">
+                <i class="fas fa-plus-circle"></i> आणखी एक रुग्ण जोडा (Add Patient)
+            </button>
+            <button type="submit" class="btn btn-primary btn-block btn-lg shadow-lg font-weight-bold p-3">
+                <i class="fas fa-check-circle"></i> माहिती तपासा आणि सेव्ह करा
+            </button>
+        </form>
+    </div>
+
+    <!-- REPORTS -->
+    <div id="view-reports" style="display:none;">
+        <div class="section-title">३. अहवाल तयार करा (Generate Reports)</div>
+        <p class="text-muted mb-4 font-weight-bold">डाऊनलोड करण्यासाठी तारीख निवडा.</p>
+
+        <div class="row">
+            <div class="col-lg-4 col-md-6 mb-3">
+                <div class="card card-custom p-4 h-100 border text-center shadow-sm hover:shadow-lg transition">
+                    <div class="report-icon"><i class="fas fa-chart-pie text-danger"></i></div>
+                    <h5 class="font-weight-bold text-dark">गोषवारा (Summary)</h5>
+                    <p class="text-muted small font-weight-bold">Daily / Monthly / Yearly</p>
+                    <div class="text-left mt-3">
+                        <label class="small font-weight-bold text-secondary">तारीख (Date):</label>
+                        <input type="date" id="summaryDate" class="form-control form-control-sm mb-3 font-weight-bold border-danger">
+                    </div>
+                    <button class="btn btn-sm btn-danger btn-block font-weight-bold mt-auto shadow" onclick="downloadSummaryReport()">📄 PDF प्रिंट काढा</button>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6 mb-3">
+                <div class="card card-custom report-card d-flex flex-column justify-content-center" onclick="downloadReport('today')">
+                    <div class="report-icon"><i class="fas fa-clipboard-list text-success"></i></div>
+                    <h5 class="font-weight-bold text-dark">आजची यादी</h5>
+                    <p class="text-muted small font-weight-bold">आजच्या सर्व रुग्णांची यादी Excel मध्ये डाऊनलोड करा.</p>
+                    <button class="btn btn-sm btn-success mt-3 font-weight-bold w-100 shadow">📥 Excel डाऊनलोड</button>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-12 mb-3">
+                <div class="card card-custom p-4 h-100 border text-center shadow-sm hover:shadow-lg transition">
+                    <div class="report-icon"><i class="fas fa-calendar-alt text-info"></i></div>
+                    <h5 class="font-weight-bold text-dark">कस्टम यादी (Custom List)</h5>
+                    <div class="text-left mt-3">
+                        <label class="small font-weight-bold text-secondary">सुरुवात (Start):</label>
+                        <input type="date" id="reportStart" class="form-control form-control-sm mb-2 font-weight-bold">
+                        <label class="small font-weight-bold text-secondary">शेवट (End):</label>
+                        <input type="date" id="reportEnd" class="form-control form-control-sm mb-3 font-weight-bold">
+                    </div>
+                    <button class="btn btn-sm btn-info btn-block font-weight-bold mt-auto shadow text-white" onclick="downloadReport('custom')">📥 Excel डाऊनलोड</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius: 12px;">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title font-weight-bold text-primary">माहिती तपासा (Review Data)</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body bg-light" id="previewContent" style="max-height: 500px; overflow-y: auto;"></div>
+            <div class="modal-footer bg-white flex-column flex-sm-row">
+                <button type="button" class="btn btn-secondary font-weight-bold px-4 w-100 w-sm-auto mb-2 mb-sm-0" data-dismiss="modal">मागे जा (Edit)</button>
+                <button type="button" class="btn btn-success font-weight-bold px-4 shadow w-100 w-sm-auto" onclick="finalSubmit()">अंतिम सेव्ह करा (Submit)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const SUPABASE_URL = 'https://qbmjsfiievcautxybaai.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_sdgZ9G8ko4H_3Mh9RouYFg_JOQ-4Mdx'; 
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let dbPhcs = [];
+    let dbSubcenters = [];
+    let dbVillages = [];
+    let dbEmployees = [];
+    let loggedInUser = null;
+    let patientCount = 0;
+
+    const riskCriteriaOptions = [
+        "TB Contact", "Diabetic", "Smoker", "Malnourished", "HIV Positive",
+        "Asthma", "Cancer", "Post Covid", "Old TB Patient", "Other"
+    ];
+
+    window.onload = async function() {
+        try {
+            const userStr = localStorage.getItem('loggedInUser');
+            if (!userStr) { window.location.href = "index.html"; return; }
+            loggedInUser = JSON.parse(userStr);
+
+            let todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('sampleDate').value = todayStr;
+            document.getElementById('summaryDate').value = todayStr;
+            
+            const role = String(loggedInUser.role || '').toLowerCase().trim();
+            let roleName = "कर्मचारी";
+            if(role === 'admin' || role === 'taluka_admin') roleName = "तालुका ॲडमिन";
+            if(role === 'phc_admin') roleName = "PHC ॲडमिन";
+            if(role === 'बाह्य रुग्ण विभाग सेविका') roleName = "OPD सेविका";
+            
+            document.getElementById('headerUserRole').innerText = `(${loggedInUser.full_name} - ${roleName})`;
+
+            let isAdmin = (role === 'admin' || role === 'taluka_admin' || role === 'phc_admin');
+            if (isAdmin) {
+                document.getElementById('nav-entry-li').style.display = 'none';
+                switchTab('reports');
+            } else {
+                switchTab('entry');
+            }
+
+            await loadMasterData();
+        } catch(err) {
+            alert("क्रिटिकल एरर: " + err.message);
+            showLoading(false);
+        }
+    };
+
+    async function loadMasterData() {
+        showLoading(true, "माहिती लोड होत आहे...");
+        try {
+            const role = String(loggedInUser.role || '').toLowerCase().trim();
+            const isAdmin = (role === 'admin' || role === 'taluka_admin' || role === 'phc_admin');
+            const isOPD = (role === 'बाह्य रुग्ण विभाग सेविका');
+            
+            const pRes = await supabaseClient.from('phcs').select('*');
+            dbPhcs = pRes.data || [];
+
+            // 🟢 OPD सेविका किंवा PHC ॲडमिन असल्यास, PHC चे सर्व उपकेंद्रे लोड करा
+            let scQuery = supabaseClient.from('sub_centers').select('*');
+            if (role === 'phc_admin' || isOPD) {
+                scQuery = loggedInUser.phc_id ? scQuery.eq('phc_id', loggedInUser.phc_id) : scQuery;
+            } else if (!isAdmin && !isOPD) {
+                scQuery = loggedInUser.sub_center_id ? scQuery.eq('id', loggedInUser.sub_center_id) : scQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+            }
+            const scRes = await scQuery;
+            dbSubcenters = scRes.data || [];
+
+            const vRes = await supabaseClient.from('villages').select('*');
+            dbVillages = vRes.data || [];
+
+            let eQuery = supabaseClient.from('employees').select('*');
+            if (role === 'phc_admin') {
+                eQuery = loggedInUser.phc_id ? eQuery.eq('phc_id', loggedInUser.phc_id) : eQuery;
+            } else if (!isAdmin) {
+                eQuery = eQuery.eq('id', loggedInUser.id);
+            }
+            const eRes = await eQuery;
+            dbEmployees = eRes.data || [];
+
+            try {
+                let today = new Date().toISOString().split('T')[0];
+                let tbQuery = supabaseClient.from('tb_entries').select('id', { count: 'exact', head: true }).eq('sample_date', today);
+                
+                if (role === 'phc_admin') {
+                    let validScNames = dbSubcenters.map(s => s.name);
+                    if(validScNames.length > 0) tbQuery = tbQuery.in('sub_center', validScNames);
+                } else if (!isAdmin) {
+                    tbQuery = tbQuery.eq('staff_name', loggedInUser.full_name);
+                }
+                const statRes = await tbQuery;
+                if (statRes && statRes.count !== null) document.getElementById('todayCountBadge').innerText = statRes.count;
+            } catch(tbErr) { console.warn("TB Stats error:", tbErr); }
+
+            let scSelect = document.getElementById('subcenter');
+            scSelect.innerHTML = '<option value="">Select Subcenter...</option>';
+            dbSubcenters.forEach(sc => { scSelect.innerHTML += `<option value="${sc.id}">${sc.name}</option>`; });
+
+            if (!isAdmin && !isOPD) {
+                if (dbSubcenters.length > 0) {
+                    scSelect.value = dbSubcenters[0].id;
+                    scSelect.style.pointerEvents = "none"; 
+                    scSelect.style.backgroundColor = "#e9ecef";
+                    updateVillagesAndStaff();
+                } else {
+                    alert("⚠️ तुमच्या खात्याला कोणतेही उपकेंद्र जोडलेले नाही. कृपया ॲडमिनशी संपर्क साधा.");
+                }
+            } else if (isOPD) {
+                // 🟢 OPD नर्सला ड्रॉपडाऊन ओपन राहील
+                updateVillagesAndStaff();
+            }
+
+            addRow();
+        } catch (error) {
+            console.error(error);
+            alert("डेटा लोड करताना त्रुटी आली: " + error.message);
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function updateVillagesAndStaff() {
+        let scId = document.getElementById('subcenter').value;
+        const role = String(loggedInUser.role || '').toLowerCase().trim();
+        const isAdmin = (role === 'admin' || role === 'taluka_admin' || role === 'phc_admin');
+        const isOPD = (role === 'बाह्य रुग्ण विभाग सेविका');
+        
+        let vSelect = document.getElementById('village');
+        vSelect.innerHTML = '<option value="">Select Village...</option>';
+        dbVillages.filter(v => v.sub_center_id === scId).forEach(v => {
+            vSelect.innerHTML += `<option value="${v.name}">${v.name}</option>`;
+        });
+        vSelect.innerHTML += `<option value="Other">इतर (Other)</option>`;
+
+        let eSelect = document.getElementById('staffName');
+        eSelect.innerHTML = '<option value="">Select Staff...</option>';
+        
+        if (isOPD) {
+            // 🟢 OPD नर्स साठी तिचे नाव नेहमी फिक्स राहील
+            eSelect.innerHTML += `<option value="${loggedInUser.full_name}">${loggedInUser.full_name} (OPD सेविका)</option>`;
+            eSelect.value = loggedInUser.full_name;
+            eSelect.style.pointerEvents = "none";
+            eSelect.style.backgroundColor = "#e9ecef";
+        } else {
+            dbEmployees.filter(e => e.sub_center_id === scId).forEach(e => {
+                eSelect.innerHTML += `<option value="${e.full_name}">${e.full_name} (${e.role})</option>`;
+            });
+
+            if (!isAdmin) {
+                 eSelect.value = loggedInUser.full_name;
+            }
+        }
+    }
+
+    function checkOtherVillage() {
+        let v = document.getElementById('village').value;
+        let i = document.getElementById('otherVillage');
+        i.style.display = (v === "Other") ? "block" : "none";
+        i.required = (v === "Other");
+    }
+
+    function switchTab(tab) {
+        if(tab === 'entry') {
+            document.getElementById('view-entry').style.display = 'block';
+            document.getElementById('view-reports').style.display = 'none';
+            if(document.getElementById('tab-entry')) document.getElementById('tab-entry').classList.add('active');
+            if(document.getElementById('tab-reports')) document.getElementById('tab-reports').classList.remove('active');
+        } else {
+            document.getElementById('view-entry').style.display = 'none';
+            document.getElementById('view-reports').style.display = 'block';
+            if(document.getElementById('tab-entry')) document.getElementById('tab-entry').classList.remove('active');
+            if(document.getElementById('tab-reports')) document.getElementById('tab-reports').classList.add('active');
+        }
+    }
+
+    function addRow() {
+        patientCount++;
+        let container = document.getElementById('patientCardsContainer');
+        let card = document.createElement('div');
+        card.className = 'card-custom p-3 p-md-4 border bg-white shadow-sm';
+        card.id = 'patientCard_' + patientCount;
+        
+        let criteriaHtml = riskCriteriaOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+
+        card.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <span class="badge badge-primary px-3 py-2" style="font-size:0.9rem;">रुग्ण #${patientCount}</span>
+                ${patientCount > 1 ? `<button type="button" class="btn btn-sm btn-outline-danger font-weight-bold" onclick="removeCard(${patientCount})"><i class="fas fa-trash"></i> काढा</button>` : ''}
+            </div>
+            <div class="form-group">
+                <label class="font-weight-bold text-secondary">रुग्णाचे नाव (Name) <span class="text-danger">*</span></label>
+                <input type="text" name="patientName" class="form-control font-weight-bold" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-4 col-6">
+                    <label class="font-weight-bold text-secondary">वय (Age) <span class="text-danger">*</span></label>
+                    <input type="number" name="age" class="form-control font-weight-bold" required>
+                </div>
+                <div class="form-group col-md-4 col-6">
+                    <label class="font-weight-bold text-secondary">लिंग (Sex)</label>
+                    <select name="sex" class="form-control font-weight-bold text-primary"><option>Male</option><option>Female</option><option>Other</option></select>
+                </div>
+                <div class="form-group col-md-4 col-12">
+                    <label class="font-weight-bold text-secondary">मोबाईल (Mobile)</label>
+                    <input type="tel" name="mobile" class="form-control font-weight-bold" pattern="[0-9]{10}" placeholder="10 अंकी नंबर">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-4 col-12">
+                    <label class="font-weight-bold text-secondary">निक्षय आयडी (Nikshay ID)</label>
+                    <input type="text" name="nikshayId" class="form-control font-weight-bold text-success">
+                </div>
+                <div class="form-group col-md-4 col-6">
+                    <label class="font-weight-bold text-secondary">प्रकार (Type)</label>
+                    <select name="type" class="form-control font-weight-bold text-info"><option selected>Sputum</option><option>FollowUp Sputum</option><option>Food Basket</option><option>LPA</option><option>TruaNaaT</option><option>X-Ray</option></select>
+                </div>
+                <div class="form-group col-md-4 col-6">
+                    <label class="font-weight-bold text-secondary">टेस्ट लोकेशन</label>
+                    <select name="testLocation" class="form-control font-weight-bold"><option>PHC</option><option>RH</option><option>DH</option></select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="font-weight-bold text-secondary">जोखमीचे निकष (Risk Criteria) <span class="text-danger">*</span></label>
+                <select name="riskCriteria" class="form-control font-weight-bold" onchange="toggleOtherRisk(this)" required><option value="">Select...</option>${criteriaHtml}<option value="Other">इतर (Other)</option></select>
+                <input type="text" name="otherRiskCriteria" class="form-control mt-2" placeholder="इतर कारण टाईप करा" style="display:none;">
+            </div>
+        `;
+        container.appendChild(card);
+    }
+
+    function removeCard(id) { document.getElementById('patientCard_' + id).remove(); }
+    function toggleOtherRisk(el) { 
+        var inp = el.nextElementSibling; 
+        inp.style.display = (el.value === "Other") ? "block" : "none"; 
+        inp.required = (el.value === "Other"); 
+    }
+
+    function showPreview() {
+        var form = document.getElementById('entryForm');
+        if(!form.checkValidity()) { form.reportValidity(); return; }
+
+        let scName = $("#subcenter option:selected").text();
+        let village = document.getElementById('village').value;
+        if(village === 'Other') village = document.getElementById('otherVillage').value;
+
+        var html = `<div class="bg-white p-3 rounded border mb-3">
+            <h6 class="text-secondary font-weight-bold">तारीख: <span class="text-dark">${document.getElementById('sampleDate').value}</span></h6>
+            <h6 class="text-secondary font-weight-bold">उपकेंद्र: <span class="text-primary">${scName}</span></h6>
+            <h6 class="text-secondary font-weight-bold">गाव: <span class="text-primary">${village}</span></h6>
+            </div><ul class="list-group">`;
+        
+        document.querySelectorAll('[id^="patientCard_"]').forEach((card, i) => {
+            let name = card.querySelector('[name="patientName"]').value;
+            let type = card.querySelector('[name="type"]').value;
+            html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                <span class="font-weight-bold">${i+1}. ${name}</span>
+                <span class="badge badge-info badge-pill p-2">${type}</span>
+            </li>`;
+        });
+        html += `</ul>`;
+        document.getElementById('previewContent').innerHTML = html;
+        $('#previewModal').modal('show');
+    }
+
+    async function finalSubmit() {
+        $('#previewModal').modal('hide');
+        showLoading(true, "माहिती सेव्ह होत आहे...");
+
+        let scName = $("#subcenter option:selected").text();
+        let village = document.getElementById('village').value;
+        if(village === 'Other') village = document.getElementById('otherVillage').value;
+        let sDate = document.getElementById('sampleDate').value;
+        let staff = document.getElementById('staffName').value;
+
+        let payloads = [];
+        document.querySelectorAll('[id^="patientCard_"]').forEach(card => {
+            let risk = card.querySelector('[name="riskCriteria"]').value;
+            if(risk === 'Other') risk = card.querySelector('[name="otherRiskCriteria"]').value;
+
+            payloads.push({
+                sample_date: sDate,
+                sub_center: scName,
+                village: village,
+                staff_name: staff,
+                patient_name: card.querySelector('[name="patientName"]').value,
+                age: card.querySelector('[name="age"]').value,
+                sex: card.querySelector('[name="sex"]').value,
+                mobile: card.querySelector('[name="mobile"]').value,
+                nikshay_id: card.querySelector('[name="nikshayId"]').value,
+                test_type: card.querySelector('[name="type"]').value,
+                test_location: card.querySelector('[name="testLocation"]').value,
+                risk_criteria: risk
+            });
+        });
+
+        try {
+            const { error } = await supabaseClient.from('tb_entries').insert(payloads);
+            if (error) throw error;
+            alert("✅ माहिती यशस्वीरीत्या सेव्ह झाली!"); 
+            location.reload();
+        } catch (err) {
+            alert("एरर: " + err.message);
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function downloadSummaryReport() {
+        let sDateStr = document.getElementById('summaryDate').value;
+        if(!sDateStr) { alert("कृपया तारीख निवडा!"); return; }
+
+        let targetDate = new Date(sDateStr);
+        let year = targetDate.getFullYear();
+        let month = targetDate.getMonth() + 1;
+
+        showLoading(true, "गोषवारा PDF तयार होत आहे...");
+        try {
+            const role = String(loggedInUser.role || '').toLowerCase().trim();
+            let isAdmin = (role === 'admin' || role === 'taluka_admin');
+
+            let tbQuery = supabaseClient.from('tb_entries')
+                .select('*')
+                .gte('sample_date', `${year}-01-01`)
+                .lte('sample_date', sDateStr);
+
+            if (role === 'phc_admin') {
+                let validScNames = dbSubcenters.map(s => s.name);
+                if(validScNames.length > 0) tbQuery = tbQuery.in('sub_center', validScNames);
+            } else if (!isAdmin) {
+                let mySc = dbSubcenters.find(s => s.id === loggedInUser.sub_center_id);
+                // OPD Nurse Queries all her own data
+                if (role !== 'बाह्य रुग्ण विभाग सेविका' && mySc) tbQuery = tbQuery.eq('sub_center', mySc.name);
+                tbQuery = tbQuery.eq('staff_name', loggedInUser.full_name);
+            }
+
+            const { data, error } = await tbQuery;
+            if (error) throw error;
+
+            let html = "";
+            let grandTotal = { dS:0, mS:0, yS:0, dX:0, mX:0, yX:0 };
+            let reportDateParts = sDateStr.split('-');
+            let printDate = `${reportDateParts[2]}/${reportDateParts[1]}/${reportDateParts[0]}`;
+
+            if (isAdmin) {
+                let scStats = {};
+                
+                dbSubcenters.forEach(sc => {
+                    let phc = dbPhcs.find(p => p.id === sc.phc_id);
+                    let phcName = phc ? (phc.name || phc.phc_name || 'इतर') : 'इतर';
+                    scStats[sc.name] = { phc: phcName, sc: sc.name, dS:0, mS:0, yS:0, dX:0, mX:0, yX:0 };
+                });
+
+                data.forEach(row => {
+                    let rDate = new Date(row.sample_date);
+                    let isDaily = (row.sample_date === sDateStr);
+                    let isMonthly = (rDate.getMonth() + 1 === month);
+                    
+                    let t = String(row.test_type).toLowerCase();
+                    let cat = (t.includes('spu') || t.includes('spo') || t.includes('lpa') || t.includes('truanaat') || t.includes('food')) ? "S" : (t.includes('x-ray') || t.includes('xray') ? "X" : "");
+                    
+                    if(cat) {
+                        let scName = row.sub_center || '-';
+                        if (!scStats[scName]) scStats[scName] = { phc: 'इतर', sc: scName, dS:0, mS:0, yS:0, dX:0, mX:0, yX:0 };
+
+                        if(cat === 'S') {
+                            if(isDaily) scStats[scName].dS++; if(isMonthly) scStats[scName].mS++; scStats[scName].yS++;
+                        } else {
+                            if(isDaily) scStats[scName].dX++; if(isMonthly) scStats[scName].mX++; scStats[scName].yX++;
+                        }
+                    }
+                });
+
+                html = `<html><head><title>TB Report - ${printDate}</title></head>
+                <body style='font-family: Arial, sans-serif; color: #333; padding: 20px;'>
+                <div style='text-align:center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 20px;'>
+                    <h1 style='margin:0; color: #2c3e50; font-size: 22px;'>TALUKA HEALTH OFFICE</h1>
+                    <h2 style='margin:5px 0; font-size: 16px; color: #34495e;'>तालुकास्तरीय क्षयरोग नियंत्रण - गोषवारा अहवाल</h2>
+                    <p style='margin:0; font-weight: bold;'>दिनांक: ${printDate}</p>
+                </div>
+                <table border='1' cellpadding='6' style='width:100%; border-collapse:collapse; text-align:center; font-size:13px;'>
+                    <tr style='background-color: #2c3e50; color: #ffffff;'>
+                        <th rowspan='2'>अ.क्र.</th>
+                        <th rowspan='2'>प्राथमिक आरोग्य केंद्र (PHC)</th>
+                        <th rowspan='2'>उपकेंद्र</th>
+                        <th colspan='3'>Sputum (बेडका नमुना)</th>
+                        <th colspan='3'>X-Ray (क्ष-किरण)</th>
+                    </tr>
+                    <tr style='background-color: #34495e; color: #ffffff;'>
+                        <th>Daily</th><th>Monthly</th><th>Yearly</th><th>Daily</th><th>Monthly</th><th>Yearly</th>
+                    </tr>`;
+
+                let sortedSc = Object.values(scStats).sort((a,b) => String(a.phc).localeCompare(String(b.phc)) || String(a.sc).localeCompare(String(b.sc)));
+                let idx = 1;
+                
+                sortedSc.forEach(s => {
+                    html += `<tr>
+                        <td>${idx++}</td>
+                        <td style='text-align:left; padding-left:10px; font-weight:bold;'>${s.phc}</td>
+                        <td style='text-align:left; padding-left:10px;'>${s.sc}</td>
+                        <td>${s.dS}</td><td>${s.mS}</td><td>${s.yS}</td>
+                        <td>${s.dX}</td><td>${s.mX}</td><td>${s.yX}</td>
+                    </tr>`;
+                    grandTotal.dS += s.dS; grandTotal.mS += s.mS; grandTotal.yS += s.yS;
+                    grandTotal.dX += s.dX; grandTotal.mX += s.mX; grandTotal.yX += s.yX;
+                });
+
+            } else {
+                let empStats = {};
+                let ashaStats = { dS:0, mS:0, yS:0, dX:0, mX:0, yX:0 };
+
+                dbEmployees.forEach(e => {
+                    if (role !== 'phc_admin' && e.full_name !== loggedInUser.full_name) return;
+                    
+                    let sc = dbSubcenters.find(s => s.id === e.sub_center_id);
+                    // 🟢 OPD नर्स साठी अहवालात SC चे नाव PHC (OPD) असे दाखवा
+                    let isOPD = String(e.role) === 'बाह्य रुग्ण विभाग सेविका';
+                    let scName = isOPD ? 'PHC (OPD)' : (sc ? sc.name : '-');
+                    let isAsha = (String(e.role).toLowerCase().includes('asha') || String(e.role).includes('आशा'));
+                    
+                    if(!isAsha) empStats[e.full_name] = { sc: scName, dS:0, mS:0, yS:0, dX:0, mX:0, yX:0 };
+                });
+
+                data.forEach(row => {
+                    let rDate = new Date(row.sample_date);
+                    let isDaily = (row.sample_date === sDateStr);
+                    let isMonthly = (rDate.getMonth() + 1 === month);
+                    
+                    let t = String(row.test_type).toLowerCase();
+                    let cat = (t.includes('spu') || t.includes('spo') || t.includes('lpa') || t.includes('truanaat') || t.includes('food')) ? "S" : (t.includes('x-ray') || t.includes('xray') ? "X" : "");
+                    
+                    if(cat) {
+                        let empName = row.staff_name || 'अज्ञात';
+                        let empObj = dbEmployees.find(e => e.full_name === empName);
+                        
+                        let isAsha = empObj && (String(empObj.role).toLowerCase().includes('asha') || String(empObj.role).includes('आशा'));
+                        let isOPD = empObj && String(empObj.role) === 'बाह्य रुग्ण विभाग सेविका';
+                        let scName = isOPD ? 'PHC (OPD)' : (row.sub_center || '-');
+
+                        let targetStat = isAsha ? ashaStats : empStats[empName];
+                        if(!isAsha && !empStats[empName]) {
+                            empStats[empName] = { sc: scName, dS:0, mS:0, yS:0, dX:0, mX:0, yX:0 };
+                            targetStat = empStats[empName];
+                        }
+
+                        if(cat === 'S') {
+                            if(isDaily) targetStat.dS++; if(isMonthly) targetStat.mS++; targetStat.yS++;
+                        } else {
+                            if(isDaily) targetStat.dX++; if(isMonthly) targetStat.mX++; targetStat.yX++;
+                        }
+                    }
+                });
+
+                let phcNameHeader = "PRIMARY HEALTH CENTER";
+                if (role === 'phc_admin') {
+                    let p = dbPhcs.find(x => x.id === loggedInUser.phc_id);
+                    if (p) {
+                        let pName = p.name || p.phc_name || "PRIMARY HEALTH CENTER";
+                        phcNameHeader = String(pName).toUpperCase();
+                    }
+                }
+
+                html = `<html><head><title>TB Report - ${printDate}</title></head>
+                <body style='font-family: Arial, sans-serif; color: #333; padding: 20px;'>
+                <div style='text-align:center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 20px;'>
+                    <h1 style='margin:0; color: #2c3e50; font-size: 22px;'>${phcNameHeader}</h1>
+                    <h2 style='margin:5px 0; font-size: 16px; color: #34495e;'>दैनिक बेडका नमुना व एक्स-रे संदर्भ अहवाल</h2>
+                    <p style='margin:0; font-weight: bold;'>दिनांक: ${printDate}</p>
+                </div>
+                <table border='1' cellpadding='6' style='width:100%; border-collapse:collapse; text-align:center; font-size:13px;'>
+                    <tr style='background-color: #2c3e50; color: #ffffff;'>
+                        <th rowspan='2'>अ.क्र.</th>
+                        <th rowspan='2'>उपकेंद्र</th>
+                        <th rowspan='2'>कर्मचाऱ्याचे नाव</th>
+                        <th colspan='3'>Sputum (बेडका नमुना)</th>
+                        <th colspan='3'>X-Ray (क्ष-किरण)</th>
+                    </tr>
+                    <tr style='background-color: #34495e; color: #ffffff;'>
+                        <th>Daily</th><th>Monthly</th><th>Yearly</th><th>Daily</th><th>Monthly</th><th>Yearly</th>
+                    </tr>`;
+
+                let idx = 1;
+                let sortedEmps = Object.keys(empStats).sort((a,b) => String(empStats[a].sc).localeCompare(String(empStats[b].sc)) || String(a).localeCompare(String(b)));
+
+                sortedEmps.forEach(name => {
+                    let s = empStats[name];
+                    let bg = (idx % 2 === 0) ? "#ffffff" : "#f9f9f9";
+                    html += `<tr style='background-color:${bg};'>
+                        <td>${idx++}</td>
+                        <td>${s.sc}</td>
+                        <td style='text-align:left; padding-left:10px;'>${name}</td>
+                        <td>${s.dS}</td><td>${s.mS}</td><td>${s.yS}</td>
+                        <td>${s.dX}</td><td>${s.mX}</td><td>${s.yX}</td>
+                    </tr>`;
+                    grandTotal.dS += s.dS; grandTotal.mS += s.mS; grandTotal.yS += s.yS;
+                    grandTotal.dX += s.dX; grandTotal.mX += s.mX; grandTotal.yX += s.yX;
+                });
+
+                if(role !== 'employee' && role !== 'बाह्य रुग्ण विभाग सेविका') {
+                    html += `<tr style='font-weight:bold; background-color: #ecf0f1;'>
+                        <td>-</td><td>-</td>
+                        <td style='text-align:left; padding-left:10px;'>इतर (सर्व आशा कर्मचारी एकत्रित)</td>
+                        <td>${ashaStats.dS}</td><td>${ashaStats.mS}</td><td>${ashaStats.yS}</td>
+                        <td>${ashaStats.dX}</td><td>${ashaStats.mX}</td><td>${ashaStats.yX}</td>
+                    </tr>`;
+                    grandTotal.dS += ashaStats.dS; grandTotal.mS += ashaStats.mS; grandTotal.yS += ashaStats.yS;
+                    grandTotal.dX += ashaStats.dX; grandTotal.mX += ashaStats.mX; grandTotal.yX += ashaStats.yX;
+                }
+            }
+
+            html += `<tr style='font-weight:bold; background-color: #d4edda; color:#155724;'>
+                <td colspan='3' style='text-align:right; padding-right:15px;'>एकूण बेरीज (Grand Total)</td>
+                <td>${grandTotal.dS}</td><td>${grandTotal.mS}</td><td>${grandTotal.yS}</td>
+                <td>${grandTotal.dX}</td><td>${grandTotal.mX}</td><td>${grandTotal.yX}</td>
+            </tr></table>`;
+
+            html += `<div style='margin-top:30px; border-left: 5px solid #2c3e50; padding-left: 15px;'>
+                <h3 style='margin: 0 0 10px 0; text-decoration: underline; font-size: 16px;'>एकत्रित गोषवारा (Consolidated Summary)</h3>
+                <p style='margin:5px 0;'><strong>1. Sputum Collection:</strong><br>&bull; Daily: ${grandTotal.dS} &nbsp;&bull; Monthly: ${grandTotal.mS} &nbsp;&bull; Yearly: ${grandTotal.yS}</p>
+                <p style='margin:5px 0;'><strong>2. X-Ray Referrals:</strong><br>&bull; Daily: ${grandTotal.dX} &nbsp;&bull; Monthly: ${grandTotal.mX} &nbsp;&bull; Yearly: ${grandTotal.yX}</p>
+            </div>
+            <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }<\/script>
+            </body></html>`;
+
+            let printWindow = window.open('', '_blank');
+            printWindow.document.write(html);
+            printWindow.document.close();
+
+        } catch(e) {
+            alert("एरर: " + e.message);
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function downloadReport(type) {
+        let sDate, eDate;
+        if(type === 'today') {
+            sDate = eDate = new Date().toISOString().split('T')[0];
+        } else {
+            sDate = document.getElementById('reportStart').value;
+            eDate = document.getElementById('reportEnd').value;
+            if(!sDate || !eDate) return alert("कृपया तारखा निवडा!");
+        }
+
+        showLoading(true, "अहवाल डाउनलोड होत आहे...");
+        try {
+            let tbQuery = supabaseClient.from('tb_entries')
+                .select('*')
+                .gte('sample_date', sDate)
+                .lte('sample_date', eDate)
+                .order('sample_date', { ascending: false });
+
+            const role = String(loggedInUser.role || '').toLowerCase().trim();
+            if (role === 'phc_admin') {
+                let validScNames = dbSubcenters.map(s => s.name);
+                if(validScNames.length > 0) tbQuery = tbQuery.in('sub_center', validScNames);
+            } else if (role !== 'admin' && role !== 'taluka_admin' && role !== 'phc_admin') {
+                tbQuery = tbQuery.eq('staff_name', loggedInUser.full_name);
+            }
+
+            const { data, error } = await tbQuery;
+
+            if (error) throw error;
+            if (!data || data.length === 0) { alert("या कालावधीत कोणताही डेटा नाही."); showLoading(false); return; }
+
+            let sheetData = [["अ.क्र.", "तारीख", "उपकेंद्र", "गाव", "कर्मचारी", "रुग्णाचे नाव", "वय", "लिंग", "मोबाईल", "निक्षय ID", "टेस्ट प्रकार", "लोकेशन", "जोखीम"]];
+            
+            data.forEach((row, i) => {
+                sheetData.push([
+                    i+1, row.sample_date, row.sub_center, row.village, row.staff_name,
+                    row.patient_name, row.age, row.sex, row.mobile, row.nikshay_id,
+                    row.test_type, row.test_location, row.risk_criteria
+                ]);
+            });
+
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.aoa_to_sheet(sheetData);
+            
+            ws["!cols"] = [{wch: 6}, {wch: 12}, {wch: 15}, {wch: 15}, {wch: 20}, {wch: 25}, {wch: 5}, {wch: 8}, {wch: 12}, {wch: 12}, {wch: 15}, {wch: 10}, {wch: 20}];
+
+            XLSX.utils.book_append_sheet(wb, ws, "TB Patient List");
+            XLSX.writeFile(wb, `TB_Patient_List_${sDate}_to_${eDate}.xlsx`);
+
+        } catch(e) {
+            alert("एरर: " + e.message);
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function showLoading(show, text) {
+        var overlay = document.getElementById('loadingOverlay');
+        if(text) document.getElementById('loadingText').innerText = text;
+        overlay.style.display = show ? 'flex' : 'none';
+    }
+</script>
+</body>
+</html>

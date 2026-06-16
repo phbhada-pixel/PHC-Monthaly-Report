@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>डॅशबोर्ड - तालुका आरोग्य प्रणाली</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 p-2 md:p-6 min-h-screen">
+
+    <div class="max-w-6xl mx-auto bg-white p-4 rounded-lg shadow-md flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-t-8 border-blue-600">
+        <div class="text-center md:text-left">
+            <h1 class="text-2xl font-extrabold text-blue-700">🏥 तालुका आरोग्य प्रणाली</h1>
+            <p class="text-sm text-gray-500 font-bold mt-1">स्वागत आहे, <span id="userName" class="font-extrabold text-black"></span> <span id="userRole" class="text-blue-700 font-extrabold px-2 py-0.5 bg-blue-100 rounded shadow-sm"></span></p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="openPasswordModal()" class="bg-yellow-500 text-white px-5 py-2 rounded-lg hover:bg-yellow-600 transition font-bold shadow-md text-sm flex items-center gap-2">
+                🔒 पासवर्ड बदला
+            </button>
+            <button onclick="logout()" class="bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 transition font-bold shadow-md text-sm flex items-center gap-2">
+                🚪 लॉगआउट
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto">
+
+        <!-- 👑 ॲडमिन सेक्शन (Taluka & PHC Admin) -->
+        <div id="adminSection" class="hidden">
+            <h2 class="text-lg font-extrabold mb-4 text-gray-800 border-b-2 border-gray-200 pb-2">⚙️ कंट्रोल पॅनेल (प्रशासन)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+
+                <div onclick="window.location.href='master-data.html'" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500 cursor-pointer hover:bg-blue-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-lg mb-2 text-blue-800">मास्टर डेटा मॅनेजमेंट</h3>
+                    <p id="masterDataDesc" class="text-sm text-gray-600 font-medium">उपकेंद्रे, गावे आणि कर्मचारी जोडा.</p>
+                </div>
+
+                <div id="formBuilderCard" onclick="window.location.href='form-builder.html'" class="hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-green-500 cursor-pointer hover:bg-green-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-lg mb-2 text-green-800">फॉर्म बिल्डर (Taluka Admin)</h3>
+                    <p class="text-sm text-gray-600 font-medium">संपूर्ण तालुक्यासाठी नवीन अहवाल फॉर्म तयार करा.</p>
+                </div>
+
+                <div onclick="window.location.href='reports.html'" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-500 cursor-pointer hover:bg-purple-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-lg mb-2 text-purple-800">📊 अहवाल केंद्र</h3>
+                    <p class="text-sm text-gray-600 font-medium">कर्मचाऱ्यांनी भरलेला डेटा तपासा व डाऊनलोड करा.</p>
+                </div>
+
+                <div id="migrationCard" onclick="window.location.href='migration.html'" class="hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-yellow-500 cursor-pointer hover:bg-yellow-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-lg mb-2 text-yellow-800">📂 जुना डेटा अपलोड करा</h3>
+                    <p class="text-sm text-gray-600 font-medium">जुने CSV अहवाल एका क्लिकमध्ये सिस्टीममध्ये आणा.</p>
+                </div>
+
+                <!-- 🟢 नवीन: सक्रिय फॉर्म्स पाहण्यासाठी स्वतंत्र टॅब/कार्ड -->
+                <div id="manageFormsCard" onclick="toggleFormsList()" class="hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-500 cursor-pointer hover:bg-gray-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-lg mb-2 text-gray-800">📝 सक्रिय फॉर्म्स</h3>
+                    <p class="text-sm text-gray-600 font-medium">तालुक्यातील सर्व सक्रिय फॉर्म्स पहा व सुधारा.</p>
+                </div>
+
+            </div>
+
+            <!-- 🟢 क्लिक केल्यानंतर उघडणारा फॉर्म्सचा ब्लॉक -->
+            <div id="activeFormsListContainer" class="hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-gray-500 mb-8 transition-all">
+                <div class="flex flex-wrap justify-between items-center border-b pb-3 mb-4 gap-2">
+                    <h2 class="text-lg font-extrabold text-gray-800">📝 तालुक्यातील सक्रिय फॉर्म्स (Manage Forms)</h2>
+                    <button onclick="toggleFormsList()" class="bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm font-bold hover:bg-red-500 hover:text-white transition">
+                        ✖ बंद करा
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 text-sm">
+                                <th class="p-3 border font-bold">फॉर्मचे नाव</th>
+                                <th class="p-3 border font-bold text-center">प्रकार</th>
+                                <th class="p-3 border text-center font-bold">ॲक्शन</th>
+                            </tr>
+                        </thead>
+                        <tbody id="formsTableBody" class="text-sm bg-white">
+                            <tr><td colspan="3" class="p-6 text-center text-gray-500 font-bold">फॉर्म लोड होत आहेत...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- इतर कार्यक्रम (Special Programs) -->
+            <h2 class="text-lg font-extrabold mb-4 text-gray-800 border-b-2 border-gray-200 pb-2">🎯 इतर आरोग्य कार्यक्रम (Special Programs)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+                <div onclick="window.location.href='tb-program.html'" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500 cursor-pointer hover:bg-red-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-lg mb-2 text-red-800">🩺 क्षयरोग (TB) नियंत्रण</h3>
+                    <p class="text-sm text-gray-600 font-medium">बेडका नमुना व इतर TB विषयक माहिती नोंदणी.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🧑‍⚕️ युझर / कर्मचारी सेक्शन -->
+        <div id="userSection" class="hidden">
+            <h2 id="userSectionTitle" class="text-lg font-extrabold mb-4 text-gray-800 border-b-2 border-gray-200 pb-2">📋 माझे कामकाज (Data Entry & Reports)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+                
+                <!-- जनरल डेटा एंट्री (OPD सेविकेला दिसणार नाही) -->
+                <div id="cardDataEntry" onclick="window.location.href='data-entry.html'" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-500 cursor-pointer hover:bg-indigo-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-xl mb-2 text-indigo-800">✍️ नवीन माहिती भरा</h3>
+                    <p class="text-sm text-gray-600 font-medium">मासिक आणि इतर अहवाल भरण्यासाठी येथे जा.</p>
+                </div>
+
+                <!-- जनरल रिपोर्ट (OPD सेविकेला दिसणार नाही) -->
+                <div id="cardReports" onclick="window.location.href='reports.html'" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-purple-500 cursor-pointer hover:bg-purple-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-xl mb-2 text-purple-800">📥 अहवाल केंद्र</h3>
+                    <p class="text-sm text-gray-600 font-medium">तुम्ही भरलेला जुना डेटा तपासा आणि डाऊनलोड करा.</p>
+                </div>
+
+                <!-- TB प्रोग्राम (सर्वांना व OPD सेविकेला दिसेल) -->
+                <div id="cardTBProgram" onclick="window.location.href='tb-program.html'" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500 cursor-pointer hover:bg-red-50 transition transform hover:-translate-y-1">
+                    <h3 class="font-bold text-xl mb-2 text-red-800">🩺 क्षयरोग (TB) नोंदणी</h3>
+                    <p class="text-sm text-gray-600 font-medium">बेडका नमुना व क्षयरोग विषयक माहिती भरा.</p>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 🔒 पासवर्ड बदलण्यासाठी पॉपअप (Modal) -->
+    <div id="passwordModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500 transform transition-all">
+            <div class="p-6">
+                <h2 class="text-2xl font-extrabold text-gray-800 mb-6 text-center">🔒 पासवर्ड बदला</h2>
+                
+                <label class="block text-sm font-bold text-gray-700 mb-1">जुना पासवर्ड</label>
+                <input type="password" id="oldPassword" class="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-yellow-500 outline-none font-bold" placeholder="सध्याचा पासवर्ड">
+                
+                <label class="block text-sm font-bold text-gray-700 mb-1">नवीन पासवर्ड</label>
+                <input type="password" id="newPassword" class="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-yellow-500 outline-none font-bold text-blue-700" placeholder="नवीन पासवर्ड टाका">
+                
+                <label class="block text-sm font-bold text-gray-700 mb-1">नवीन पासवर्ड पुन्हा टाका</label>
+                <input type="password" id="confirmPassword" class="w-full p-3 border-2 border-gray-300 rounded-lg mb-6 focus:ring-2 focus:ring-yellow-500 outline-none font-bold text-blue-700" placeholder="खात्री करण्यासाठी पुन्हा टाका">
+                
+                <div class="flex justify-between gap-3">
+                    <button onclick="closePasswordModal()" class="w-1/2 bg-gray-300 text-gray-800 px-4 py-2.5 rounded-lg font-extrabold hover:bg-gray-400 transition shadow-sm">रद्द करा</button>
+                    <button onclick="changePassword()" id="btnChangePwd" class="w-1/2 bg-green-600 text-white px-4 py-2.5 rounded-lg font-extrabold shadow-lg hover:bg-green-700 transition">सेव्ह करा</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🟢 JavaScript Logic -->
+    <script>
+        const SUPABASE_URL = 'https://qbmjsfiievcautxybaai.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_sdgZ9G8ko4H_3Mh9RouYFg_JOQ-4Mdx'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let loggedInUserObj = null;
+
+        window.onload = function() {
+            const userDataString = localStorage.getItem('loggedInUser');
+            if (!userDataString) { window.location.href = "index.html"; return; }
+
+            loggedInUserObj = JSON.parse(userDataString);
+            document.getElementById('userName').innerText = loggedInUserObj.full_name;
+
+            const exactRole = String(loggedInUserObj.role || '').trim();
+            const role = exactRole.toLowerCase();
+
+            if (role === 'taluka_admin' || role === 'admin') {
+                document.getElementById('userRole').innerText = "(तालुका ॲडमिन)";
+                document.getElementById('adminSection').classList.remove('hidden');
+
+                document.getElementById('formBuilderCard').classList.remove('hidden');
+                document.getElementById('migrationCard').classList.remove('hidden'); 
+                
+                // 🟢 येथे 'सक्रिय फॉर्म्स' चे कार्ड दाखवत आहोत (टेबल लपलेले राहील)
+                document.getElementById('manageFormsCard').classList.remove('hidden'); 
+                
+                document.getElementById('masterDataDesc').innerText = "नवीन PHC, उपकेंद्रे आणि PHC ॲडमिन तयार करा.";
+
+                loadActiveForms(); 
+
+            } else if (role === 'phc_admin') {
+                document.getElementById('userRole').innerText = "(PHC ॲडमिन)";
+                document.getElementById('adminSection').classList.remove('hidden');
+                document.getElementById('masterDataDesc').innerText = "तुमच्या PHC मधील उपकेंद्रे, गावे आणि कर्मचारी तयार करा.";
+
+            } else {
+                // 🟢 सामान्य कर्मचारी / आशा / OPD सेविका
+                document.getElementById('userRole').innerText = `(${exactRole})`;
+                document.getElementById('userSection').classList.remove('hidden');
+
+                // 🟢 OPD सेविकेसाठी निर्बंध (Restriction Logic)
+                if (exactRole === 'बाह्य रुग्ण विभाग सेविका') {
+                    document.getElementById('userSectionTitle').innerText = "🩺 क्षयरोग (TB) नियंत्रण विभाग";
+                    document.getElementById('cardDataEntry').classList.add('hidden'); // जनरल फॉर्म्स लपवा
+                    document.getElementById('cardReports').classList.add('hidden'); // जनरल रिपोर्ट लपवा
+                    
+                    // कार्ड मध्यभागी दिसण्यासाठी CSS ॲडजस्टमेंट
+                    document.getElementById('cardTBProgram').parentElement.classList.remove('md:grid-cols-3');
+                    document.getElementById('cardTBProgram').parentElement.classList.add('md:grid-cols-1', 'max-w-md');
+                }
+            }
+        };
+
+        // 🟢 क्लिक केल्यावर फॉर्म्सचा टेबल उघडणे व बंद करणे
+        function toggleFormsList() {
+            const container = document.getElementById('activeFormsListContainer');
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                // हळूवारपणे खाली स्क्रोल करण्यासाठी
+                setTimeout(() => container.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        async function loadActiveForms() {
+            const { data, error } = await supabaseClient.from('dynamic_forms').select('id, form_name, form_type').eq('is_active', true);
+            const tbody = document.getElementById('formsTableBody');
+            
+            if (error || !data || data.length === 0) { 
+                tbody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-red-500 font-bold bg-red-50">अद्याप कोणताही फॉर्म तयार केलेला नाही.</td></tr>'; 
+                return; 
+            }
+            
+            tbody.innerHTML = '';
+            data.forEach(form => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition border-b border-gray-200";
+                
+                tr.innerHTML = `
+                    <td class="p-3 border-x font-bold text-gray-800">${form.form_name}</td>
+                    <td class="p-3 border-x text-center uppercase text-xs font-bold text-indigo-600"><span class="bg-indigo-100 px-2 py-1 rounded">${form.form_type}</span></td>
+                    <td class="p-3 border-x text-center">
+                        <button onclick="editForm('${form.id}')" class="bg-blue-100 text-blue-700 px-5 py-1.5 rounded text-sm font-extrabold hover:bg-blue-200 shadow-sm transition">✏️ सुधारा (Edit)</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function editForm(id) { 
+            window.location.href = `form-builder.html?edit=${id}`; 
+        }
+
+        function openPasswordModal() {
+            document.getElementById('oldPassword').value = ""; document.getElementById('newPassword').value = ""; document.getElementById('confirmPassword').value = "";
+            document.getElementById('passwordModal').classList.remove('hidden');
+        }
+        
+        function closePasswordModal() { document.getElementById('passwordModal').classList.add('hidden'); }
+
+        async function changePassword() {
+            const oldP = document.getElementById('oldPassword').value.trim(); 
+            const newP = document.getElementById('newPassword').value.trim(); 
+            const confP = document.getElementById('confirmPassword').value.trim();
+            
+            if (!oldP || !newP || !confP) return alert('कृपया सर्व रकाने भरा!');
+            if (newP.length < 4) return alert('नवीन पासवर्ड किमान ४ अक्षरांचा/अंकांचा असावा!');
+            if (newP !== confP) return alert('नवीन पासवर्ड आणि खात्री पासवर्ड जुळत नाही!');
+
+            document.getElementById('btnChangePwd').innerText = "सेव्ह होत... "; document.getElementById('btnChangePwd').disabled = true;
+
+            try {
+                const { data, error } = await supabaseClient.from('employees').select('password, possword').eq('id', loggedInUserObj.id).single();
+                let dbPwd = data.password || data.possword;
+                if (error || !data || String(dbPwd).trim() !== oldP) { alert('तुमचा जुना पासवर्ड चुकीचा आहे!'); } 
+                else {
+                    const { error: updateErr } = await supabaseClient.from('employees').update({ password: newP }).eq('id', loggedInUserObj.id);
+                    if (updateErr) throw updateErr;
+                    alert('✅ पासवर्ड यशस्वीरीत्या बदलला आहे! सुरक्षिततेसाठी कृपया नवीन पासवर्डने पुन्हा लॉगिन करा.'); logout(); 
+                }
+            } catch(e) { alert("तांत्रिक एरर: " + e.message); }
+            document.getElementById('btnChangePwd').innerText = "सेव्ह करा"; document.getElementById('btnChangePwd').disabled = false;
+        }
+
+        function logout() { localStorage.removeItem('loggedInUser'); sessionStorage.clear(); window.location.href = "index.html"; }
+    </script>
+</body>
+</html>

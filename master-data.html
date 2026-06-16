@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>मास्टर डेटा मॅनेजमेंट - तालुका व PHC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .tab-btn.active { border-bottom: 4px solid #2563eb; color: #1d4ed8; font-weight: bold; background-color: #eff6ff; }
+    </style>
+</head>
+<body class="bg-gray-100 p-2 md:p-6 min-h-screen">
+
+    <div class="max-w-7xl mx-auto bg-white p-4 rounded-lg shadow-md flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-xl font-bold text-blue-700">⚙️ मास्टर डेटा मॅनेजमेंट</h1>
+            <p class="text-sm text-gray-500">उपकेंद्रे, गावे आणि कर्मचारी यांचे व्यवस्थापन करा</p>
+        </div>
+        <button onclick="window.location.href='dashboard.html'" class="bg-gray-600 text-white px-4 py-2 rounded font-bold shadow hover:bg-gray-700 transition text-sm">डॅशबोर्डवर परत जा</button>
+    </div>
+
+    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md overflow-hidden mb-8">
+        
+        <div class="flex flex-wrap border-b bg-gray-50 text-sm md:text-base">
+            <button id="tabBtnPHC" onclick="switchTab('phcTab')" class="tab-btn hidden flex-1 py-3 px-2 md:px-4 text-gray-600 font-medium hover:bg-gray-100 transition">🏥 PHC व ॲडमिन</button>
+            <button id="tabBtnSubCenter" onclick="switchTab('subCenterTab')" class="tab-btn active flex-1 py-3 px-2 md:px-4 text-gray-600 font-medium hover:bg-gray-100 transition">🏢 उपकेंद्रे</button>
+            <button id="tabBtnVillage" onclick="switchTab('villageTab')" class="tab-btn flex-1 py-3 px-2 md:px-4 text-gray-600 font-medium hover:bg-gray-100 transition">🏘️ गावे</button>
+            <button id="tabBtnEmployee" onclick="switchTab('employeeTab')" class="tab-btn flex-1 py-3 px-2 md:px-4 text-gray-600 font-medium hover:bg-gray-100 transition">🧑‍⚕️ कर्मचारी</button>
+        </div>
+
+        <div class="p-4 md:p-6">
+            
+            <div id="phcTab" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-8">
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h3 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">१. नवीन प्राथमिक आरोग्य केंद्र (PHC) जोडा</h3>
+                        <form onsubmit="addPHC(event)" class="flex gap-2">
+                            <input type="text" id="newPHCName" placeholder="उदा. PHC भादा" required class="flex-1 p-2 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 font-bold">
+                            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-blue-700">जोडा</button>
+                        </form>
+                    </div>
+
+                    <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <h3 class="font-bold text-purple-800 mb-3 border-b border-purple-200 pb-2">२. नवीन PHC ॲडमिन जोडा</h3>
+                        <form onsubmit="addPHCAdmin(event)" class="space-y-3">
+                            <select id="adminPHCSelect" required class="w-full p-2 border border-purple-300 rounded font-bold"><option value="">-- PHC निवडा --</option></select>
+                            <input type="text" id="adminName" placeholder="ॲडमिनचे पूर्ण नाव" required class="w-full p-2 border border-purple-300 rounded">
+                            <div class="flex gap-2">
+                                <input type="tel" id="adminMobile" placeholder="मोबाईल नंबर (लॉगिन आयडी)" required pattern="[0-9]{10}" class="w-1/2 p-2 border border-purple-300 rounded">
+                                <input type="text" id="adminPassword" placeholder="पासवर्ड" required value="123456" class="w-1/2 p-2 border border-purple-300 rounded font-bold text-purple-700">
+                            </div>
+                            <button type="submit" class="w-full bg-purple-600 text-white px-4 py-2 rounded font-bold shadow hover:bg-purple-700">PHC ॲडमिन तयार करा</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 md:p-6 rounded-lg border border-gray-300 shadow-sm">
+                    <h3 class="font-extrabold text-gray-800 mb-4 text-xl border-b pb-3">🏥 सर्व प्राथमिक आरोग्य केंद्र, उपकेंद्रे व गावे यादी</h3>
+                    <p class="text-sm text-blue-600 mb-4 font-bold">👉 विस्तृत माहिती पाहण्यासाठी नावांवर क्लिक करा.</p>
+                    <div id="phcHierarchyTree" class="space-y-4"></div>
+                </div>
+            </div>
+
+            <div id="subCenterTab" class="tab-content">
+                <div class="phc-admin-warning hidden bg-red-100 text-red-800 p-4 rounded-lg border-2 border-red-300 font-bold mb-6 text-center shadow-sm">
+                    🔒 तालुका ॲडमिनद्वारे नवीन उपकेंद्र नोंदणी तात्पुरती बंद करण्यात आली आहे.
+                </div>
+                
+                <div class="phc-admin-form bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                    <h2 class="font-bold text-gray-700 mb-3" id="subCenterFormTitle">नवीन आरोग्य उपकेंद्र जोडा</h2>
+                    <input type="hidden" id="editSubCenterId" value="">
+                    <form onsubmit="saveSubCenter(event)" class="flex flex-col md:flex-row gap-3">
+                        <select id="scPHCSelect" class="p-2 border border-gray-300 rounded flex-1 font-bold hidden"><option value="">-- PHC निवडा --</option></select>
+                        <input type="text" id="subCenterName" placeholder="नवीन उपकेंद्राचे नाव (उदा. उपकेंद्र शिवली)" required class="p-2 border border-gray-300 rounded flex-1 font-bold">
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <button type="submit" id="subCenterSaveBtn" class="flex-1 md:flex-none bg-blue-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-blue-700">सेव्ह करा</button>
+                            <button type="button" onclick="resetSubCenterForm()" id="subCenterCancelBtn" class="bg-gray-300 px-4 py-2 rounded font-bold hidden hover:bg-gray-400">रद्द</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <h3 class="font-bold text-gray-700 mb-2 italic">सर्व नोंदणीकृत उपकेंद्रे</h3>
+                <div class="overflow-x-auto border rounded shadow-sm">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead><tr class="bg-gray-200 text-gray-700"><th class="p-3 border w-12 text-center">अ.क्र.</th><th class="p-3 border">उपकेंद्राचे नाव</th><th id="thPHCName" class="p-3 border hidden">संबंधित PHC</th><th class="p-3 border text-center w-20 phc-admin-form">कृती</th></tr></thead>
+                        <tbody id="subCenterTableBody" class="bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="villageTab" class="tab-content hidden">
+                <div class="phc-admin-warning hidden bg-red-100 text-red-800 p-4 rounded-lg border-2 border-red-300 font-bold mb-6 text-center shadow-sm">
+                    🔒 तालुका ॲडमिनद्वारे नवीन गाव नोंदणी तात्पुरती बंद करण्यात आली आहे.
+                </div>
+
+                <div class="phc-admin-form bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                    <h2 class="font-bold text-gray-700 mb-3" id="villageFormTitle">नवीन गाव जोडा</h2>
+                    <input type="hidden" id="editVillageId" value="">
+                    <form onsubmit="saveVillage(event)" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <select id="subCenterSelect" required class="p-2 border border-gray-300 rounded font-bold md:col-span-1"><option value="">-- उपकेंद्र निवडा --</option></select>
+                        <input type="text" id="villageName" placeholder="नवीन गावाचे नाव" required class="p-2 border border-gray-300 rounded font-bold md:col-span-1">
+                        <input type="number" id="villagePopulation" placeholder="लोकसंख्या (उदा. 1500)" class="p-2 border border-gray-300 rounded md:col-span-1">
+                        <input type="number" id="villageHouses" placeholder="घरांची संख्या (उदा. 350)" class="p-2 border border-gray-300 rounded md:col-span-1">
+                        
+                        <div class="flex gap-2 md:col-span-4 justify-end mt-2">
+                            <button type="button" onclick="resetVillageForm()" id="villageCancelBtn" class="bg-gray-300 px-6 py-2 rounded font-bold hidden hover:bg-gray-400">रद्द करा</button>
+                            <button type="submit" id="villageSaveBtn" class="bg-green-600 text-white px-8 py-2 rounded font-bold shadow hover:bg-green-700">गाव सेव्ह करा</button>
+                        </div>
+                    </form>
+                </div>
+
+                <h3 class="font-bold text-gray-700 mb-2 italic">सर्व नोंदणीकृत गावे</h3>
+                <div class="overflow-x-auto border rounded shadow-sm max-h-96">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="sticky top-0 bg-gray-200 text-gray-700"><tr class="font-bold"><th class="p-3 border w-12 text-center">अ.क्र.</th><th class="p-3 border">गावाचे नाव</th><th class="p-3 border">उपकेंद्र (व PHC)</th><th class="p-3 border text-center">लोकसंख्या</th><th class="p-3 border text-center">घरे</th><th class="p-3 border text-center w-20 phc-admin-form">कृती</th></tr></thead>
+                        <tbody id="villageTableBody" class="bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="employeeTab" class="tab-content hidden">
+                <div class="phc-admin-warning hidden bg-red-100 text-red-800 p-4 rounded-lg border-2 border-red-300 font-bold mb-6 text-center shadow-sm">
+                    🔒 तालुका ॲडमिनद्वारे नवीन कर्मचारी नोंदणी तात्पुरती बंद करण्यात आली आहे.
+                </div>
+
+                <div class="phc-admin-form bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-6">
+                    <h2 class="font-bold text-indigo-800 mb-3 border-b border-indigo-200 pb-2">नवीन कर्मचारी जोडा (MPW / ANM / CHO / इतर)</h2>
+                    <form onsubmit="addEmployee(event)" class="flex flex-col md:flex-row flex-wrap gap-3">
+                        <input type="text" id="empName" placeholder="कर्मचाऱ्याचे पूर्ण नाव" required class="flex-1 p-2 border border-indigo-300 rounded font-bold min-w-[150px]">
+                        <input type="tel" id="empMobile" placeholder="मोबाईल (लॉगिन आयडी)" required pattern="[0-9]{10}" class="flex-1 p-2 border border-indigo-300 rounded font-bold min-w-[140px]">
+                        
+                        <select id="empRole" required onchange="handleEmpRoleChange()" class="flex-1 p-2 border border-indigo-300 rounded font-bold text-indigo-700 min-w-[160px]">
+                            <option value="">-- पद / Role निवडा --</option>
+                            <option value="MPW">MPW (आरोग्य सेवक)</option>
+                            <option value="ANM">ANM (आरोग्य सेविका)</option>
+                            <option value="CHO">CHO (समुदाय आरोग्य अधिकारी)</option>
+                            <option value="आशा कार्यकर्ती">आशा कार्यकर्ती</option>
+                            <option value="बाह्य रुग्ण विभाग सेविका">बाह्य रुग्ण विभाग सेविका (OPD)</option>
+                        </select>
+
+                        <select id="empPHCSelect" class="flex-1 p-2 border border-indigo-300 rounded font-bold hidden min-w-[150px]" onchange="populateEmpSubCenters()">
+                            <option value="">-- PHC निवडा --</option>
+                        </select>
+
+                        <select id="empSubCenterSelect" required class="flex-1 p-2 border border-indigo-300 rounded font-bold min-w-[150px]">
+                            <option value="">-- उपकेंद्र निवडा --</option>
+                        </select>
+                        
+                        <div class="flex gap-2 flex-1 min-w-[150px]">
+                            <input type="text" id="empPassword" placeholder="पासवर्ड" value="123456" required class="p-2 border border-indigo-300 rounded font-bold w-1/2 text-center text-indigo-600">
+                            <button type="submit" class="bg-indigo-600 text-white p-2 rounded font-bold shadow hover:bg-indigo-700 w-1/2">जोडा</button>
+                        </div>
+                    </form>
+                </div>
+
+                <h3 class="font-bold text-gray-700 mb-3 text-lg border-b pb-2 text-indigo-700">कर्मचारी यादी (तालुका व उपकेंद्रानुसार)</h3>
+                <div class="overflow-x-auto border rounded shadow-sm max-h-96">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="sticky top-0 bg-indigo-100 text-indigo-900 font-bold">
+                            <tr><th class="p-3 border">कर्मचाऱ्याचे नाव</th><th class="p-3 border text-center">पद (Role)</th><th class="p-3 border text-center">मोबाईल / पासवर्ड</th><th class="p-3 border">नियुक्त ठिकाण (PHC/उपकेंद्र)</th></tr>
+                        </thead>
+                        <tbody id="employeeTableBody" class="bg-white text-gray-700">
+                            <tr><td colspan="4" class="p-3 text-center text-gray-400">कर्मचारी डेटा लोड होत आहे...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="loader" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl text-center border-4 border-blue-500"><div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-3"></div><p class="text-lg font-bold text-gray-800">प्रोसेसिंग सुरू आहे...</p></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qbmjsfiievcautxybaai.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_sdgZ9G8ko4H_3Mh9RouYFg_JOQ-4Mdx'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let currentUser = null;
+        let isTalukaAdmin = false;
+
+        let globalPHCs = [];
+        let globalSubCenters = [];
+        let globalVillages = [];
+        let globalEmployees = [];
+        let isCreationAllowed = true;
+
+        window.onload = async function() {
+            const userString = localStorage.getItem('loggedInUser');
+            if (!userString) { window.location.href = "index.html"; return; }
+            currentUser = JSON.parse(userString);
+
+            const role = String(currentUser.role || '').toLowerCase().trim();
+            if (role !== 'admin' && role !== 'taluka_admin' && role !== 'phc_admin') { 
+                alert("परवानगी नाकारली!"); window.location.href = "dashboard.html"; return; 
+            }
+
+            isTalukaAdmin = (role === 'admin' || role === 'taluka_admin');
+
+            if (isTalukaAdmin) {
+                document.getElementById('tabBtnPHC').classList.remove('hidden');
+                document.getElementById('scPHCSelect').classList.remove('hidden');
+                document.getElementById('thPHCName').classList.remove('hidden');
+                document.getElementById('empPHCSelect').classList.remove('hidden');
+                switchTab('phcTab'); 
+            } else {
+                switchTab('subCenterTab'); 
+            }
+
+            await loadMasterData();
+        };
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.remove('hidden');
+            
+            let btnId = '';
+            if(tabId === 'phcTab') btnId = 'tabBtnPHC';
+            else if(tabId === 'subCenterTab') btnId = 'tabBtnSubCenter';
+            else if(tabId === 'villageTab') btnId = 'tabBtnVillage';
+            else if(tabId === 'employeeTab') btnId = 'tabBtnEmployee';
+            
+            if(btnId) document.getElementById(btnId).classList.add('active');
+        }
+
+        window.toggleVisibility = function(id) {
+            const el = document.getElementById(id);
+            if(el) { el.classList.toggle('hidden'); }
+        };
+
+        function showLoader() { document.getElementById('loader').classList.remove('hidden'); }
+        function hideLoader() { document.getElementById('loader').classList.add('hidden'); }
+
+        async function loadMasterData() {
+            showLoader();
+            try {
+                const { data: pData } = await supabaseClient.from('phcs').select('*');
+                globalPHCs = pData || [];
+                globalPHCs.sort((a,b) => String(extractPHCName(a)).localeCompare(String(extractPHCName(b))));
+
+                if (!isTalukaAdmin && currentUser.phc_id) {
+                    let myPhc = globalPHCs.find(p => p.id === currentUser.phc_id);
+                    if (myPhc && myPhc.allow_creation === false) {
+                        isCreationAllowed = false;
+                    }
+                }
+
+                let scQuery = supabaseClient.from('sub_centers').select('*');
+                if (!isTalukaAdmin && currentUser.phc_id) scQuery = scQuery.eq('phc_id', currentUser.phc_id);
+                const { data: scData } = await scQuery;
+                globalSubCenters = scData || [];
+                globalSubCenters.sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+                let vQuery = supabaseClient.from('villages').select('*');
+                if (!isTalukaAdmin) {
+                    const validScIds = globalSubCenters.map(sc => sc.id);
+                    if (validScIds.length > 0) vQuery = vQuery.in('sub_center_id', validScIds);
+                    else vQuery = vQuery.eq('sub_center_id', '00000000-0000-0000-0000-000000000000'); 
+                }
+                const { data: vData } = await vQuery;
+                globalVillages = vData || [];
+                globalVillages.sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+                let eQuery = supabaseClient.from('employees').select('*');
+                if (!isTalukaAdmin && currentUser.phc_id) eQuery = eQuery.eq('phc_id', currentUser.phc_id);
+                const { data: eData } = await eQuery;
+                globalEmployees = eData || [];
+                globalEmployees.sort((a,b) => String(a.full_name || '').localeCompare(String(b.full_name || '')));
+
+                renderAllUI();
+            } catch (error) { 
+                alert("माहिती लोड करताना एरर: " + error.message); 
+            }
+            hideLoader();
+        }
+
+        function extractPHCName(phcObj) {
+            if (!phcObj) return 'अज्ञात PHC';
+            return phcObj.phc_name || phcObj.name || 'अज्ञात PHC';
+        }
+
+        function renderAllUI() {
+            if (!isCreationAllowed && !isTalukaAdmin) {
+                document.querySelectorAll('.phc-admin-form').forEach(el => el.classList.add('hidden'));
+                document.querySelectorAll('.phc-admin-warning').forEach(el => el.classList.remove('hidden'));
+            } else {
+                document.querySelectorAll('.phc-admin-form').forEach(el => el.classList.remove('hidden'));
+                document.querySelectorAll('.phc-admin-warning').forEach(el => el.classList.add('hidden'));
+            }
+
+            const adminPhcSel = document.getElementById('adminPHCSelect');
+            const scPhcSel = document.getElementById('scPHCSelect');
+            const empPhcSel = document.getElementById('empPHCSelect');
+            
+            adminPhcSel.innerHTML = '<option value="">-- PHC निवडा --</option>';
+            scPhcSel.innerHTML = '<option value="">-- PHC निवडा --</option>';
+            if(isTalukaAdmin) empPhcSel.innerHTML = '<option value="">-- PHC निवडा --</option>';
+            
+            globalPHCs.forEach(p => { 
+                let pName = extractPHCName(p);
+                adminPhcSel.innerHTML += `<option value="${p.id}">${pName}</option>`; 
+                scPhcSel.innerHTML += `<option value="${p.id}">${pName}</option>`; 
+                if(isTalukaAdmin) empPhcSel.innerHTML += `<option value="${p.id}">${pName}</option>`;
+            });
+
+            document.getElementById('subCenterSelect').innerHTML = '<option value="">-- उपकेंद्र निवडा --</option>';
+            globalSubCenters.forEach(sc => {
+                let phcName = isTalukaAdmin ? ` (${getPHCName(sc.phc_id)})` : '';
+                document.getElementById('subCenterSelect').innerHTML += `<option value="${sc.id}">${sc.name}${phcName}</option>`;
+            });
+
+            populateEmpSubCenters(); 
+
+            if (isTalukaAdmin) renderPHCHierarchy(); 
+            
+            renderSubCenterTable(); 
+            renderVillageTable(); 
+            renderEmployeeTable();
+        }
+
+        function handleEmpRoleChange() {
+            const role = document.getElementById('empRole').value;
+            const scSel = document.getElementById('empSubCenterSelect');
+            if (role === 'बाह्य रुग्ण विभाग सेविका') {
+                scSel.disabled = true;
+                scSel.removeAttribute('required');
+                scSel.innerHTML = '<option value="">-- थेट PHC ला नियुक्त --</option>';
+                scSel.classList.add('bg-gray-200', 'text-gray-500');
+            } else {
+                scSel.disabled = false;
+                scSel.setAttribute('required', 'true');
+                scSel.classList.remove('bg-gray-200', 'text-gray-500');
+                populateEmpSubCenters();
+            }
+        }
+
+        function populateEmpSubCenters() {
+            const role = document.getElementById('empRole').value;
+            if (role === 'बाह्य रुग्ण विभाग सेविका') return;
+
+            const scSel = document.getElementById('empSubCenterSelect');
+            scSel.innerHTML = '<option value="">-- उपकेंद्र निवडा --</option>';
+            
+            let phcId = isTalukaAdmin ? document.getElementById('empPHCSelect').value : currentUser.phc_id;
+            let filteredSc = globalSubCenters;
+            if (phcId) {
+                filteredSc = globalSubCenters.filter(sc => sc.phc_id === phcId);
+            }
+
+            filteredSc.forEach(sc => {
+                let pName = (isTalukaAdmin && !phcId) ? ` (${getPHCName(sc.phc_id)})` : '';
+                scSel.innerHTML += `<option value="${sc.id}">${sc.name}${pName}</option>`;
+            });
+        }
+
+        function getPHCName(id) { 
+            let p = globalPHCs.find(x => x.id === id); 
+            return p ? extractPHCName(p) : '<span class="text-red-500">अज्ञात PHC</span>'; 
+        }
+        function getSCName(id) { 
+            let s = globalSubCenters.find(x => x.id === id); 
+            return s ? s.name : '<span class="text-red-500 italic">असाइन नाही</span>'; 
+        }
+
+        async function togglePhcCreation(phcId, currentStatus) {
+            if(!confirm(`तुम्हाला खात्री आहे की या PHC साठी नवीन डेटा नोंदणी ${currentStatus ? 'बंद' : 'चालू'} करायची आहे?`)) return;
+            showLoader();
+            const { error } = await supabaseClient.from('phcs').update({ allow_creation: !currentStatus }).eq('id', phcId);
+            hideLoader();
+            if(error) alert("एरर: " + error.message);
+            else loadMasterData();
+        }
+
+        function renderPHCHierarchy() {
+            let container = document.getElementById('phcHierarchyTree'); container.innerHTML = '';
+            if(globalPHCs.length === 0) { 
+                container.innerHTML = '<p class="text-center text-gray-500 p-4 font-bold border rounded bg-gray-50">अद्याप प्राथमिक आरोग्य केंद्रे जोडलेली नाहीत.</p>'; 
+                return; 
+            } 
+
+            globalPHCs.forEach(phc => { 
+                let pName = extractPHCName(phc);
+                let scList = globalSubCenters.filter(sc => sc.phc_id === phc.id);
+                
+                let scHtml = '';
+                scList.forEach(sc => {
+                    let vList = globalVillages.filter(v => v.sub_center_id === sc.id);
+                    let vHtml = '';
+                    vList.forEach((v) => { vHtml += `<li class="ml-6 md:ml-10 list-disc text-sm font-semibold text-gray-700 py-1.5 border-b border-dashed border-gray-300 last:border-0">${v.name} <span class="text-xs text-gray-500 font-normal ml-1">(लोक.: ${v.population || 0}, घरे: ${v.total_houses || 0})</span></li>`; });
+                    
+                    scHtml += `<div class="mt-3 ml-2 md:ml-6 border-l-4 border-indigo-400 pl-3 py-1 bg-white rounded shadow-sm"><div class="cursor-pointer font-bold text-indigo-800 hover:text-indigo-600 flex items-center justify-between" onclick="toggleVisibility('villages_${sc.id}')"><span class="text-[15px]">🏢 ${sc.name} <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full ml-2 shadow-sm">${vList.length} गावे ▼</span></span></div><ul id="villages_${sc.id}" class="hidden mt-2 mb-2 bg-gray-50 p-2 rounded-lg border border-gray-200 shadow-inner">${vHtml || '<li class="text-xs text-red-500 italic font-bold">या उपकेंद्रात गावे जोडलेली नाहीत.</li>'}</ul></div>`;
+                });
+
+                let allowBtn = phc.allow_creation !== false 
+                    ? `<button onclick="togglePhcCreation('${phc.id}', true)" class="bg-green-100 text-green-700 px-3 py-1 rounded text-xs font-bold border border-green-400 hover:bg-green-200 shadow-sm transition whitespace-nowrap">एन्ट्री: चालू (ON)</button>`
+                    : `<button onclick="togglePhcCreation('${phc.id}', false)" class="bg-red-100 text-red-700 px-3 py-1 rounded text-xs font-bold border border-red-400 hover:bg-red-200 shadow-sm transition whitespace-nowrap">एन्ट्री: बंद (OFF)</button>`;
+
+                let phcHtml = `
+                    <div class="bg-white border-2 border-blue-300 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+                        <div class="p-3 md:p-4 bg-blue-50 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-blue-100 gap-3">
+                            <div class="cursor-pointer font-extrabold text-blue-900 text-base md:text-lg flex-1 w-full" onclick="toggleVisibility('sc_${phc.id}')">
+                                🏥 ${pName} <span class="text-xs md:text-sm font-bold bg-blue-600 text-white px-3 py-1 rounded-full ml-2 shadow-sm">${scList.length} उपकेंद्रे ▼</span>
+                            </div>
+                            <div class="flex gap-2 w-full md:w-auto justify-end items-center">
+                                ${allowBtn}
+                            </div>
+                        </div>
+                        <div id="sc_${phc.id}" class="hidden p-3 bg-blue-50/30">
+                            ${scHtml || '<p class="text-sm text-red-500 italic font-bold p-2 text-center">अद्याप उपकेंद्रे जोडलेली नाहीत.</p>'}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += phcHtml;
+            });
+        }
+
+        function renderSubCenterTable() {
+            let tbody = document.getElementById('subCenterTableBody'); tbody.innerHTML = '';
+            if(globalSubCenters.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 font-bold">अद्याप उपकेंद्रे जोडलेली नाहीत.</td></tr>'; return; }
+            globalSubCenters.forEach((sc, i) => {
+                let phcTd = isTalukaAdmin ? `<td class="p-3 border font-bold text-blue-700 bg-blue-50/30">${getPHCName(sc.phc_id)}</td>` : '';
+                let actions = (isCreationAllowed || isTalukaAdmin) 
+                    ? `<button onclick="startEditSubCenter(${i})" class="text-blue-600 font-bold hover:underline px-2 py-1 bg-blue-50 rounded border border-blue-200 shadow-sm">सुधारा (Edit)</button>` 
+                    : `<span class="text-gray-400 font-bold text-xs">🔒 लॉक</span>`;
+
+                tbody.innerHTML += `<tr class="hover:bg-gray-50"><td class="p-3 border text-center">${i+1}</td><td class="p-3 border font-bold text-gray-800">${sc.name}</td>${phcTd}<td class="p-3 border text-center">${actions}</td></tr>`;
+            });
+        }
+
+        function renderVillageTable() {
+            let tbody = document.getElementById('villageTableBody'); tbody.innerHTML = '';
+            if(globalVillages.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400 font-bold">अद्याप गावे जोडलेली नाहीत.</td></tr>'; return; }
+            globalVillages.forEach((v, i) => {
+                let scObj = globalSubCenters.find(x => x.id === v.sub_center_id);
+                let phcBadge = (isTalukaAdmin && scObj) ? `<br><span class="text-[10px] font-bold text-blue-600 bg-blue-100 px-1 rounded">🏥 ${getPHCName(scObj.phc_id)}</span>` : '';
+                let actions = (isCreationAllowed || isTalukaAdmin) 
+                    ? `<button onclick="startEditVillage(${i})" class="text-blue-600 font-bold hover:underline px-2 py-1 bg-blue-50 rounded border border-blue-200 shadow-sm">सुधारा (Edit)</button>` 
+                    : `<span class="text-gray-400 font-bold text-xs">🔒 लॉक</span>`;
+
+                tbody.innerHTML += `<tr class="hover:bg-gray-50"><td class="p-3 border text-center">${i+1}</td><td class="p-3 border font-bold text-gray-800 text-base">${v.name}</td><td class="p-3 border font-medium text-gray-700">${getSCName(v.sub_center_id)}${phcBadge}</td><td class="p-3 border text-center text-blue-600 font-bold">${v.population || 0}</td><td class="p-3 border text-center text-indigo-600 font-bold">${v.total_houses || 0}</td><td class="p-3 border text-center">${actions}</td></tr>`;
+            });
+        }
+
+        function renderEmployeeTable() {
+            let tbody = document.getElementById('employeeTableBody'); tbody.innerHTML = '';
+            let validEmps = globalEmployees.filter(e => {
+                let r = String(e.role || '').toLowerCase().trim();
+                return r !== 'admin' && r !== 'taluka_admin';
+            });
+
+            if(validEmps.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 font-bold">अद्याप कर्मचारी जोडलेले नाहीत.</td></tr>'; return; }
+            
+            validEmps.forEach(e => {
+                let isPhcAdmin = String(e.role).toLowerCase() === 'phc_admin';
+                let isOPD = String(e.role) === 'बाह्य रुग्ण विभाग सेविका';
+                let phcBadge = isTalukaAdmin && e.phc_id ? `<br><span class="text-[10px] font-bold text-blue-600 bg-blue-100 px-1 rounded">🏥 ${getPHCName(e.phc_id)}</span>` : '';
+                
+                let scName = '';
+                if (isPhcAdmin) scName = `<span class="text-purple-700 font-bold">संपूर्ण PHC ॲडमिन</span>${phcBadge}`;
+                else if (isOPD) scName = `<span class="text-teal-700 font-bold">थेट PHC ला नियुक्त (OPD)</span>${phcBadge}`;
+                else scName = `${getSCName(e.sub_center_id)}${phcBadge}`;
+
+                let pwd = e.password || e.possword || 'Set NA';
+                let roleColor = isPhcAdmin ? 'bg-purple-100 text-purple-800 border-purple-300' : 'bg-blue-100 text-blue-800 border-blue-300';
+                
+                tbody.innerHTML += `<tr class="hover:bg-gray-50"><td class="p-3 border font-bold text-gray-800">${e.full_name}</td><td class="p-3 border text-center"><span class="px-2 py-1 rounded text-xs font-bold border ${roleColor}">${String(e.role).toUpperCase()}</span></td><td class="p-3 border text-center text-gray-700">📱 ${e.mobile_number}<br><span class="text-[10px] text-gray-500">🔑 ${pwd}</span></td><td class="p-3 border">${scName}</td></tr>`;
+            });
+        }
+
+        async function addPHC(e) {
+            e.preventDefault(); showLoader(); const name = document.getElementById('newPHCName').value.trim();
+            const { error } = await supabaseClient.from('phcs').insert([{ phc_name: name, allow_creation: true }]); 
+            hideLoader();
+            if (error) {
+                if(error.message.includes('column "phc_name" does not exist')) {
+                    await supabaseClient.from('phcs').insert([{ name: name, allow_creation: true }]);
+                    document.getElementById('newPHCName').value = ''; loadMasterData();
+                } else { alert("एरर: " + error.message); }
+            } else { document.getElementById('newPHCName').value = ''; loadMasterData(); }
+        }
+
+        async function addPHCAdmin(e) {
+            e.preventDefault(); showLoader();
+            const payload = {
+                full_name: document.getElementById('adminName').value.trim(), mobile_number: document.getElementById('adminMobile').value.trim(),
+                password: document.getElementById('adminPassword').value.trim(), role: 'phc_admin', phc_id: document.getElementById('adminPHCSelect').value
+            };
+            const { error } = await supabaseClient.from('employees').insert([payload]); hideLoader();
+            if (error) alert("एरर: " + error.message); else { document.getElementById('adminName').value = ''; document.getElementById('adminMobile').value = ''; loadMasterData(); alert("PHC ॲडमिन यशस्वीरीत्या तयार झाला!"); }
+        }
+
+        function startEditSubCenter(idx) {
+            const sc = globalSubCenters[idx]; if(!sc) return;
+            document.getElementById('editSubCenterId').value = sc.id; document.getElementById('subCenterName').value = sc.name;
+            if(isTalukaAdmin) document.getElementById('scPHCSelect').value = sc.phc_id || '';
+            document.getElementById('subCenterFormTitle').innerText = "उपकेंद्र सुधारा (Edit Mode)"; document.getElementById('subCenterSaveBtn').innerText = "बदल अपडेट करा"; document.getElementById('subCenterCancelBtn').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function resetSubCenterForm() { document.getElementById('editSubCenterId').value = ''; document.getElementById('subCenterName').value = ''; document.getElementById('scPHCSelect').value = ''; document.getElementById('subCenterFormTitle').innerText = "नवीन आरोग्य उपकेंद्र जोडा"; document.getElementById('subCenterSaveBtn').innerText = "सेव्ह करा"; document.getElementById('subCenterCancelBtn').classList.add('hidden'); }
+
+        async function saveSubCenter(e) {
+            e.preventDefault(); showLoader();
+            let phcId = isTalukaAdmin ? document.getElementById('scPHCSelect').value : currentUser.phc_id;
+            if (isTalukaAdmin && !phcId) { alert("कृपया PHC निवडा!"); hideLoader(); return; }
+            const name = document.getElementById('subCenterName').value.trim(); const id = document.getElementById('editSubCenterId').value;
+            let error;
+            if (id) { const res = await supabaseClient.from('sub_centers').update({ name: name, phc_id: phcId }).eq('id', id); error = res.error; } 
+            else { const res = await supabaseClient.from('sub_centers').insert([{ name: name, phc_id: phcId }]); error = res.error; }
+            hideLoader(); if(error) alert("एरर: " + error.message); else { alert("उपकेंद्राची माहिती यशस्वीरीत्या सेव्ह झाली!"); resetSubCenterForm(); loadMasterData(); }
+        }
+
+        function startEditVillage(idx) {
+            const v = globalVillages[idx]; if(!v) return;
+            document.getElementById('editVillageId').value = v.id; document.getElementById('subCenterSelect').value = v.sub_center_id || ''; document.getElementById('villageName').value = v.name; document.getElementById('villagePopulation').value = v.population || 0; document.getElementById('villageHouses').value = v.total_houses || 0;
+            document.getElementById('villageFormTitle').innerText = "गावाची माहिती सुधारा (Edit Mode)"; document.getElementById('villageSaveBtn').innerText = "बदल अपडेट करा"; document.getElementById('villageCancelBtn').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function resetVillageForm() { document.getElementById('editVillageId').value = ''; document.getElementById('subCenterSelect').value = ''; document.getElementById('villageName').value = ''; document.getElementById('villagePopulation').value = ''; document.getElementById('villageHouses').value = ''; document.getElementById('villageFormTitle').innerText = "नवीन गाव जोडा"; document.getElementById('villageSaveBtn').innerText = "गाव सेव्ह करा"; document.getElementById('villageCancelBtn').classList.add('hidden'); }
+
+        async function saveVillage(e) {
+            e.preventDefault(); showLoader();
+            const id = document.getElementById('editVillageId').value; const subCenterId = document.getElementById('subCenterSelect').value; const name = document.getElementById('villageName').value.trim(); const pop = parseInt(document.getElementById('villagePopulation').value) || 0; const houses = parseInt(document.getElementById('villageHouses').value) || 0;
+            let error;
+            if (id) { const res = await supabaseClient.from('villages').update({ sub_center_id: subCenterId, name: name, population: pop, total_houses: houses }).eq('id', id); error = res.error; } 
+            else { const res = await supabaseClient.from('villages').insert([{ sub_center_id: subCenterId, name: name, population: pop, total_houses: houses }]); error = res.error; }
+            hideLoader(); if(error) alert("एरर: " + error.message); else { alert("गावाची माहिती यशस्वीरीत्या सेव्ह झाली!"); resetVillageForm(); loadMasterData(); }
+        }
+
+        // 🟢 कर्मचाऱ्यांची माहिती सेव्ह करणे (FIXED FOREIGN KEY BUG)
+        async function addEmployee(e) {
+            e.preventDefault(); showLoader();
+            const role = document.getElementById('empRole').value;
+            let scId = document.getElementById('empSubCenterSelect').value || null; // <--- Changed here to handle null
+            let targetPhcId = currentUser.phc_id;
+
+            // 🟢 तालुका ॲडमिनसाठी PHC लॉजिक
+            if (isTalukaAdmin) { 
+                targetPhcId = document.getElementById('empPHCSelect').value;
+                if(!targetPhcId) {
+                    if (role === 'बाह्य रुग्ण विभाग सेविका') {
+                        alert("कृपया OPD सेविकेसाठी PHC निवडा!"); hideLoader(); return;
+                    } else if (scId) { // <--- Changed here
+                        let scObj = globalSubCenters.find(x => x.id === scId); 
+                        targetPhcId = scObj ? scObj.phc_id : null;
+                    }
+                }
+            }
+
+            // 🟢 OPD नर्स असेल तर उपकेंद्र 'Null' टाका (Foreign Key Error टाळण्यासाठी)
+            if(role === 'बाह्य रुग्ण विभाग सेविका') {
+                scId = null;
+            }
+
+            const payload = {
+                full_name: document.getElementById('empName').value.trim(), 
+                mobile_number: document.getElementById('empMobile').value.trim(),
+                password: document.getElementById('empPassword').value.trim(), 
+                role: role,
+                sub_center_id: scId, 
+                phc_id: targetPhcId
+            };
+            
+            const { error } = await supabaseClient.from('employees').insert([payload]); 
+            hideLoader();
+            
+            if (error) alert("एरर: " + error.message); 
+            else { 
+                document.getElementById('empName').value = ''; 
+                document.getElementById('empMobile').value = ''; 
+                document.getElementById('empRole').value = '';
+                handleEmpRoleChange(); // Reset UI
+                loadMasterData(); 
+                alert("कर्मचारी यशस्वीरीत्या जोडला गेला!"); 
+            }
+        }
+    </script>
+</body>
+</html>

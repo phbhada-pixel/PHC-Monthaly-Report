@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>डेटा मायग्रेशन (Excel Transfer) - आरोग्य प्रणाली</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 🟢 नवीन: Excel (.xlsx) फाईल्स वाचण्यासाठी SheetJS लायब्ररी -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 p-2 md:p-6 min-h-screen">
+
+    <div class="max-w-5xl mx-auto bg-white p-4 rounded-lg shadow-md flex justify-between items-center mb-6 border-t-8 border-green-600">
+        <div>
+            <h1 class="text-xl md:text-2xl font-extrabold text-green-800">📊 जुना डेटा अपलोड करा (Excel Upload)</h1>
+            <p class="text-sm font-bold text-gray-500 mt-1">तुमच्या Google Sheets किंवा Excel (.xlsx) मधून एका क्लिकवर डेटा आणा.</p>
+        </div>
+        <button onclick="window.location.href='dashboard.html'" class="bg-gray-600 text-white px-4 py-2 rounded font-bold shadow-lg hover:bg-gray-700 transition">डॅशबोर्ड</button>
+    </div>
+
+    <div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-md mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">कोणत्या फॉर्मचा डेटा आहे? <span class="text-red-500">*</span></label>
+                <select id="formSelect" onchange="toggleSampleButton()" class="w-full p-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 font-bold bg-green-50 text-green-900 shadow-sm">
+                    <option value="">-- प्रथम फॉर्म निवडा --</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">तुमची Excel (.xlsx) फाईल निवडा <span class="text-red-500">*</span></label>
+                <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="w-full p-2 border-2 border-gray-300 rounded-lg font-bold file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+            </div>
+
+        </div>
+
+        <div class="flex flex-col md:flex-row justify-center gap-4 border-t border-gray-200 pt-6">
+            <button id="downloadSampleBtn" onclick="downloadSampleExcel()" class="hidden bg-yellow-500 text-white px-6 py-3 rounded-xl font-extrabold text-lg shadow-xl hover:bg-yellow-600 transition w-full md:w-auto text-gray-900">
+                📥 नमुना (Sample Excel) डाऊनलोड
+            </button>
+
+            <button onclick="startMigration()" class="bg-blue-600 text-white px-10 py-3 rounded-xl font-extrabold text-lg shadow-xl hover:bg-blue-700 transition transform hover:-translate-y-1 w-full md:w-auto">
+                🚀 डेटा ट्रान्सफर सुरू करा
+            </button>
+        </div>
+
+        <div id="resultArea" class="hidden mt-6 p-4 rounded-lg bg-gray-50 border-2 border-gray-200 text-sm font-mono whitespace-pre-wrap overflow-x-auto"></div>
+    </div>
+
+    <div id="loader" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-2xl text-center border-t-8 border-green-500">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent mb-3"></div>
+            <p class="text-xl font-extrabold text-gray-800" id="loaderText">फाईल तपासत आहे...</p>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qbmjsfiievcautxybaai.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_sdgZ9G8ko4H_3Mh9RouYFg_JOQ-4Mdx'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let globalForms = [];
+        let globalVillages = [];
+        let globalEmployees = [];
+
+        const monthMap = { "जानेवारी":1, "फेब्रुवारी":2, "मार्च":3, "एप्रिल":4, "मे":5, "जून":6, "जुलै":7, "ऑगस्ट":8, "सप्टेंबर":9, "ऑक्टोबर":10, "नोव्हेंबर":11, "डिसेंबर":12 };
+
+        window.onload = async function() {
+            const userStr = localStorage.getItem('loggedInUser');
+            if (!userStr) { window.location.href = "index.html"; return; }
+            let user = JSON.parse(userStr);
+            if(user.role !== 'admin' && user.role !== 'taluka_admin') {
+                alert("हा पेज फक्त तालुका ॲडमिन वापरू शकतात!"); window.location.href = "dashboard.html"; return;
+            }
+            await fetchMasterData();
+        };
+
+        function showLoader(text="प्रक्रिया सुरू आहे...") { document.getElementById('loaderText').innerText = text; document.getElementById('loader').classList.remove('hidden'); }
+        function hideLoader() { document.getElementById('loader').classList.add('hidden'); }
+
+        async function fetchMasterData() {
+            showLoader("डेटाबेस लोड होत आहे...");
+            try {
+                const [fRes, vRes, eRes] = await Promise.all([
+                    supabaseClient.from('dynamic_forms').select('*').eq('is_active', true),
+                    supabaseClient.from('villages').select('id, name'),
+                    supabaseClient.from('employees').select('id, mobile_number, full_name')
+                ]);
+                globalForms = fRes.data || [];
+                globalVillages = vRes.data || [];
+                globalEmployees = eRes.data || [];
+
+                let fSelect = document.getElementById('formSelect');
+                globalForms.forEach(f => { fSelect.innerHTML += `<option value="${f.id}">${f.form_name}</option>`; });
+            } catch(e) { alert("एरर: " + e.message); }
+            hideLoader();
+        }
+
+        function getFieldLabelChain(fields, fieldObj) {
+            let label = fieldObj.label; let current = fieldObj;
+            while(current && current.parent_id) {
+                let parent = fields.find(f => f.id === current.parent_id);
+                if(parent && parent.type === 'group_header') { label = parent.label + " - " + label; current = parent; } else break;
+            }
+            return label.replace(/\s+/g, ' ').trim();
+        }
+
+        function toggleSampleButton() {
+            const formId = document.getElementById('formSelect').value;
+            const btn = document.getElementById('downloadSampleBtn');
+            if (formId) btn.classList.remove('hidden'); else btn.classList.add('hidden');
+        }
+
+        // 🟢 नमुना एक्सेल (.xlsx) डाऊनलोड
+        function downloadSampleExcel() {
+            const formId = document.getElementById('formSelect').value;
+            if (!formId) return alert("कृपया प्रथम फॉर्म निवडा!");
+
+            const selectedForm = globalForms.find(f => f.id === formId);
+            const fields = selectedForm.schema_json.fields.filter(f => f.type !== 'group_header' && (!f.formula || f.formula.trim() === ""));
+
+            let headers = ['तारीख', 'मोबाईल क्र.', 'गाव', 'महिना', 'वर्ष', 'माहिती'];
+            fields.forEach(f => {
+                let fullLabel = getFieldLabelChain(selectedForm.schema_json.fields, f);
+                headers.push(fullLabel);
+            });
+
+            let dummyRow = ['2026-05-30', '9730266586', 'भादा', 'मे', '2026', ''];
+            fields.forEach(f => {
+                if (f.type === 'number') dummyRow.push(0);
+                else dummyRow.push('test');
+            });
+
+            const wsData = [headers, dummyRow];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "SampleData");
+            
+            XLSX.writeFile(wb, `Sample_${selectedForm.form_name}.xlsx`);
+        }
+
+        // 🟢 एक्सेल वाचून डेटाबेसमध्ये टाकणे
+        function startMigration() {
+            const formId = document.getElementById('formSelect').value;
+            const fileInput = document.getElementById('excelFileInput');
+            
+            if(!formId) return alert("कृपया फॉर्म निवडा!");
+            if(fileInput.files.length === 0) return alert("कृपया Excel (.xlsx) फाईल निवडा!");
+
+            const selectedForm = globalForms.find(f => f.id === formId);
+            const fields = selectedForm.schema_json.fields.filter(f => f.type !== 'group_header' && (!f.formula || f.formula.trim()===""));
+
+            let fieldLabelMap = {};
+            fields.forEach(f => {
+                let fullL = getFieldLabelChain(selectedForm.schema_json.fields, f);
+                fieldLabelMap[fullL.toLowerCase()] = f.id;
+                fieldLabelMap[f.label.toLowerCase()] = f.id;
+            });
+
+            showLoader("एक्सेल फाईल वाचत आहे...");
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const excelData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
+
+                    if(excelData.length === 0) { hideLoader(); return alert("फाईल रिकामी आहे!"); }
+
+                    let successCount = 0; let failCount = 0; let logs = "";
+                    let payloads = [];
+
+                    for(let i=0; i<excelData.length; i++) {
+                        let row = excelData[i];
+                        
+                        let vName = String(row['गाव'] || '').trim().toLowerCase();
+                        let mob = String(row['मोबाईल क्र.'] || '').trim();
+                        let monthStr = String(row['महिना'] || '').trim();
+                        let monthNum = monthMap[monthStr] || 5; 
+                        let yearNum = parseInt(row['वर्ष'] || 2026);
+                        
+                        // Excel मधील तारीख हाताळणे
+                        let dateStr = row['तारीख'];
+                        if(!dateStr) dateStr = new Date().toISOString();
+                        
+                        let isNil = false;
+                        if(row['माहिती'] && String(row['माहिती']).includes('निरंक')) isNil = true;
+
+                        let vObj = globalVillages.find(v => v.name.toLowerCase() === vName || v.name.toLowerCase().includes(vName));
+                        let eObj = globalEmployees.find(e => e.mobile_number === mob);
+
+                        if(!vObj) { failCount++; logs += `[ओळ ${i+2}] गाव सापडले नाही: ${vName}\n`; continue; }
+                        if(!eObj) { failCount++; logs += `[ओळ ${i+2}] कर्मचारी सापडला नाही (मोबाईल): ${mob}\n`; continue; }
+
+                        let respData = {};
+                        if(isNil) {
+                            respData = { is_nil: true };
+                        } else {
+                            Object.keys(row).forEach(excelHeader => {
+                                let cHeaderClean = excelHeader.replace(/\s+/g, ' ').trim().toLowerCase();
+                                let matchedFid = fieldLabelMap[cHeaderClean];
+
+                                if(!matchedFid) {
+                                    for(let key in fieldLabelMap) {
+                                        if(cHeaderClean.includes(key) || key.includes(cHeaderClean)) { matchedFid = fieldLabelMap[key]; break; }
+                                    }
+                                }
+                                
+                                if(matchedFid) {
+                                    respData[matchedFid] = { value: String(row[excelHeader]) };
+                                }
+                            });
+                        }
+
+                        payloads.push({
+                            form_id: formId,
+                            village_id: vObj.id,
+                            employee_id: eObj.id,
+                            report_month: monthNum,
+                            report_year: yearNum,
+                            response_data: respData,
+                            created_at: typeof dateStr === 'number' ? new Date(Math.round((dateStr - 25569)*86400*1000)).toISOString() : dateStr
+                        });
+                    }
+
+                    document.getElementById('loaderText').innerText = "डेटाबेसमध्ये सेव्ह करत आहे...";
+                    
+                    if(payloads.length > 0) {
+                        const chunkSize = 100;
+                        for (let j = 0; j < payloads.length; j += chunkSize) {
+                            const chunk = payloads.slice(j, j + chunkSize);
+                            const { error } = await supabaseClient.from('form_responses').insert(chunk);
+                            if(error) throw error;
+                            successCount += chunk.length;
+                        }
+                    }
+
+                    hideLoader();
+                    let resArea = document.getElementById('resultArea');
+                    resArea.classList.remove('hidden');
+                    resArea.innerHTML = `<span class="text-green-600 font-bold">✅ यशस्वी: ${successCount} रेकॉर्ड्स</span>\n<span class="text-red-600 font-bold">❌ अयशस्वी: ${failCount} रेकॉर्ड्स</span>\n\n<b>त्रुटी (Errors):</b>\n${logs}`;
+                    
+                } catch(err) {
+                    hideLoader();
+                    alert("फाईल वाचताना एरर: " + err.message);
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>

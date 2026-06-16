@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>प्रगत अहवाल केंद्र</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <style>
+        :root { --primary: #00705a; }
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; table-layout: auto; }
+        .report-table th, .report-table td { border: 1px solid #000; padding: 6px; text-align: center; word-wrap: break-word; }
+        .report-table th { font-weight: bold; color: #333; }
+        .page-break { page-break-before: always !important; display: block; }
+        .table-responsive { width: 100%; overflow-x: auto; margin-bottom: 20px;}
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #fff; padding: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-2 md:p-6 min-h-screen">
+
+    <div class="max-w-7xl mx-auto bg-white p-4 rounded-lg shadow-md flex justify-between items-center mb-6 no-print border-t-8 border-green-700">
+        <div>
+            <h1 id="mainTitle" class="text-xl font-bold text-green-800">📊 प्रगत अहवाल केंद्र</h1>
+            <p class="text-sm font-bold text-blue-600 mt-1" id="roleSubtitle">माहिती लोड होत आहे...</p>
+        </div>
+        <button onclick="window.location.href='dashboard.html'" class="bg-gray-600 text-white px-4 py-2 rounded font-bold shadow hover:bg-gray-700 transition text-sm">डॅशबोर्डवर परत जा</button>
+    </div>
+
+    <div class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md mb-6 no-print">
+
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
+
+            <div class="relative" id="multiSelectContainer">
+                <label class="block text-gray-700 text-xs font-bold mb-1">अहवाल / फॉर्म निवडा</label>
+                <button onclick="toggleMultiSelect()" class="w-full p-2 border border-gray-300 rounded bg-white text-left text-sm font-medium flex justify-between items-center min-h-[38px] hover:border-green-500">
+                    <span id="multiSelectBtnText">सर्व अहवाल (All Forms)</span>
+                    <span class="text-xs text-gray-400">▼</span>
+                </button>
+                <div id="multiSelectDropdown" class="absolute left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-2xl z-50 max-h-60 overflow-y-auto hidden">
+                    <div class="p-3 border-b bg-gray-50 sticky top-0">
+                        <label class="flex items-center gap-2 font-bold text-sm text-green-700 cursor-pointer">
+                            <input type="checkbox" id="chkAllReports" checked onchange="toggleAllReports(this)" class="w-4 h-4"> 
+                            सर्व फॉर्म्स निवडा
+                        </label>
+                    </div>
+                    <div id="multiSelectOptions" class="text-sm font-medium"></div>
+                </div>
+                <select id="reportFormSelect" class="hidden"></select>
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-xs font-bold mb-1">कालावधी प्रकार</label>
+                <select id="periodType" onchange="togglePeriodInputs()" class="w-full p-2 border border-gray-300 rounded bg-white text-sm font-bold text-blue-700">
+                    <option value="monthly">महिन्यानुसार</option>
+                    <option value="custom">तारखेनुसार (फक्त यादी)</option>
+                </select>
+            </div>
+
+            <div id="monthlyInputs" class="col-span-2 flex gap-2">
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-xs font-bold mb-1">महिना</label>
+                    <select id="reportMonth" class="w-full p-2 border border-gray-300 rounded bg-white text-sm font-bold">
+                        <option value="जानेवारी">जानेवारी</option><option value="फेब्रुवारी">फेब्रुवारी</option>
+                        <option value="मार्च">मार्च</option><option value="एप्रिल">एप्रिल</option>
+                        <option value="मे">मे</option><option value="जून">जून</option>
+                        <option value="जुलै">जुलै</option><option value="ऑगस्ट">ऑगस्ट</option>
+                        <option value="सप्टेंबर">सप्टेंबर</option><option value="ऑक्टोबर">ऑक्टोबर</option>
+                        <option value="नोव्हेंबर">नोव्हेंबर</option><option value="डिसेंबर">डिसेंबर</option>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-xs font-bold mb-1">वर्ष</label>
+                    <input type="number" id="reportYear" class="w-full p-2 border border-gray-300 rounded text-sm font-bold text-center" value="2026">
+                </div>
+                <div id="fortnightInputs" class="flex-1 hidden">
+                    <label class="block text-orange-700 text-xs font-bold mb-1">पंधरवाडा</label>
+                    <select id="reportFortnight" class="w-full p-2 border border-orange-400 rounded bg-orange-50 text-sm font-bold text-orange-900">
+                        <option value="1">१ ते १५ तारीख</option>
+                        <option value="2">१६ ते अखेर</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="customDateInputs" class="col-span-2 hidden flex gap-2">
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-xs font-bold mb-1">पासून (Start Date)</label>
+                    <input type="date" id="startDate" class="w-full p-2 border border-gray-300 rounded text-sm font-bold text-indigo-700">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-xs font-bold mb-1">पर्यंत (End Date)</label>
+                    <input type="date" id="endDate" class="w-full p-2 border border-gray-300 rounded text-sm font-bold text-indigo-700">
+                </div>
+            </div>
+
+            <div id="subcenterFilterDiv">
+                <label class="block text-gray-700 text-xs font-bold mb-1">उपकेंद्र फिल्टर</label>
+                <select id="reportSubCenterFilter" class="w-full p-2 border border-gray-300 rounded bg-white text-sm font-bold">
+                    <option value="सर्व">सर्व उपकेंद्र (All Sub-centers)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4">
+            <div id="groupFilterDiv">
+                <label class="block text-gray-700 text-xs font-bold mb-1">अहवाल मांडणी प्रकार (Group View)</label>
+                <select id="reportGroupFilter" class="w-full p-2 border border-gray-300 rounded bg-blue-50 text-sm font-bold text-blue-800 focus:ring-2 focus:ring-blue-500">
+                    <option value="Village">१. गावनिहाय कर्मचारी गटबद्ध यादी (Employee Blocks)</option>
+                    <option value="SubCenterFlat">२. सर्व उपकेंद्रांची सलग गावनिहाय यादी (Flat Village List)</option>
+                    <option value="SubCenterSum">३. उपकेंद्र निहाय एकूण बेरजेची यादी (SubCenter Wise Sum)</option>
+                    <option value="SubCenterConsolidated">४. उपकेंद्र एकत्रित उभी मांडणी (Vertical Consolidated)</option>
+                </select>
+            </div>
+
+            <div class="flex items-end gap-3 md:col-span-2">
+                <button onclick="fetchReportData()" class="flex-1 bg-blue-600 text-white font-extrabold p-3 rounded-lg shadow-lg hover:bg-blue-700 transition transform hover:-translate-y-0.5 text-sm md:text-base">🔍 अहवाल पहा</button>
+                <button onclick="generatePendingReport()" id="pendingReportBtn" class="flex-1 bg-red-600 text-white font-extrabold p-3 rounded-lg shadow-lg hover:bg-red-700 transition transform hover:-translate-y-0.5 text-sm md:text-base">⚠️ अपूर्ण यादी शोधा</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="reportLoader" class="text-center py-10 hidden no-print bg-white mx-auto max-w-lg rounded-lg shadow border border-gray-200">
+        <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-green-600 border-t-transparent mb-3"></div>
+        <p class="text-green-700 font-bold">डेटाबेस मधून प्रगत अहवाल आणि आकडेमोड सुरू आहे, कृपया थांबा...</p>
+    </div>
+
+    <div id="downloadButtonsArea" class="max-w-7xl mx-auto mb-4 no-print"></div>
+
+    <div id="reportContentArea" class="max-w-7xl mx-auto bg-white p-2 md:p-6 rounded-lg shadow-md hidden overflow-hidden">
+        <div id="reportTableContainer"></div>
+    </div>
+
+    <!-- 🟢 Edit Modal -->
+    <div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border-t-8 border-blue-600">
+            <div class="p-4 border-b flex justify-between items-center bg-blue-50">
+                <h2 class="text-lg font-bold text-blue-900">✏️ माहिती एडिट करा</h2>
+                <button onclick="closeEditModal()" class="text-red-500 font-bold text-2xl hover:text-red-700">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-gray-50" id="editModalBody">
+                <!-- Inputs will be generated here -->
+            </div>
+            <div class="p-4 border-t flex justify-end gap-3 bg-white">
+                <button onclick="closeEditModal()" class="bg-gray-500 text-white px-5 py-2 rounded font-bold shadow">रद्द करा</button>
+                <button onclick="saveEditResponse()" class="bg-green-600 text-white px-5 py-2 rounded font-bold shadow hover:bg-green-700">💾 अपडेट करा</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qbmjsfiievcautxybaai.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_sdgZ9G8ko4H_3Mh9RouYFg_JOQ-4Mdx'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let masterData = { forms: [], villages: [], employees: [], filledStats: [], subCenters: [], phcs: [] };
+        let currentReports = [];
+        let user = { role: 'User', subcenter: 'सर्व', mobile: '', phc_id: null, id: null };
+        let windowDbData = [];
+
+        const monthNamesMarathi = {
+            "जानेवारी": 1, "फेब्रुवारी": 2, "मार्च": 3, "एप्रिल": 4, "मे": 5, "जून": 6,
+            "जुलै": 7, "ऑगस्ट": 8, "सप्टेंबर": 9, "ऑक्टोबर": 10, "नोव्हेंबर": 11, "डिसेंबर": 12
+        };
+        const monthNamesNumeric = {
+            1: "जानेवारी", 2: "फेब्रुवारी", 3: "मार्च", 4: "एप्रिल", 5: "मे", 6: "जून",
+            7: "जुलै", 8: "ऑगस्ट", 9: "सप्टेंबर", 10: "ऑक्टोबर", 11: "नोव्हेंबर", 12: "डिसेंबर"
+        };
+
+        window.onload = async function() {
+            const userDataString = localStorage.getItem('loggedInUser');
+            if (!userDataString) { window.location.href = "index.html"; return; }
+            const sessionUser = JSON.parse(userDataString);
+
+            let roleStr = String(sessionUser.role || '').toLowerCase().trim();
+            user.role = roleStr;
+            user.mobile = sessionUser.mobile_number || '';
+            user.phc_id = sessionUser.phc_id || null;
+            user.id = sessionUser.id;
+
+            let subtitle = document.getElementById('roleSubtitle');
+
+            if (roleStr === 'admin' || roleStr === 'taluka_admin') {
+                subtitle.innerHTML = "👨‍💼 तालुका ॲडमिन (संपूर्ण तालुक्याचा डेटा)";
+            } else if (roleStr === 'phc_admin') {
+                subtitle.innerHTML = "🏥 PHC ॲडमिन (फक्त तुमच्या PHC चा डेटा)";
+            } else {
+                subtitle.innerHTML = "🧑‍⚕️ कर्मचारी (फक्त तुम्ही भरलेला स्वतःचा डेटा)";
+                document.getElementById('subcenterFilterDiv').classList.add('hidden');
+                document.getElementById('groupFilterDiv').classList.add('hidden');
+                document.getElementById('pendingReportBtn').classList.add('hidden');
+                document.getElementById('mainTitle').innerHTML = "📊 माझे अहवाल केंद्र (My Reports)";
+            }
+
+            const mIdx = new Date().getMonth() + 1;
+            document.getElementById('reportMonth').value = monthNamesNumeric[mIdx];
+            document.getElementById('reportYear').value = new Date().getFullYear();
+
+            let today = new Date();
+            let dd = String(today.getDate()).padStart(2, '0');
+            let mm = String(today.getMonth() + 1).padStart(2, '0');
+            let yyyy = today.getFullYear();
+            let todayFormatted = yyyy + '-' + mm + '-' + dd;
+            document.getElementById('startDate').value = todayFormatted;
+            document.getElementById('endDate').value = todayFormatted;
+
+            await loadInitialMasterData();
+        };
+
+        // 🟢 10th Date Lock Function
+        function isEditingAllowed(reportMonth, reportYear) {
+            if (!reportMonth || !reportYear) return false;
+            let today = new Date();
+            let lockDate = new Date(reportYear, reportMonth, 10, 23, 59, 59); 
+            return today <= lockDate;
+        }
+
+        function togglePeriodInputs() {
+            let val = document.getElementById('periodType').value;
+            if (val === 'custom') {
+                document.getElementById('monthlyInputs').classList.add('hidden');
+                document.getElementById('customDateInputs').classList.remove('hidden');
+            } else {
+                document.getElementById('monthlyInputs').classList.remove('hidden');
+                document.getElementById('customDateInputs').classList.add('hidden');
+            }
+        }
+
+        async function loadInitialMasterData() {
+            document.getElementById('reportLoader').classList.remove('hidden');
+
+            try {
+                const { data: pData } = await supabaseClient.from('phcs').select('*');
+                masterData.phcs = pData || [];
+
+                let scQuery = supabaseClient.from('sub_centers').select('*').order('name');
+                if (user.role === 'phc_admin' && user.phc_id) {
+                    scQuery = scQuery.eq('phc_id', user.phc_id);
+                }
+                const { data: scData } = await scQuery;
+                masterData.subCenters = scData || [];
+
+                let scFilter = document.getElementById('reportSubCenterFilter');
+                scFilter.innerHTML = '<option value="सर्व">सर्व उपकेंद्र (All Sub-centers)</option>';
+                masterData.subCenters.forEach(sc => { 
+                    scFilter.innerHTML += `<option value="${sc.name}">${sc.name}</option>`; 
+                });
+
+                let vQuery = supabaseClient.from('villages').select('*').order('name');
+                if (user.role === 'phc_admin') {
+                    let scIds = masterData.subCenters.map(s => s.id);
+                    if (scIds.length > 0) vQuery = vQuery.in('sub_center_id', scIds);
+                    else vQuery = vQuery.eq('sub_center_id', '00000000-0000-0000-0000-000000000000');
+                }
+                const { data: vData } = await vQuery;
+                masterData.villages = vData || [];
+
+                let eQuery = supabaseClient.from('employees').select('*').order('full_name');
+                if (user.role === 'phc_admin' && user.phc_id) eQuery = eQuery.eq('phc_id', user.phc_id);
+                const { data: empData } = await eQuery;
+                masterData.employees = empData || [];
+
+                const { data: formData } = await supabaseClient.from('dynamic_forms').select('*').eq('is_active', true);
+                masterData.forms = formData || [];
+
+                let select = document.getElementById('reportFormSelect');
+                let optionsDiv = document.getElementById('multiSelectOptions');
+                select.innerHTML = ''; optionsDiv.innerHTML = '';
+
+                masterData.forms.forEach(f => {
+                    let opt = document.createElement('option'); opt.value = f.id; opt.text = f.form_name; select.appendChild(opt);
+                    let div = document.createElement('div');
+                    let formTypeTag = '';
+                    if(f.form_type === 'list') formTypeTag = `<span class="bg-indigo-100 text-indigo-700 text-[10px] px-1 ml-2 rounded">यादी फॉर्म</span>`;
+                    else if(f.form_type === 'fortnightly') formTypeTag = `<span class="bg-orange-100 text-orange-700 text-[10px] px-1 ml-2 rounded">पंधरवाडी</span>`;
+                    else if(f.form_type === 'subcenter') formTypeTag = `<span class="bg-green-100 text-green-700 text-[10px] px-1 ml-2 rounded">उपकेंद्र स्तर</span>`;
+                    
+                    div.className = "hover:bg-gray-100 transition"; div.style.padding = "10px"; div.style.borderBottom = "1px solid #eee"; div.style.cursor = "pointer";
+                    div.innerHTML = `<label style="cursor:pointer; display:flex; align-items:center; gap:8px; font-weight:600;"><input type="checkbox" class="report-chk w-4 h-4" value="${f.id}" checked onchange="checkIndividualReport()"> ${f.form_name} ${formTypeTag}</label>`;
+                    optionsDiv.appendChild(div);
+                });
+
+                const { data: respData } = await supabaseClient.from('form_responses').select('form_id, village_id, report_month, report_year, report_fortnight');
+                masterData.filledStats = respData || [];
+
+                document.getElementById('chkAllReports').checked = true;
+                updateMultiSelectText();
+
+            } catch(e) { console.error(e); alert("माहिती लोड करण्यात त्रुटी: " + e.message); }
+
+            document.getElementById('reportLoader').classList.add('hidden');
+        }
+
+        function toggleMultiSelect() {
+            let dropdown = document.getElementById('multiSelectDropdown');
+            dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+        }
+
+        document.addEventListener('click', function(event) {
+            let container = document.getElementById('multiSelectContainer');
+            if (container && !container.contains(event.target)) document.getElementById('multiSelectDropdown').style.display = 'none';
+        });
+
+        function toggleAllReports(chkAll) {
+            document.querySelectorAll('.report-chk').forEach(chk => chk.checked = chkAll.checked); updateMultiSelectText();
+        }
+
+        function checkIndividualReport() {
+            let allChecked = true; document.querySelectorAll('.report-chk').forEach(chk => { if(!chk.checked) allChecked = false; });
+            document.getElementById('chkAllReports').checked = allChecked; updateMultiSelectText();
+        }
+
+        function updateMultiSelectText() {
+            let chkAll = document.getElementById('chkAllReports');
+            let textSpan = document.getElementById('multiSelectBtnText');
+            
+            let hasFortnightly = false;
+            document.querySelectorAll('.report-chk:checked').forEach(chk => {
+                let fObj = masterData.forms.find(f => f.id === chk.value);
+                if(fObj && fObj.form_type === 'fortnightly') hasFortnightly = true;
+            });
+            
+            if (hasFortnightly) document.getElementById('fortnightInputs').classList.remove('hidden');
+            else document.getElementById('fortnightInputs').classList.add('hidden');
+
+            if(chkAll && chkAll.checked) { textSpan.innerText = "सर्व अहवाल (All Forms)"; textSpan.style.color = "var(--primary)"; } 
+            else {
+                let selected = document.querySelectorAll('.report-chk:checked');
+                if(selected.length === 0) { textSpan.innerText = "-- कोणताही अहवाल निवडलेला नाही --"; textSpan.style.color = "red"; } 
+                else if(selected.length === 1) { let lbl = selected[0].parentElement.innerText.trim(); textSpan.innerText = lbl.length > 35 ? lbl.substring(0, 35) + "..." : lbl; textSpan.style.color = "#d35400"; } 
+                else { textSpan.innerText = `✔️ ${selected.length} अहवाल निवडले`; textSpan.style.color = "green"; }
+            }
+        }
+
+        function getSelectedReportIDs() {
+            if(document.getElementById('chkAllReports').checked) return ["ALL"];
+            let selected = []; document.querySelectorAll('.report-chk:checked').forEach(chk => selected.push(chk.value)); return selected;
+        }
+
+        function formatDateToDDMMYYYY(dateString) {
+            if (dateString === null || dateString === undefined || dateString === "") return "";
+            let val = String(dateString).trim();
+            let numVal = Number(val);
+            if (!isNaN(numVal) && numVal > 30000 && numVal < 60000) {
+                let jsDate = new Date(Math.round((numVal - 25569) * 86400 * 1000));
+                if (!isNaN(jsDate.getTime())) {
+                    return `${String(jsDate.getUTCDate()).padStart(2, '0')}-${String(jsDate.getUTCMonth() + 1).padStart(2, '0')}-${jsDate.getUTCFullYear()}`;
+                }
+            }
+            try {
+                let dStr = val.split('T')[0];
+                let parts = dStr.split(/[-/]/); 
+                if(parts.length === 3) {
+                    if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    else if (parts[2].length === 4) return `${parts[0]}-${parts[1]}-${parts[2]}`; 
+                }
+                let dt = new Date(val);
+                if (!isNaN(dt.getTime())) return `${String(dt.getDate()).padStart(2, '0')}-${String(dt.getMonth() + 1).padStart(2, '0')}-${dt.getFullYear()}`;
+            } catch(e) {}
+            return val;
+        }
+
+        async function fetchReportData() {
+            let selectedIDs = getSelectedReportIDs(); if(selectedIDs.length === 0) { alert("कृपया किमान एक अहवाल निवडा!"); return; }
+
+            let formsToProcess = selectedIDs.includes("ALL") ? masterData.forms : masterData.forms.filter(f => selectedIDs.includes(f.id));
+            let mixedTypes = new Set(formsToProcess.map(f => f.form_type));
+            
+            if (mixedTypes.has('fortnightly') && (mixedTypes.has('monthly') || mixedTypes.has('progressive') || mixedTypes.has('list') || mixedTypes.has('subcenter'))) {
+                alert("⚠️ पंधरवाडी अहवाल आणि इतर अहवाल एकत्र पाहता येणार नाहीत. कृपया फक्त 'पंधरवाडी' अहवाल निवडा.");
+                return;
+            }
+
+            let periodType = document.getElementById('periodType').value;
+            let query = supabaseClient.from('form_responses').select('*');
+            
+            let periodText = "";
+            let selMonthNum = 0, selYear = 0;
+
+            if (periodType === 'monthly') {
+                const selMonth = document.getElementById('reportMonth').value; 
+                selMonthNum = monthNamesMarathi[selMonth]; 
+                selYear = document.getElementById('reportYear').value;
+                
+                query = query.eq('report_year', parseInt(selYear));
+                if (selMonthNum < 4) query = query.or(`and(report_year.eq.${parseInt(selYear)}),and(report_year.eq.${parseInt(selYear-1)},report_month.gte.4)`);
+                periodText = `${selMonth} ${selYear}`;
+                
+                if (mixedTypes.has('fortnightly')) {
+                    let fn = document.getElementById('reportFortnight').value;
+                    query = query.eq('report_fortnight', parseInt(fn));
+                    periodText += ` (पंधरवाडा: ${fn === '1' ? '१ ते १५' : '१६ ते अखेर'})`;
+                }
+
+            } else {
+                let sDate = document.getElementById('startDate').value;
+                let eDate = document.getElementById('endDate').value;
+                if(!sDate || !eDate) { alert("कृपया सुरुवातीची व शेवटची तारीख निवडा!"); return; }
+                
+                query = query.gte('created_at', sDate + 'T00:00:00.000Z').lte('created_at', eDate + 'T23:59:59.999Z');
+                periodText = `${formatDateToDDMMYYYY(sDate)} ते ${formatDateToDDMMYYYY(eDate)}`;
+            }
+
+            let filterSubCenter = document.getElementById('reportSubCenterFilter').value; 
+            let groupType = document.getElementById('reportGroupFilter').value;
+
+            if (user.role !== 'admin' && user.role !== 'taluka_admin' && user.role !== 'phc_admin') {
+                groupType = 'Village';
+            }
+
+            if (periodType === 'custom') {
+                let nonListForms = formsToProcess.filter(f => f.form_type !== 'list');
+                if (nonListForms.length > 0 && !selectedIDs.includes("ALL")) {
+                    alert("⚠️ 'कस्टम तारीख' फिल्टर फक्त 'यादी (List)' प्रकारच्या फॉर्मसाठीच लागू आहे. कृपया इतर फॉर्म्स निवडू नका.");
+                    return;
+                }
+                formsToProcess = formsToProcess.filter(f => f.form_type === 'list');
+                if(formsToProcess.length === 0) {
+                    alert("सध्या तुम्ही निवडलेल्यांमध्ये कोणतेही 'यादी (List)' प्रकारचे फॉर्म उपलब्ध नाहीत."); return;
+                }
+            }
+
+            document.getElementById('reportLoader').classList.remove('hidden'); 
+            document.getElementById('reportContentArea').classList.add('hidden'); 
+            document.getElementById('reportTableContainer').innerHTML = "";
+
+            try {
+                if(!selectedIDs.includes("ALL")) query = query.in('form_id', formsToProcess.map(f=>f.id));
+
+                const { data: dbData, error } = await query; 
+                document.getElementById('reportLoader').classList.add('hidden');
+                if (error || !dbData || dbData.length === 0) { alert("या कालावधीत किंवा निवडलेल्या फिल्टरमध्ये कोणताही डेटा उपलब्ध नाही."); return; }
+
+                windowDbData = dbData; 
+
+                let finalReports = [];
+
+                formsToProcess.forEach(formObj => {
+                    let formResp = dbData.filter(r => r.form_id === formObj.id); if(formResp.length === 0) return;
+                    const allFields = formObj.schema_json.fields;
+                    const validDataFields = allFields.filter(f => f.type !== 'group_header');
+                    const isProgressive = formObj.form_type === 'progressive';
+
+                    let fieldMetaList = validDataFields.map(f => {
+                        let chain = getFieldHierarchyChain(allFields, f);
+                        return { id: f.id, label: f.label, type: f.type, formula: f.formula, l1: chain[0] || "", l2: chain[1] || "", l3: f.label };
+                    });
+
+                    let fData = [];
+                    
+                    let currentMonthResp = [];
+                    if (periodType === 'monthly') {
+                        currentMonthResp = formResp.filter(r => r.report_month === parseInt(selMonthNum) && r.report_year === parseInt(selYear));
+                    } else {
+                        currentMonthResp = formResp; 
+                    }
+
+                    currentMonthResp.forEach(res => {
+                        if (res.response_data && res.response_data.is_nil === true) return;
+
+                        let isStringNil = false;
+                        for (let key in res.response_data) {
+                            if (res.response_data[key] && typeof res.response_data[key].value === 'string') {
+                                let v = res.response_data[key].value.trim().toLowerCase();
+                                if (v === 'निरंक' || v.includes('निरंक') || v.includes('nil report') || v === 'nil') {
+                                    isStringNil = true; break;
+                                }
+                            }
+                        }
+                        if (isStringNil) return;
+
+                        if (user.role !== 'admin' && user.role !== 'taluka_admin' && user.role !== 'phc_admin') {
+                            if (res.employee_id !== user.id) return;
+                        }
+
+                        let villageObj = masterData.villages.find(v => v.id === res.village_id);
+                        let empObj = masterData.employees.find(e => e.id === res.employee_id);
+                        let scObj = villageObj ? masterData.subCenters.find(s => s.id === villageObj.sub_center_id) : null;
+
+                        if (user.role === 'phc_admin') {
+                            if (!scObj || scObj.phc_id !== user.phc_id) return;
+                        }
+
+                        let scName = scObj ? scObj.name : '-';
+                        if(user.role !== 'employee' && filterSubCenter !== "सर्व" && scName !== filterSubCenter) return;
+
+                        let vName = villageObj ? villageObj.name : '-';
+                        if (formObj.form_type === 'subcenter') {
+                            vName = "🏢 संपूर्ण उपकेंद्र (Subcenter Level)";
+                        }
+
+                        let row = { 
+                            response_id: res.id,
+                            report_month: res.report_month,
+                            report_year: res.report_year,
+                            month: periodText, 
+                            year: '', 
+                            subcenter: scName, 
+                            village: vName, 
+                            employee: empObj?empObj.full_name:'-', 
+                            values: {} 
+                        };
+
+                        validDataFields.forEach(f => {
+                            if (!f.formula || String(f.formula).trim() === "") {
+                                let monthlyVal = res.response_data[f.id] ? res.response_data[f.id].value : '';
+
+                                if (f.type === 'date' && monthlyVal && String(monthlyVal).trim() !== '') {
+                                    monthlyVal = formatDateToDDMMYYYY(monthlyVal);
+                                }
+
+                                if (isProgressive && f.type === 'number') {
+                                    let sumProg = 0;
+                                    getProgressiveMonthsList(selMonthNum, selYear).forEach(p => {
+                                        let pastRes = formResp.find(r => r.village_id === res.village_id && r.report_month === p.month && r.report_year === p.year);
+                                        if(pastRes && pastRes.response_data && pastRes.response_data[f.id]) {
+                                            sumProg += parseFloat(pastRes.response_data[f.id].value) || 0;
+                                        }
+                                    });
+                                    row.values[f.id] = { M: formatNumberDecimals(monthlyVal), P: formatNumberDecimals(sumProg) };
+                                } else { 
+                                    row.values[f.id] = formatNumberDecimals(monthlyVal); 
+                                }
+                            }
+                        });
+
+                        validDataFields.forEach(f => {
+                            if (f.formula && String(f.formula).trim() !== "") {
+                                let evalRowFormula = (type) => {
+                                    let formulaStr = String(f.formula).toLowerCase().trim();
+                                    validDataFields.forEach(af => {
+                                        if (!af.formula || String(af.formula).trim() === "") {
+                                            let ph = `[${af.id.toLowerCase()}]`;
+                                            if(formulaStr.includes(ph)) {
+                                                let val = 0;
+                                                let afVal = row.values[af.id];
+                                                if (typeof afVal === 'object' && afVal !== null) { val = parseFloat(afVal[type]) || 0; } 
+                                                else { val = parseFloat(afVal) || 0; }
+                                                formulaStr = formulaStr.replaceAll(ph, val);
+                                            }
+                                        }
+                                    });
+                                    try {
+                                        if (/^[0-9.+\-*/() ]+$/.test(formulaStr)) {
+                                            let res = eval(formulaStr); 
+                                            return isNaN(res) || !isFinite(res) ? 0 : res;
+                                        }
+                                    } catch(e) {}
+                                    return 0;
+                                };
+
+                                if (isProgressive && f.type === 'number') {
+                                    row.values[f.id] = { M: formatNumberDecimals(evalRowFormula('M')), P: formatNumberDecimals(evalRowFormula('P')) };
+                                } else {
+                                    row.values[f.id] = formatNumberDecimals(evalRowFormula('M'));
+                                }
+                            }
+                        });
+
+                        fData.push(row);
+                    });
+
+                    if(fData.length > 0) {
+                        finalReports.push({ formName: formObj.form_name, formType: formObj.form_type, fields: fieldMetaList, rows: fData, isProg: isProgressive, periodText: periodText });
+                    }
+                });
+
+                if(finalReports.length > 0) { 
+                    currentReports = finalReports; 
+                    renderMultipleTables(finalReports, groupType); 
+                    document.getElementById('reportContentArea').classList.remove('hidden'); 
+                } else { 
+                    alert("या कालावधीसाठी तुमच्या अधिकारात किंवा निवडलेल्या फिल्टरमध्ये कोणताही डेटा उपलब्ध नाही."); 
+                }
+            } catch(e) { alert("एरर: " + e.message); }
+        }
+
+        function getFieldHierarchyChain(fields, fieldObj) {
+            let chain = []; let current = fieldObj;
+            while (current && current.parent_id) {
+                let parent = fields.find(f => f.id === current.parent_id);
+                if (parent) { if (parent.type === 'group_header') chain.unshift(parent.label); current = parent; } 
+                else { break; }
+            }
+            return chain; 
+        }
+
+        function getProgressiveMonthsList(targetMonthNumeric, targetYear) {
+            let startYear = parseInt(targetYear); let targetMonth = parseInt(targetMonthNumeric); let periods = [];
+            if (targetMonth >= 4) { for (let m = 4; m <= targetMonth; m++) periods.push({ month: m, year: startYear }); } 
+            else {
+                for (let m = 4; m <= 12; m++) periods.push({ month: m, year: startYear - 1 });
+                for (let m = 1; m <= targetMonth; m++) periods.push({ month: m, year: startYear });
+            }
+            return periods;
+        }
+
+        function formatNumberDecimals(val) {
+            if (val === "" || val === null || val === undefined || val === "-" || String(val).trim() === "") return val;
+            if (typeof val === 'string' && val.match(/^\d{2}-\d{2}-\d{4}$/)) return val;
+
+            let n = Number(val);
+            if (!isNaN(n)) { return Number.isInteger(n) ? n : parseFloat(n.toFixed(2)); }
+            return val;
+        }
+
+        function calculateSmartTotals(rows, fields, isProg) {
+            let sums = { M: {}, P: {} };
+            let results = {};
+
+            fields.forEach(f => {
+                let sumM = 0, sumP = 0, isNum = false;
+                rows.forEach(r => {
+                    let cv = r.values[f.id];
+                    if(typeof cv === 'object' && cv !== null) {
+                        sumM += parseFloat(cv.M || 0); sumP += parseFloat(cv.P || 0); isNum = true;
+                    } else {
+                        let n = parseFloat(cv);
+                        if(!isNaN(n)) { sumM += n; isNum = true; }
+                    }
+                });
+                sums.M[f.id] = sumM; sums.P[f.id] = sumP;
+                results[f.id] = { M: sumM, P: sumP, isNum: isNum };
+            });
+
+            fields.forEach(f => {
+                if(f.formula && String(f.formula).trim() !== "") {
+                    let evalFormulaForTotals = (type) => {
+                        let formulaStr = String(f.formula).toLowerCase().trim();
+                        fields.forEach(af => {
+                            let ph = `[${af.id.toLowerCase()}]`;
+                            if(formulaStr.includes(ph)) { formulaStr = formulaStr.replaceAll(ph, sums[type][af.id] || 0); }
+                        });
+                        try {
+                            if (/^[0-9.+\-*/() ]+$/.test(formulaStr)) {
+                                let res = eval(formulaStr); return isNaN(res) || !isFinite(res) ? 0 : res;
+                            }
+                        } catch(e) {}
+                        return 0;
+                    };
+
+                    let finalM = evalFormulaForTotals('M'); 
+                    let finalP = isProg ? evalFormulaForTotals('P') : 0;
+                    sums.M[f.id] = finalM; sums.P[f.id] = finalP;
+                    results[f.id] = { M: finalM, P: finalP, isNum: true };
+                }
+            });
+            return results;
+        }
+
+        function renderMultipleTables(reports, groupType) {
+            let container = document.getElementById('reportTableContainer');
+            let downArea = document.getElementById('downloadButtonsArea');
+
+            let phcHeaderTxt = "माझे अहवाल";
+            if (user.role === 'admin' || user.role === 'taluka_admin') phcHeaderTxt = "तालुका अहवाल - संपूर्ण डेटा";
+            if (user.role === 'phc_admin') phcHeaderTxt = "तुमच्या PHC चा अहवाल";
+
+            downArea.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-center gap-2 p-3 bg-gray-50 rounded-lg border shadow-sm mb-4"><span class="font-bold text-gray-700">${phcHeaderTxt}</span><div class="flex gap-2"><button onclick="downloadConsolidatedExcel()" class="bg-green-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-green-700 transition">📥 Excel डाऊनलोड</button><button onclick="window.print()" class="bg-red-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-red-700 transition">🖨️ प्रिंट काढा</button></div></div>`;
+
+            let html = '';
+            reports.forEach(rep => {
+                let columns = rep.fields; let rows = rep.rows;
+                html += `<div class="mb-8 p-4 border border-gray-300 rounded-xl bg-white shadow-sm overflow-hidden"><div class="text-center border-b pb-2 mb-4 bg-purple-50 p-3 rounded-t-lg"><h2 class="text-lg font-extrabold text-purple-800">📋 अहवाल: ${rep.formName}</h2><p class="text-sm font-bold text-gray-600">कालावधी: ${rep.periodText}</p></div>`;
+
+                if(groupType === "SubCenterConsolidated") {
+                    let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
+                    let l1Row = `<tr><th rowspan="${rep.isProg?3:2}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?3:2}" class="border p-2 text-left">तपशील / मुख्य प्रश्न</th>`;
+                    let l2Row = `<tr>`; let l3Row = rep.isProg ? `<tr>` : ``;
+
+                    rows.forEach((r) => {
+                        let vName = r.village ? `${r.village} <br/><span class="text-[10px] text-gray-500">(${r.subcenter})</span>` : "-";
+                        l1Row += `<th colspan="${rep.isProg ? 2 : 1}" class="border p-2 bg-purple-100">${vName}</th>`;
+                        if (rep.isProg) { l2Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th></tr>`; }
+                    });
+                    
+                    if(rep.formType !== 'list') {
+                        l1Row += `<th colspan="${rep.isProg ? 2 : 1}" class="border p-2 bg-green-200">एकूण PHC Total</th></tr>`;
+                        if (rep.isProg) { l2Row += `<th class="border p-1 bg-green-100 text-[10px]">मासिक</th><th class="border p-1 bg-green-100 text-[10px]">प्रगत</th></tr>`; }
+                    } else {
+                        l1Row += `</tr>`;
+                    }
+
+                    let tbodyHtml = '';
+                    columns.forEach((c, vIndex) => {
+                        let fLabel = ""; if(c.l1) fLabel += c.l1+" - "; if(c.l2) fLabel += c.l2+" - "; fLabel += c.l3;
+                        tbodyHtml += `<tr class="hover:bg-gray-50 text-xs"><td class="border p-2 text-center font-bold">${vIndex+1}</td><td class="border p-2 font-bold text-gray-800 text-left">${fLabel}</td>`;
+                        rows.forEach(r => {
+                            let val = r.values[c.id];
+                            if(typeof val === 'object' && val !== null) { tbodyHtml += `<td class="border p-2 text-center text-blue-700">${val.M}</td><td class="border p-2 font-medium bg-orange-50/30 text-center text-orange-700">${val.P}</td>`; } 
+                            else { tbodyHtml += `<td class="border p-2 text-center">${val !== '' ? val : '-'}</td>`; }
+                        });
+                        
+                        if(rep.formType !== 'list') {
+                            let smartM = phcTotals[c.id].isNum ? formatNumberDecimals(phcTotals[c.id].M) : "-";
+                            let smartP = rep.isProg && phcTotals[c.id].isNum ? formatNumberDecimals(phcTotals[c.id].P) : "-";
+                            tbodyHtml += `<td class="border p-2 font-extrabold bg-green-50 text-green-900 text-center">${smartM}</td>`;
+                            if (rep.isProg) tbodyHtml += `<td class="border p-2 font-extrabold bg-green-50 text-green-900 text-center">${smartP}</td>`;
+                        }
+                        tbodyHtml += `</tr>`;
+                    });
+
+                    html += `<div class="table-responsive"><table class="report-table"><thead>${l1Row + l2Row + l3Row}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+                } else {
+                    let dataRowsToRender = rows;
+
+                    if(groupType === "SubCenterSum") {
+                        let scGroups = {};
+                        rows.forEach(r => { if(!scGroups[r.subcenter]) scGroups[r.subcenter] = []; scGroups[r.subcenter].push(r); });
+                        let subCenterAggregatedRows = [];
+                        Object.keys(scGroups).sort().forEach(sc => {
+                            let scRows = scGroups[sc];
+                            let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
+                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
+                            columns.forEach(c => {
+                                let t = scSmartTotals[c.id];
+                                if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
+                                else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                            });
+                            subCenterAggregatedRows.push(scNewRow);
+                        });
+                        dataRowsToRender = subCenterAggregatedRows;
+                    } else if (groupType === "SubCenterFlat") {
+                        dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.village.localeCompare(b.village));
+                    }
+
+                    if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
+                        let l1Row = `<tr><th rowspan="${rep.isProg?4:3}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?4:3}" class="border p-2">उपकेंद्र</th>`;
+                        if (groupType === 'SubCenterFlat') l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
+                        let l2Row = `<tr>`; let l3Row = `<tr>`; let l4Row = rep.isProg ? `<tr>` : ``;
+
+                        let i = 0;
+                        while(i < columns.length) {
+                            let c = columns[i]; let j = i + 1;
+                            if(c.l1 !== "") {
+                                while(j < columns.length && columns[j].l1 === c.l1) { j++; }
+                                let totalL1Span = 0; for(let k=i; k<j; k++) totalL1Span += (rep.isProg && columns[k].type === 'number') ? 2 : 1;
+                                l1Row += `<th colspan="${totalL1Span}" class="border p-2 bg-purple-100 text-purple-900">${c.l1}</th>`;
+
+                                let k = i;
+                                while(k < j) {
+                                    let c2 = columns[k]; let m = k + 1;
+                                    if(c2.l2 !== "") {
+                                        while(m < j && columns[m].l2 === c2.l2) { m++; }
+                                        let totalL2Span = 0; for(let n=k; n<m; n++) totalL2Span += (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                        l2Row += `<th colspan="${totalL2Span}" class="border p-2 bg-blue-50 text-blue-900">${c2.l2}</th>`;
+                                        for(let n=k; n<m; n++) {
+                                            let w = (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                            if(w===2) { l3Row += `<th colspan="2" class="border p-2 text-xs">${columns[n].l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
+                                            else { l3Row += `<th rowspan="${rep.isProg?2:1}" class="border p-2 text-xs">${columns[n].l3}</th>`; }
+                                        }
+                                        k = m;
+                                    } else {
+                                        let mult2 = (rep.isProg && c2.type === 'number') ? 2 : 1;
+                                        if(mult2 === 2) { l2Row += `<th colspan="2" rowspan="2" class="border p-2 text-xs">${c2.l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
+                                        else { l2Row += `<th rowspan="${rep.isProg?3:2}" class="border p-2 text-xs">${c2.l3}</th>`; }
+                                        k++;
+                                    }
+                                }
+                                i = j;
+                            } else {
+                                let mult = (rep.isProg && c.type === 'number') ? 2 : 1;
+                                if(mult === 2) { l1Row += `<th colspan="2" rowspan="3" class="border p-2 text-xs">${c.l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
+                                else { l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 text-xs">${c.l3}</th>`; }
+                                i++;
+                            }
+                        }
+                        l1Row += `</tr>`; l2Row += `</tr>`; l3Row += `</tr>`; if(rep.isProg) l4Row += `</tr>`;
+
+                        let tbodyHtml = '';
+                        dataRowsToRender.forEach((r, rIdx) => {
+                            // 🟢 Action Button Logic with 10th Date Check
+                            let actionHtml = '';
+                            if (user.role === 'phc_admin' && r.response_id && isEditingAllowed(r.report_month, r.report_year)) {
+                                actionHtml = `<div class="mt-1 flex gap-1 justify-start no-print">
+                                    <button onclick="openEditModal('${r.response_id}')" class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm hover:bg-blue-200">✏️</button>
+                                    <button onclick="deleteResponse('${r.response_id}')" class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm hover:bg-red-200">🗑️</button>
+                                </div>`;
+                            }
+
+                            tbodyHtml += `<tr class="hover:bg-gray-50 text-xs"><td class="border p-2 text-center font-bold">${rIdx+1}</td><td class="border p-2 font-bold text-gray-800 text-left">${r.subcenter}</td>`;
+                            if(groupType === 'SubCenterFlat') tbodyHtml += `<td class="border p-2 font-bold text-gray-800 text-left">${r.village} ${actionHtml}</td>`;
+                            
+                            columns.forEach(c => {
+                                let val = r.values[c.id];
+                                if(typeof val === 'object' && val !== null) { tbodyHtml += `<td class="border p-2 text-blue-800 text-center font-bold">${val.M}</td><td class="border p-2 font-bold bg-orange-50/30 text-orange-800 text-center">${val.P}</td>`; } 
+                                else { tbodyHtml += `<td class="border p-2 text-center">${val !== '' ? val : '-'}</td>`; }
+                            });
+                            tbodyHtml += `</tr>`;
+                        });
+
+                        if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                            let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
+                            let colspanTotal = groupType === 'SubCenterFlat' ? 3 : 2;
+                            tbodyHtml += `<tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2 text-left" colspan="${colspanTotal}">एकूण Total</td>`;
+                            columns.forEach(c => {
+                                let pVal = phcTotals[c.id];
+                                if(rep.isProg && c.type === 'number') { tbodyHtml += `<td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.M) : '-'}</td><td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.P) : '-'}</td>`; }
+                                else { tbodyHtml += `<td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.M) : '-'}</td>`; }
+                            });
+                            tbodyHtml += `</tr>`;
+                        }
+
+                        html += `<div class="table-responsive"><table class="report-table"><thead>${l1Row + l2Row + l3Row + l4Row}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+                    } else {
+                        let employeeGroups = {};
+                        rows.forEach(r => { let key = `${r.subcenter}###${r.employee}`; if(!employeeGroups[key]) employeeGroups[key] = []; employeeGroups[key].push(r); });
+
+                        Object.keys(employeeGroups).sort().forEach(empKey => {
+                            let [scName, empName] = empKey.split("###");
+                            let subRows = employeeGroups[empKey];
+
+                            html += `<div style="margin-top:20px; margin-bottom:10px; background:#00705a; color:#ffffff; padding:10px; border-radius:4px; font-weight:bold; font-size:14px;">🏢 उपकेंद्र: ${scName} | 🧑‍⚕️ कर्मचारी: ${empName}</div>`;
+
+                            let l1Row = `<tr><th rowspan="${rep.isProg?4:3}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
+                            let l2Row = `<tr>`; let l3Row = `<tr>`; let l4Row = rep.isProg ? `<tr>` : ``;
+
+                            let i = 0;
+                            while(i < columns.length) {
+                                let c = columns[i]; let j = i + 1;
+                                if(c.l1 !== "") {
+                                    while(j < columns.length && columns[j].l1 === c.l1) { j++; }
+                                    let totalL1Span = 0; for(let k=i; k<j; k++) totalL1Span += (rep.isProg && columns[k].type === 'number') ? 2 : 1;
+                                    l1Row += `<th colspan="${totalL1Span}" class="border p-2 bg-purple-100 text-purple-900">${c.l1}</th>`;
+
+                                    let k = i;
+                                    while(k < j) {
+                                        let c2 = columns[k]; let m = k + 1;
+                                        if(c2.l2 !== "") {
+                                            while(m < j && columns[m].l2 === c2.l2) { m++; }
+                                            let totalL2Span = 0; for(let n=k; n<m; n++) totalL2Span += (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                            l2Row += `<th colspan="${totalL2Span}" class="border p-2 bg-blue-50 text-blue-900">${c2.l2}</th>`;
+                                            for(let n=k; n<m; n++) {
+                                                let w = (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                                if(w===2) { l3Row += `<th colspan="2" class="border p-2 text-xs">${columns[n].l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
+                                                else { l3Row += `<th rowspan="${rep.isProg?2:1}" class="border p-2 text-xs">${columns[n].l3}</th>`; }
+                                            }
+                                            k = m;
+                                        } else {
+                                            let mult2 = (rep.isProg && c2.type === 'number') ? 2 : 1;
+                                            if(mult2 === 2) { l2Row += `<th colspan="2" rowspan="2" class="border p-2 text-xs">${c2.l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
+                                            else { l2Row += `<th rowspan="${rep.isProg?3:2}" class="border p-2 text-xs">${c2.l3}</th>`; }
+                                            k++;
+                                        }
+                                    }
+                                    i = j;
+                                } else {
+                                    let mult = (rep.isProg && c.type === 'number') ? 2 : 1;
+                                    if(mult === 2) { l1Row += `<th colspan="2" rowspan="3" class="border p-2 text-xs">${c.l3}</th>`; l4Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th>`; } 
+                                    else { l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 text-xs">${c.l3}</th>`; }
+                                    i++;
+                                }
+                            }
+                            l1Row += `</tr>`; l2Row += `</tr>`; l3Row += `</tr>`; if(rep.isProg) l4Row += `</tr>`;
+
+                            let tbodyHtml = '';
+                            subRows.forEach((r, rIdx) => {
+                                // 🟢 Action Button Logic with 10th Date Check
+                                let actionHtml = '';
+                                if (user.role === 'phc_admin' && r.response_id && isEditingAllowed(r.report_month, r.report_year)) {
+                                    actionHtml = `<div class="mt-1 flex gap-1 justify-start no-print">
+                                        <button onclick="openEditModal('${r.response_id}')" class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm hover:bg-blue-200">✏️</button>
+                                        <button onclick="deleteResponse('${r.response_id}')" class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm hover:bg-red-200">🗑️</button>
+                                    </div>`;
+                                }
+
+                                tbodyHtml += `<tr class="hover:bg-gray-50 text-xs"><td class="border p-2 text-center font-bold">${rIdx+1}</td><td class="border p-2 font-bold text-gray-800 text-left">${r.village} ${actionHtml}</td>`;
+                                columns.forEach(c => {
+                                    let val = r.values[c.id];
+                                    if(typeof val === 'object' && val !== null) { tbodyHtml += `<td class="border p-2 text-blue-800 text-center font-bold">${val.M}</td><td class="border p-2 font-bold bg-orange-50/30 text-orange-800 text-center">${val.P}</td>`; } 
+                                    else { tbodyHtml += `<td class="border p-2 text-center">${val !== '' ? val : '-'}</td>`; }
+                                });
+                                tbodyHtml += `</tr>`;
+                            });
+
+                            if(rep.formType !== 'list') {
+                                let groupTotals = calculateSmartTotals(subRows, columns, rep.isProg);
+                                tbodyHtml += `<tr class="bg-blue-50 font-bold text-blue-900 text-xs"><td class="border p-2 text-left" colspan="2">गटाची एकूण बेरीज</td>`;
+                                columns.forEach(c => {
+                                    let gVal = groupTotals[c.id];
+                                    if(rep.isProg && c.type === 'number') { tbodyHtml += `<td class="border p-2 text-center">${gVal.isNum ? formatNumberDecimals(gVal.M) : '-'}</td><td class="border p-2 text-center">${gVal.isNum ? formatNumberDecimals(gVal.P) : '-'}</td>`; }
+                                    else { tbodyHtml += `<td class="border p-2 text-center">${gVal.isNum ? formatNumberDecimals(gVal.M) : '-'}</td>`; }
+                                });
+                                tbodyHtml += `</tr>`;
+                            }
+
+                            html += `<div class="table-responsive"><table class="report-table"><thead>${l1Row + l2Row + l3Row + l4Row}</thead><tbody>${tbodyHtml}</tbody></table></div>`;
+                        });
+
+                        if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                            let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
+                            html += `<div class="table-responsive"><table class="report-table"><tbody><tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2" style="width:200px;" colspan="2">एकूण Total</td>`;
+                            columns.forEach(c => {
+                                let pVal = phcTotals[c.id];
+                                if(rep.isProg && c.type === 'number') { html += `<td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.M) : '-'}</td><td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.P) : '-'}</td>`; }
+                                else { html += `<td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.M) : '-'}</td>`; }
+                            });
+                            html += `</tr></tbody></table></div>`;
+                        }
+                    }
+                }
+                html += `</div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // 🟢 Edit / Delete Functions
+        async function deleteResponse(responseId) {
+            if(!confirm("तुम्हाला खात्री आहे का? हा डेटा कायमचा डिलीट होईल!")) return;
+            document.getElementById('reportLoader').classList.remove('hidden');
+            const { error } = await supabaseClient.from('form_responses').delete().eq('id', responseId);
+            document.getElementById('reportLoader').classList.add('hidden');
+            
+            if(error) alert("डिलीट करताना त्रुटी: " + error.message);
+            else { alert("✅ डेटा डिलीट झाला!"); fetchReportData(); }
+        }
+
+        let currentEditResponseId = null;
+        let currentEditFormId = null;
+
+        function openEditModal(respId) {
+            let response = windowDbData.find(r => r.id === respId);
+            if(!response) return;
+            
+            currentEditResponseId = respId;
+            currentEditFormId = response.form_id;
+            
+            let formObj = masterData.forms.find(f => f.id === response.form_id);
+            if(!formObj) return;
+
+            let allFields = formObj.schema_json.fields.filter(f => f.type !== 'group_header');
+            
+            let html = `<div class="space-y-4">`;
+            allFields.forEach(f => {
+                if(f.formula && String(f.formula).trim() !== "") return; 
+                
+                let val = "";
+                if(response.response_data && response.response_data[f.id]) {
+                    val = response.response_data[f.id].value;
+                }
+                
+                let chain = getFieldHierarchyChain(formObj.schema_json.fields, f);
+                let fullLabel = chain.join(" > ") + (chain.length > 0 ? " > " : "") + f.label;
+                
+                let inputType = f.type === 'number' ? 'number' : 'text';
+                
+                html += `<div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">${fullLabel}</label>
+                    <input type="${inputType}" id="edit_f_${f.id}" value="${val}" class="w-full p-2 border-2 border-gray-300 rounded font-bold text-blue-900 focus:ring focus:ring-blue-200">
+                </div>`;
+            });
+            html += `</div>`;
+            
+            document.getElementById('editModalBody').innerHTML = html;
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            currentEditResponseId = null;
+            currentEditFormId = null;
+        }
+
+        async function saveEditResponse() {
+            if(!currentEditResponseId) return;
+            let response = windowDbData.find(r => r.id === currentEditResponseId);
+            let formObj = masterData.forms.find(f => f.id === currentEditFormId);
+            
+            let allFields = formObj.schema_json.fields.filter(f => f.type !== 'group_header' && (!f.formula || String(f.formula).trim() === ""));
+            
+            let newData = { ...response.response_data };
+            allFields.forEach(f => {
+                let el = document.getElementById(`edit_f_${f.id}`);
+                if(el) {
+                    newData[f.id] = { value: el.value };
+                }
+            });
+            
+            document.getElementById('reportLoader').classList.remove('hidden');
+            closeEditModal();
+            
+            const { error } = await supabaseClient.from('form_responses').update({ response_data: newData }).eq('id', currentEditResponseId);
+            
+            if(error) alert("अपडेट करताना त्रुटी: " + error.message);
+            else {
+                alert("✅ डेटा यशस्वीरीत्या अपडेट झाला!");
+                fetchReportData();
+            }
+            document.getElementById('reportLoader').classList.add('hidden');
+        }
+
+        function downloadConsolidatedExcel() {
+            if(currentReports.length === 0) return;
+            let groupType = document.getElementById('reportGroupFilter').value;
+
+            if (user.role !== 'admin' && user.role !== 'taluka_admin' && user.role !== 'phc_admin') groupType = 'Village';
+
+            let wb = XLSX.utils.book_new();
+
+            currentReports.forEach((rep) => {
+                let columns = rep.fields; let rows = rep.rows;
+                let sheetData = []; let merges = []; let masterHeaderRows = []; let subTitleHeaderRows = []; let groupTotalRows = []; let phcTotalRows = [];
+
+                if (groupType === "SubCenterConsolidated") {
+                    let verticalColCount = 2 + (rows.length * (rep.isProg ? 2 : 1)) + (rep.isProg ? 2 : 1);
+                    sheetData.push(["तालुका आरोग्य प्रणाली अहवाल"]);
+                    sheetData.push([`व्यावसायिक अहवाल: ${rep.formName} | कालावधी: ${rep.periodText}`]);
+                    sheetData.push([]);
+                    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: verticalColCount - 1 } });
+                    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: verticalColCount - 1 } });
+
+                    let r1 = ["अ.क्र.", "तपशील / मुख्य निर्देशांक प्रश्न"];
+                    let r2 = rep.isProg ? ["", ""] : null;
+                    if(rep.isProg) { merges.push({ s: { r: 3, c: 0 }, e: { r: 4, c: 0 } }); merges.push({ s: { r: 3, c: 1 }, e: { r: 4, c: 1 } }); }
+
+                    let ccIdx = 2;
+                    rows.forEach(r => {
+                        let vName = r.village ? `${r.village} (${r.subcenter})` : "-";
+                        r1.push(vName); if(rep.isProg) r1.push("");
+                        if(rep.isProg) { merges.push({ s: { r: 3, c: ccIdx }, e: { r: 3, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); ccIdx += 2; } else { ccIdx += 1; }
+                    });
+                    
+                    if(rep.formType !== 'list') {
+                        r1.push("एकूण Total"); if(rep.isProg) r1.push("");
+                        if(rep.isProg) { merges.push({ s: { r: 3, c: ccIdx }, e: { r: 3, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); }
+                    }
+
+                    sheetData.push(r1); subTitleHeaderRows.push(3);
+                    if(rep.isProg) { sheetData.push(r2); subTitleHeaderRows.push(4); }
+
+                    let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
+
+                    columns.forEach((c, vIndex) => {
+                        let fLabel = ""; if(c.l1) fLabel += c.l1+" - "; if(c.l2) fLabel += c.l2+" - "; fLabel += c.l3;
+                        let rowData = [vIndex + 1, fLabel];
+                        rows.forEach(r => {
+                            let val = r.values[c.id]; let mObj = (typeof val === 'object' && val !== null) ? val.M : val;
+                            rowData.push(mObj !== undefined && mObj !== "" ? (isNaN(Number(mObj)) ? String(mObj) : Number(mObj)) : 0);
+                            
+                            if(rep.isProg) { 
+                                let pObj = (typeof val === 'object' && val !== null) ? val.P : val; 
+                                rowData.push(pObj !== undefined && pObj !== "" ? (isNaN(Number(pObj)) ? String(pObj) : Number(pObj)) : 0); 
+                            }
+                        });
+
+                        if(rep.formType !== 'list') {
+                            let tM = phcTotals[c.id].isNum ? Number(phcTotals[c.id].M) : "-";
+                            let tP = phcTotals[c.id].isNum ? Number(phcTotals[c.id].P) : "-";
+                            rowData.push(tM); if(rep.isProg) rowData.push(tP);
+                        }
+                        sheetData.push(rowData); 
+                    });
+
+                } else if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
+                    let dataRowsToRender = rows;
+
+                    if(groupType === "SubCenterSum") {
+                        let scGroups = {};
+                        rows.forEach(r => { if(!scGroups[r.subcenter]) scGroups[r.subcenter] = []; scGroups[r.subcenter].push(r); });
+                        let subCenterAggregatedRows = [];
+                        Object.keys(scGroups).sort().forEach(sc => {
+                            let scRows = scGroups[sc];
+                            let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
+                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
+                            columns.forEach(c => {
+                                let t = scSmartTotals[c.id];
+                                if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
+                                else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                            });
+                            subCenterAggregatedRows.push(scNewRow);
+                        });
+                        dataRowsToRender = subCenterAggregatedRows;
+                    } else if (groupType === "SubCenterFlat") {
+                        dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.village.localeCompare(b.village));
+                    }
+
+                    sheetData.push(["तालुका आरोग्य प्रणाली अहवाल"]);
+                    sheetData.push([`सलग अहवाल: ${rep.formName} | कालावधी: ${rep.periodText}`]);
+                    sheetData.push([]); 
+
+                    let totalBaseCols = groupType === 'SubCenterFlat' ? 3 : 2;
+                    let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
+
+                    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalColumnsCount - 1 } });
+                    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: totalColumnsCount - 1 } });
+
+                    let startR = 3;
+                    let r1 = ["अ.क्र.", "उपकेंद्र"]; if(groupType === 'SubCenterFlat') r1.push("गाव/कार्यक्षेत्र");
+                    let r2 = []; let r3 = []; let r4 = rep.isProg ? [] : null;
+
+                    for(let x=0; x<totalBaseCols; x++) { r2.push(""); r3.push(""); if(rep.isProg) r4.push(""); }
+                    let totalHeaderRows = rep.isProg ? 4 : 3;
+                    for(let x=0; x<totalBaseCols; x++) merges.push({ s: { r: startR, c: x }, e: { r: startR + totalHeaderRows - 1, c: x } });
+
+                    let i = 0;
+                    while(i < columns.length) {
+                        let c = columns[i]; let j = i + 1;
+                        if(c.l1 !== "") {
+                            while(j < columns.length && columns[j].l1 === c.l1) { j++; }
+                            let totalL1Span = 0; for(let k=i; k<j; k++) totalL1Span += (rep.isProg && columns[k].type === 'number') ? 2 : 1;
+                            r1.push(c.l1); for(let s=1; s<totalL1Span; s++) r1.push("");
+                            merges.push({ s: { r: startR, c: r1.length - totalL1Span }, e: { r: startR, c: r1.length - 1 } });
+
+                            let k = i;
+                            while(k < j) {
+                                let c2 = columns[k]; let m = k + 1;
+                                if(c2.l2 !== "") {
+                                    while(m < j && columns[m].l2 === c2.l2) { m++; }
+                                    let totalL2Span = 0; for(let n=k; n<m; n++) totalL2Span += (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                    r2.push(c2.l2); for(let s=1; s<totalL2Span; s++) r2.push("");
+                                    merges.push({ s: { r: startR+1, c: r2.length - totalL2Span }, e: { r: startR+1, c: r2.length - 1 } });
+
+                                    for(let n=k; n<m; n++) {
+                                        let cn = columns[n]; let w = (rep.isProg && cn.type === 'number') ? 2 : 1;
+                                        r3.push(cn.l3);
+                                        if(w === 2) {
+                                            r3.push(""); merges.push({ s: { r: startR+2, c: r3.length - 2 }, e: { r: startR+2, c: r3.length - 1 } });
+                                            r4.push("मासिक"); r4.push("प्रगत");
+                                        } else { if(rep.isProg) { merges.push({ s: { r: startR+2, c: r3.length - 1 }, e: { r: startR+3, c: r3.length - 1 } }); r4.push(""); } }
+                                    }
+                                    k = m;
+                                } else {
+                                    let w = (rep.isProg && c2.type === 'number') ? 2 : 1;
+                                    r2.push(c2.l3);
+                                    if(w === 2) {
+                                        r2.push(""); merges.push({ s: { r: startR+1, c: r2.length - 2 }, e: { r: startR+2, c: r2.length - 1 } }); 
+                                        r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                                    } else {
+                                        if(rep.isProg) { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+3, c: r2.length - 1 } }); r3.push(""); r4.push(""); } 
+                                        else { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+2, c: r2.length - 1 } }); r3.push(""); }
+                                    }
+                                    k++;
+                                }
+                            }
+                            i = j;
+                        } else {
+                            let w = (rep.isProg && c.type === 'number') ? 2 : 1;
+                            r1.push(c.l3);
+                            if(w === 2) {
+                                r1.push(""); merges.push({ s: { r: startR, c: r1.length - 2 }, e: { r: startR+2, c: r1.length - 1 } }); 
+                                r2.push(""); r2.push(""); r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                            } else {
+                                let bottomR = rep.isProg ? startR+3 : startR+2;
+                                merges.push({ s: { r: startR, c: r1.length - 1 }, e: { r: bottomR, c: r1.length - 1 } });
+                                r2.push(""); r3.push(""); if(rep.isProg) r4.push("");
+                            }
+                            i++;
+                        }
+                    }
+
+                    sheetData.push(r1); subTitleHeaderRows.push(startR);
+                    sheetData.push(r2); subTitleHeaderRows.push(startR + 1);
+                    sheetData.push(r3); subTitleHeaderRows.push(startR + 2);
+                    if(rep.isProg) { sheetData.push(r4); subTitleHeaderRows.push(startR + 3); }
+
+                    dataRowsToRender.forEach((r, rIdx) => {
+                        let rowData = [rIdx + 1, r.subcenter];
+                        if(groupType === 'SubCenterFlat') rowData.push(r.village);
+                        columns.forEach(c => {
+                            let val = r.values[c.id];
+                            if(typeof val === 'object' && val !== null) { 
+                                rowData.push(val.M !== '' ? (isNaN(Number(val.M)) ? String(val.M) : Number(val.M)) : 0); 
+                                rowData.push(val.P !== '' ? (isNaN(Number(val.P)) ? String(val.P) : Number(val.P)) : 0); 
+                            } else { 
+                                rowData.push(val !== '' ? (isNaN(Number(val)) ? String(val) : Number(val)) : ''); 
+                            }
+                        });
+                        sheetData.push(rowData);
+                    });
+
+                    if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                        let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
+                        let pRow = ["एकूण Total"];
+                        for(let x=1; x<totalBaseCols; x++) pRow.push("");
+                        merges.push({ s: { r: sheetData.length, c: 0 }, e: { r: sheetData.length, c: totalBaseCols - 1 } });
+
+                        columns.forEach(c => {
+                            let pVal = phcTotals[c.id];
+                            if(rep.isProg && c.type === 'number') { pRow.push(pVal.isNum ? Number(pVal.M) : '-'); pRow.push(pVal.isNum ? Number(pVal.P) : '-'); }
+                            else { pRow.push(pVal.isNum ? Number(pVal.M) : '-'); }
+                        });
+                        phcTotalRows.push(sheetData.length);
+                        sheetData.push(pRow);
+                    }
+
+                } else {
+                    let employeeGroups = {};
+                    rows.forEach(r => { let key = `${r.subcenter}###${r.employee}`; if(!employeeGroups[key]) employeeGroups[key] = []; employeeGroups[key].push(r); });
+
+                    let totalColumnsCount = 2; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
+
+                    Object.keys(employeeGroups).sort().forEach(empKey => {
+                        let [scName, empName] = empKey.split("###"); let subRows = employeeGroups[empKey];
+
+                        let currentMetaIndex = sheetData.length;
+                        sheetData.push([`📋 अहवाल: ${rep.formName} | कालावधी: ${rep.periodText} | 🏢 उपकेंद्र: ${scName} | 🧑‍⚕️ कर्मचारी: ${empName}`]);
+                        masterHeaderRows.push(currentMetaIndex); merges.push({ s: { r: currentMetaIndex, c: 0 }, e: { r: currentMetaIndex, c: totalColumnsCount - 1 } });
+
+                        let startR = sheetData.length;
+                        let r1 = ["अ.क्र.", "गाव/कार्यक्षेत्र"]; let r2 = ["", ""]; let r3 = ["", ""]; let r4 = rep.isProg ? ["", ""] : null;
+
+                        let totalHeaderRows = rep.isProg ? 4 : 3;
+                        merges.push({ s: { r: startR, c: 0 }, e: { r: startR + totalHeaderRows - 1, c: 0 } });
+                        merges.push({ s: { r: startR, c: 1 }, e: { r: startR + totalHeaderRows - 1, c: 1 } });
+
+                        let i = 0;
+                        while(i < columns.length) {
+                            let c = columns[i]; let j = i + 1;
+                            if(c.l1 !== "") {
+                                while(j < columns.length && columns[j].l1 === c.l1) { j++; }
+                                let totalL1Span = 0; for(let k=i; k<j; k++) totalL1Span += (rep.isProg && columns[k].type === 'number') ? 2 : 1;
+                                r1.push(c.l1); for(let s=1; s<totalL1Span; s++) r1.push("");
+                                merges.push({ s: { r: startR, c: r1.length - totalL1Span }, e: { r: startR, c: r1.length - 1 } });
+
+                                let k = i;
+                                while(k < j) {
+                                    let c2 = columns[k]; let m = k + 1;
+                                    if(c2.l2 !== "") {
+                                        while(m < j && columns[m].l2 === c2.l2) { m++; }
+                                        let totalL2Span = 0; for(let n=k; n<m; n++) totalL2Span += (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                        r2.push(c2.l2); for(let s=1; s<totalL2Span; s++) r2.push("");
+                                        merges.push({ s: { r: startR+1, c: r2.length - totalL2Span }, e: { r: startR+1, c: r2.length - 1 } });
+
+                                        for(let n=k; n<m; n++) {
+                                            let cn = columns[n]; let w = (rep.isProg && cn.type === 'number') ? 2 : 1;
+                                            r3.push(cn.l3);
+                                            if(w === 2) {
+                                                r3.push(""); merges.push({ s: { r: startR+2, c: r3.length - 2 }, e: { r: startR+2, c: r3.length - 1 } });
+                                                r4.push("मासिक"); r4.push("प्रगत");
+                                            } else {
+                                                if(rep.isProg) { merges.push({ s: { r: startR+2, c: r3.length - 1 }, e: { r: startR+3, c: r3.length - 1 } }); r4.push(""); }
+                                            }
+                                        }
+                                        k = m;
+                                    } else {
+                                        let w = (rep.isProg && c2.type === 'number') ? 2 : 1;
+                                        r2.push(c2.l3);
+                                        if(w === 2) {
+                                            r2.push(""); merges.push({ s: { r: startR+1, c: r2.length - 2 }, e: { r: startR+2, c: r2.length - 1 } }); 
+                                            r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                                        } else {
+                                            if(rep.isProg) { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+3, c: r2.length - 1 } }); r3.push(""); r4.push(""); } 
+                                            else { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+2, c: r2.length - 1 } }); r3.push(""); }
+                                        }
+                                        k++;
+                                    }
+                                }
+                                i = j;
+                            } else {
+                                let w = (rep.isProg && c.type === 'number') ? 2 : 1;
+                                r1.push(c.l3);
+                                if(w === 2) {
+                                    r1.push(""); merges.push({ s: { r: startR, c: r1.length - 2 }, e: { r: startR+2, c: r1.length - 1 } }); 
+                                    r2.push(""); r2.push(""); r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                                } else {
+                                    let bottomR = rep.isProg ? startR+3 : startR+2;
+                                    merges.push({ s: { r: startR, c: r1.length - 1 }, e: { r: bottomR, c: r1.length - 1 } });
+                                    r2.push(""); r3.push(""); if(rep.isProg) r4.push("");
+                                }
+                                i++;
+                            }
+                        }
+
+                        sheetData.push(r1); subTitleHeaderRows.push(startR);
+                        sheetData.push(r2); subTitleHeaderRows.push(startR + 1);
+                        sheetData.push(r3); subTitleHeaderRows.push(startR + 2);
+                        if(rep.isProg) { sheetData.push(r4); subTitleHeaderRows.push(startR + 3); }
+
+                        subRows.forEach((r, rIdx) => {
+                            let rowData = [rIdx + 1, r.village];
+                            columns.forEach(c => {
+                                let val = r.values[c.id];
+                                if(typeof val === 'object' && val !== null) { 
+                                    rowData.push(val.M !== '' ? (isNaN(Number(val.M)) ? String(val.M) : Number(val.M)) : 0); 
+                                    rowData.push(val.P !== '' ? (isNaN(Number(val.P)) ? String(val.P) : Number(val.P)) : 0); 
+                                } else { 
+                                    rowData.push(val !== '' ? (isNaN(Number(val)) ? String(val) : Number(val)) : ''); 
+                                }
+                            });
+                            sheetData.push(rowData);
+                        });
+
+                        if(rep.formType !== 'list') {
+                            let groupTotals = calculateSmartTotals(subRows, columns, rep.isProg);
+                            let gRow = ["गटाची एकूण बेरीज", ""];
+                            columns.forEach(c => {
+                                let gVal = groupTotals[c.id];
+                                if(rep.isProg && c.type === 'number') { gRow.push(gVal.isNum ? Number(gVal.M) : '-'); gRow.push(gVal.isNum ? Number(gVal.P) : '-'); }
+                                else { gRow.push(gVal.isNum ? Number(gVal.M) : '-'); }
+                            });
+                            let gRowIdx = sheetData.length;
+                            sheetData.push(gRow); groupTotalRows.push(gRowIdx);
+                            merges.push({ s: { r: gRowIdx, c: 0 }, e: { r: gRowIdx, c: 1 } });
+                        }
+
+                        sheetData.push(Array(totalColumnsCount).fill(""));
+                    });
+
+                    if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
+                        let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
+                        let pRow = ["एकूण Total", ""];
+                        columns.forEach(c => {
+                            let pVal = phcTotals[c.id];
+                            if(rep.isProg && c.type === 'number') { pRow.push(pVal.isNum ? Number(pVal.M) : '-'); pRow.push(pVal.isNum ? Number(pVal.P) : '-'); }
+                            else { pRow.push(pVal.isNum ? Number(pVal.M) : '-'); }
+                        });
+                        let pRowIdx = sheetData.length;
+                        sheetData.push(pRow); phcTotalRows.push(pRowIdx);
+                        merges.push({ s: { r: pRowIdx, c: 0 }, e: { r: pRowIdx, c: 1 } });
+                    }
+                }
+
+                let ws = XLSX.utils.aoa_to_sheet(sheetData); ws["!merges"] = merges;
+                let finalColLimit = sheetData[3] ? sheetData[3].length : 60;
+
+                for(let R=0; R<sheetData.length; R++) {
+                    for(let C=0; C<finalColLimit; C++) { 
+                        let cellRef = XLSX.utils.encode_cell({r: R, c: C}); if(!ws[cellRef]) ws[cellRef] = { t: "s", v: "" }; 
+                        let style = { font: { name: "Arial", sz: 10 }, alignment: { vertical: "center", horizontal: "center", wrapText: true }, border: { top:{style:"thin",color:{rgb:"000000"}}, bottom:{style:"thin",color:{rgb:"000000"}}, left:{style:"thin",color:{rgb:"000000"}}, right:{style:"thin",color:{rgb:"000000"}} } };
+
+                        if (typeof ws[cellRef].v === 'string' && ws[cellRef].v.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                            ws[cellRef].t = "s"; 
+                        }
+
+                        if(masterHeaderRows.includes(R)) { 
+                            style.fill = { fgColor: { rgb: "00705A" } }; style.font = { sz: 12, bold: true, color: { rgb: "FFFFFF" } }; style.alignment.horizontal = "left"; 
+                        } else if(subTitleHeaderRows.includes(R)) {
+                            let idxInGroup = subTitleHeaderRows.indexOf(R) % (rep.isProg?4:3);
+                            if(idxInGroup === 0) style.fill = { fgColor: { rgb: "E1BEE7" } }; 
+                            else if(idxInGroup === 1) style.fill = { fgColor: { rgb: "E3F2FD" } }; 
+                            else if(idxInGroup === 2) style.fill = { fgColor: { rgb: "FFF9C4" } }; 
+                            else style.fill = { fgColor: { rgb: "FFE0B2" } }; 
+                            style.font.bold = true;
+                        } else if (groupTotalRows.includes(R)) {
+                            style.fill = { fgColor: { rgb: "E3F2FD" } }; style.font.bold = true; style.font.color = { rgb: "0D47A1" };
+                        } else if (phcTotalRows.includes(R)) {
+                            style.fill = { fgColor: { rgb: "C8E6C9" } }; style.font.bold = true; style.font.color = { rgb: "1B5E20" };
+                        } else if (sheetData[R][0] === "") {
+                            style = {}; 
+                        } else {
+                            if (C === 1 || (groupType === 'SubCenterFlat' && C === 2)) { style.alignment.horizontal = "left"; style.font.bold = true; }
+                            if (groupType === "SubCenterConsolidated" && C === 1) { style.alignment.horizontal = "left"; style.font.bold = true; }
+
+                            let offset = (groupType === "SubCenterConsolidated" || groupType === "SubCenterSum") ? 2 : (groupType === 'SubCenterFlat' ? 3 : 2);
+                            if (rep.isProg && C >= offset && C % 2 !== (offset%2)) style.fill = { fgColor: { rgb: "FFF9F2" } }; 
+                        }
+                        ws[cellRef].s = style;
+                    }
+                }
+
+                let wscols = [{ wch: 6 }, { wch: 25 }];
+                if(groupType === 'SubCenterFlat') wscols.push({ wch: 20 });
+                if (groupType === "SubCenterConsolidated") { wscols[1] = { wch: 45 }; }
+                for(let c=wscols.length; c<finalColLimit; c++) wscols.push({ wch: 14 });
+                ws["!cols"] = wscols;
+
+                XLSX.utils.book_append_sheet(wb, ws, rep.formName.substring(0, 30));
+            });
+
+            let dlName = `अहवाल_${document.getElementById('periodType').value === 'custom' ? 'Custom' : document.getElementById('reportMonth').value}_${document.getElementById('reportYear').value}.xlsx`;
+            XLSX.writeFile(wb, dlName);
+        }
+
+        function generatePendingReport() {
+            let periodType = document.getElementById('periodType').value;
+            if (periodType === 'custom') {
+                alert("अपूर्ण यादी (Pending Report) शोधण्यासाठी कृपया 'महिन्यानुसार' कालावधी निवडा. कस्टम तारखांसाठी हे उपलब्ध नाही.");
+                return;
+            }
+
+            const selMonth = document.getElementById('reportMonth').value;
+            const selMonthNum = monthNamesMarathi[selMonth];
+            const selYear = document.getElementById('reportYear').value;
+            let selFortnight = document.getElementById('reportFortnight') ? document.getElementById('reportFortnight').value : "1";
+            
+            let selectedIDs = getSelectedReportIDs();
+            if (selectedIDs.length === 0) { alert("कृपया किमान एक अहवाल निवडा!"); return; }
+
+            let groupedData = {}; 
+            let filterSubCenter = document.getElementById('reportSubCenterFilter').value;
+            let formsToCheck = masterData.forms;
+            if(!selectedIDs.includes("ALL")) formsToCheck = formsToCheck.filter(f => selectedIDs.includes(f.id));
+
+            formsToCheck.forEach(f => {
+                groupedData[f.form_name] = [];
+                masterData.employees.forEach(u => {
+
+                    let empRole = String(u.role).toUpperCase().trim();
+
+                    if (['ADMIN', 'TALUKA_ADMIN', 'PHC_ADMIN'].includes(empRole)) return;
+                    if (!u.sub_center_id || u.sub_center_id === '00000000-0000-0000-0000-000000000000') return;
+
+                    if (f.allowed_roles && f.allowed_roles.toUpperCase() !== 'ALL') {
+                        let allowedArray = f.allowed_roles.toUpperCase().split(',').map(r => r.trim());
+                        if (!allowedArray.includes(empRole)) return; 
+                    }
+
+                    if (user.role === 'phc_admin' && u.phc_id !== user.phc_id) return;
+                    if (user.role !== "admin" && user.role !== "taluka_admin" && user.role !== "phc_admin" && String(u.mobile_number).trim() !== String(user.mobile).trim()) return;
+
+                    let scObj = masterData.subCenters.find(s => s.id === u.sub_center_id);
+                    let scName = scObj ? scObj.name : "Unknown";
+                    if (user.role !== 'employee' && filterSubCenter !== "सर्व" && scName !== filterSubCenter) return;
+
+                    let userVillages = masterData.villages.filter(v => v.sub_center_id === u.sub_center_id);
+                    userVillages.forEach(v => {
+                        let isFortnightly = f.form_type === 'fortnightly';
+                        let isFilled = masterData.filledStats.some(h => 
+                            h.form_id === f.id && 
+                            h.village_id === v.id && 
+                            h.report_month === parseInt(selMonthNum) && 
+                            h.report_year === parseInt(selYear) &&
+                            (!isFortnightly || h.report_fortnight === parseInt(selFortnight))
+                        );
+                        if (!isFilled) groupedData[f.form_name].push({ sc: scName, name: u.full_name, role: u.role, village: v.name });
+                    });
+                });
+            });
+
+            let container = document.getElementById('reportTableContainer'); let downArea = document.getElementById('downloadButtonsArea');
+            downArea.innerHTML = `<div class="no-print flex justify-end gap-2 mb-3"><button onclick="copyPendingListText()" class="bg-gray-600 text-white px-4 py-2 rounded text-xs font-bold shadow">📋 यादी कॉपी करा</button><button onclick="window.print()" class="bg-red-600 text-white px-4 py-2 rounded text-xs font-bold shadow">📥 PDF प्रिंट करा</button></div>`;
+
+            let phcHeader = "तालुका आरोग्य प्रणाली";
+            if (user.role === 'phc_admin') phcHeader = "तुमची अपूर्ण यादी";
+            if (filterSubCenter !== 'सर्व') phcHeader += ` (उपकेंद्र: ${filterSubCenter})`;
+
+            let html = `<div id="pdfExportArea" class="pdf-container"><div style="text-align:center; border-bottom: 2px solid var(--primary); padding-bottom:10px; margin-bottom:20px;"><h2 style="margin:0; color:var(--primary); font-size:24px;">${phcHeader}</h2><h3 style="margin:5px 0 0 0; color:#444; font-size:18px;">अपूर्ण अहवाल यादी - कालावधी: ${selMonth} ${selYear}</h3></div>`;
+            let hasData = false; let isFirstPending = true;
+
+            for(let fName in groupedData) {
+                if(groupedData[fName].length > 0) {
+                    hasData = true; let pbClass = isFirstPending ? "" : "page-break"; isFirstPending = false;
+                    html += `<div class="${pbClass}"><div class="pdf-group-header" style="background:#f8f9fa; color:#c0392b; padding:10px; font-weight:bold; font-size:16px; margin-top:10px; border:1px solid #ddd;">📄 फॉर्म: ${fName}</div><table class="report-table pending-data-table" style="width:100%; border-collapse:collapse; margin-bottom:30px;"><thead style="background:#f4f7f6;"><tr><th style="border: 1px solid #ccc; padding: 8px; width:10%; text-align:center;">अ.क्र.</th><th style="border: 1px solid #ccc; padding: 8px; text-align:left;">अहवाल प्रलंबित असणारे कर्मचारी (उपकेंद्र) - अपूर्ण गावे</th></tr></thead><tbody>`;
+                    let empMap = {}; groupedData[fName].forEach(p => { let key = p.name + "###" + p.sc; if(!empMap[key]) empMap[key] = []; empMap[key].push(p.village); });
+                    let sortedKeys = Object.keys(empMap).sort();
+                    sortedKeys.forEach((key, idx) => {
+                        let [empName, scName] = key.split("###"); let villagesStr = empMap[key].join(", ");
+                        html += `<tr><td style="border: 1px solid #ccc; padding: 8px; text-align:center; font-weight:bold;">${idx+1}</td><td style="border: 1px solid #ccc; padding: 8px; text-align:left; font-size:15px;"><span style="color:#0056b3; font-weight:bold;">${empName}</span> - <span style="color:#d35400; font-weight:bold;">${scName}</span> <span style="color:#28a745; font-weight:bold;">(${villagesStr})</span></td></tr>`;
+                    });
+                    html += `</tbody></table></div>`;
+                }
+            }
+            if(!hasData) { html = `<h3 style="text-align:center; color:green; padding:30px; font-weight:bold;">🎉 उत्कृष्ट! तुमचे सर्व अहवाल पूर्ण भरले आहेत.</h3>`; downArea.innerHTML = ""; }
+            container.innerHTML = html + `</div>`; document.getElementById('reportContentArea').classList.remove('hidden');
+        }
+
+        function copyPendingListText() {
+            let textToCopy = `*अपूर्ण अहवाल यादी*\n\n`;
+            let tables = document.querySelectorAll('.pending-data-table'); if(tables.length === 0) return;
+            let formHeaders = document.querySelectorAll('.pdf-group-header');
+            tables.forEach((table, tableIndex) => {
+                let formName = formHeaders[tableIndex] ? formHeaders[tableIndex].innerText.replace('📄 फॉर्म: ', '').trim() : "अहवाल";
+                textToCopy += `📌 *${formName}*\n`;
+                table.querySelectorAll('tbody tr').forEach((row, rowIndex) => { let cells = row.querySelectorAll('td'); if(cells.length >= 2) textToCopy += `${rowIndex + 1}. ${cells[1].innerText.replace(/\n/g, " ").trim()}\n`; });
+                textToCopy += `\n`;
+            });
+            navigator.clipboard.writeText(textToCopy).then(() => { alert("✅ यादी व्हॉट्सॲप मेसेजसाठी कॉपी झाली आहे!"); });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>माहिती भरा - आरोग्य उपकेंद्र</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    </style>
+</head>
+<body class="bg-gray-100 p-2 md:p-6 min-h-screen">
+
+    <div class="max-w-7xl mx-auto bg-white p-4 rounded-lg shadow-md flex justify-between items-center mb-6 no-print border-t-8 border-indigo-600">
+        <div>
+            <h1 class="text-xl md:text-2xl font-bold text-indigo-700">📝 नवीन माहिती भरा (Data Entry)</h1>
+            <p class="text-xs md:text-sm text-gray-500">तुमच्या सोयीनुसार एक गाव किंवा सर्व गावे निवडा</p>
+        </div>
+        <button onclick="window.location.href='dashboard.html'" class="bg-gray-500 text-white px-3 py-2 rounded hover:bg-gray-600 transition text-sm font-bold shadow">डॅशबोर्ड</button>
+    </div>
+
+    <div class="max-w-7xl mx-auto bg-white p-3 md:p-6 rounded-lg shadow-md">
+
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-6 mb-6 pb-6 border-b">
+            <div>
+                <label class="block text-gray-700 font-bold mb-2 text-sm">अहवाल महिना <span class="text-red-500">*</span></label>
+                <select id="reportMonth" onchange="handleMonthYearChange()" class="w-full p-2.5 border-2 border-gray-300 rounded font-bold text-gray-800 text-base">
+                    <option value="1">जानेवारी</option><option value="2">फेब्रुवारी</option>
+                    <option value="3">मार्च</option><option value="4">एप्रिल</option>
+                    <option value="5">मे</option><option value="6">जून</option>
+                    <option value="7">जुलै</option><option value="8">ऑगस्ट</option>
+                    <option value="9">सप्टेंबर</option><option value="10">ऑक्टोबर</option>
+                    <option value="11">नोव्हेंबर</option><option value="12">डिसेंबर</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-gray-700 font-bold mb-2 text-sm">अहवाल वर्ष <span class="text-red-500">*</span></label>
+                <input type="number" id="reportYear" onchange="handleMonthYearChange()" class="w-full p-2.5 border-2 border-gray-300 rounded text-base font-mono font-bold" value="2026">
+            </div>
+
+            <div id="fortnightDiv" class="hidden">
+                <label class="block text-orange-700 font-bold mb-2 text-sm">पंधरवाडा <span class="text-red-500">*</span></label>
+                <select id="reportFortnight" onchange="handleMonthYearChange()" class="w-full p-2.5 border-2 border-orange-400 rounded bg-orange-50 font-bold text-orange-900 text-base shadow-sm">
+                    <option value="1">१ ते १५ तारीख</option>
+                    <option value="2">१६ ते महिनाअखेर</option>
+                </select>
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="block text-gray-700 font-bold mb-2 text-sm">अहवाल / फॉर्म निवडा <span class="text-red-500">*</span></label>
+                <select id="formSelect" onchange="loadFormSchema()" class="w-full p-2.5 border-2 border-indigo-400 rounded bg-indigo-50 font-extrabold text-indigo-900 shadow-sm text-base">
+                    <option value="">-- फॉर्म लोड होत आहेत --</option>
+                </select>
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="block text-gray-700 font-bold mb-2 text-sm">गाव / कार्यक्षेत्र निवडा <span class="text-red-500">*</span></label>
+                <select id="villageSelect" onchange="renderFormFields()" class="w-full p-2.5 border-2 border-green-400 rounded bg-green-50 font-extrabold text-green-900 shadow-sm text-base disabled:opacity-50">
+                    <option value="">-- आधी फॉर्म निवडा --</option>
+                </select>
+                <p id="villageHint" class="text-[10px] text-green-600 mt-1 hidden font-bold">✓ फक्त राहिलेली गावे दाखवली आहेत.</p>
+            </div>
+        </div>
+
+        <form id="dynamicDataForm" onsubmit="event.preventDefault();">
+
+            <div id="dynamicFieldsContainer" class="mb-8">
+                <p class="text-center text-gray-400 font-bold py-10 text-lg">कृपया वरून फॉर्म आणि गाव निवडा. प्रश्नांची यादी येथे दिसेल.</p>
+            </div>
+
+            <div class="flex flex-col md:flex-row justify-center md:justify-end gap-3 border-t pt-4" id="actionButtonsContainer">
+                
+                <button type="button" id="btnNilReport" onclick="submitData(true, false)" class="hidden w-full md:w-auto bg-gray-500 text-white px-6 py-4 md:py-3 rounded-lg font-extrabold text-lg shadow-xl hover:bg-gray-600 transition transform hover:scale-105">
+                    🚫 निरंक (NIL) रिपोर्ट
+                </button>
+
+                <button type="button" id="btnSaveAndAddMore" onclick="submitData(false, true)" class="hidden w-full md:w-auto bg-blue-600 text-white px-6 py-4 md:py-3 rounded-lg font-extrabold text-lg shadow-xl hover:bg-blue-700 transition transform hover:scale-105">
+                    ➕ सेव्ह करून आणखी जोडा
+                </button>
+
+                <button type="button" id="submitBtn" onclick="submitData(false, false)" class="hidden w-full md:w-auto bg-green-600 text-white px-10 py-4 md:py-3 rounded-lg font-extrabold text-xl md:text-lg shadow-xl hover:bg-green-700 transition transform hover:scale-105">
+                    💾 माहिती सेव्ह करा
+                </button>
+            </div>
+        </form>
+
+    </div>
+
+    <div id="loader" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-2xl text-center border-4 border-green-500">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-green-600 border-t-transparent mb-4"></div>
+            <p class="text-xl font-extrabold text-gray-800" id="loaderText">डेटा सुरक्षित सेव्ह होत आहे...</p>
+            <p class="text-sm font-bold text-gray-500 mt-2">कृपया ब्राउझर बंद करू नका</p>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qbmjsfiievcautxybaai.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_sdgZ9G8ko4H_3Mh9RouYFg_JOQ-4Mdx'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let loggedInUser = null;
+        let allFormsMap = {};
+        let userVillages = [];
+        let allowedForms = [];
+        let currentMonthResponses = [];
+
+        let globalPendingVillages = []; 
+        let currentPendingVillages = []; 
+        let currentDataFields = []; 
+        let currentFormObj = null;
+
+        window.onload = async function() {
+            const userDataString = localStorage.getItem('loggedInUser');
+            if (!userDataString) { window.location.href = "index.html"; return; }
+            loggedInUser = JSON.parse(userDataString);
+
+            const currentMonth = new Date().getMonth() + 1;
+            document.getElementById('reportMonth').value = currentMonth;
+            document.getElementById('reportYear').value = new Date().getFullYear();
+
+            await fetchVillages();
+            await fetchAvailableForms();
+            await fetchMonthResponses(); 
+
+            updateFormDropdown(); 
+        };
+
+        function getFieldHierarchyChain(fields, fieldObj) {
+            let chain = [];
+            let current = fieldObj;
+            while (current && current.parent_id) {
+                let parent = fields.find(f => f.id === current.parent_id);
+                if (parent) {
+                    if (parent.type === 'group_header') {
+                        chain.unshift(parent.label);
+                    }
+                    current = parent;
+                } else {
+                    break;
+                }
+            }
+            return chain; 
+        }
+
+        async function fetchVillages() {
+            let subCenterId = loggedInUser.sub_center_id;
+            if(!subCenterId || subCenterId === '00000000-0000-0000-0000-000000000000') {
+                if(loggedInUser.role === 'बाह्य रुग्ण विभाग सेविका') subCenterId = null; 
+            }
+
+            let query = supabaseClient.from('villages').select('*').order('name');
+            
+            if (subCenterId) query = query.eq('sub_center_id', subCenterId);
+            else if(loggedInUser.phc_id) {
+                const scRes = await supabaseClient.from('sub_centers').select('id').eq('phc_id', loggedInUser.phc_id);
+                if(scRes.data && scRes.data.length > 0) {
+                    query = query.in('sub_center_id', scRes.data.map(s=>s.id));
+                }
+            }
+
+            const { data, error } = await query;
+            userVillages = data || [];
+        }
+
+        async function fetchAvailableForms() {
+            const { data, error } = await supabaseClient.from('dynamic_forms').select('*').eq('is_active', true);
+            if (!error && data) {
+                let userRole = loggedInUser.role ? String(loggedInUser.role).trim().toUpperCase() : "ALL";
+                allowedForms = data.filter(form => {
+                    let rolesStr = form.allowed_roles ? String(form.allowed_roles).trim().toUpperCase() : "ALL";
+                    if (rolesStr === "ALL" || loggedInUser.role === "admin") return true;
+                    return rolesStr.split(',').includes(userRole);
+                });
+            }
+        }
+
+        async function fetchMonthResponses() {
+            const m = document.getElementById('reportMonth').value;
+            const y = document.getElementById('reportYear').value;
+            if (userVillages.length === 0) return;
+            const villageIds = userVillages.map(v => v.id);
+
+            const { data, error } = await supabaseClient
+                .from('form_responses')
+                .select('form_id, village_id, employee_id, response_data, report_fortnight')
+                .eq('report_month', parseInt(m))
+                .eq('report_year', parseInt(y))
+                .in('village_id', villageIds);
+
+            currentMonthResponses = data || [];
+        }
+
+        async function handleMonthYearChange() {
+            document.getElementById('dynamicFieldsContainer').innerHTML = '<p class="text-center text-blue-500 font-bold py-10 text-lg">महिना/पंधरवाडा बदलला आहे, डेटा तपासला जात आहे...</p>';
+            document.getElementById('submitBtn').classList.add('hidden');
+            document.getElementById('btnNilReport').classList.add('hidden');
+            document.getElementById('btnSaveAndAddMore').classList.add('hidden');
+            document.getElementById('villageSelect').innerHTML = '<option value="">-- आधी फॉर्म निवडा --</option>';
+            document.getElementById('villageHint').classList.add('hidden');
+
+            await fetchMonthResponses();
+            updateFormDropdown();
+            
+            if(document.getElementById('formSelect').value) {
+                loadFormSchema();
+            }
+        }
+
+        function updateFormDropdown() {
+            const fSelect = document.getElementById('formSelect');
+            const currentSelection = fSelect.value;
+            fSelect.innerHTML = '<option value="">-- फॉर्म निवडा --</option>';
+            allFormsMap = {};
+
+            let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
+
+            allowedForms.forEach(form => {
+                let showForm = true;
+                
+                // 🟢 Subcenter Level Form Filtering Logic
+                if (form.form_type === 'subcenter' && userVillages.length > 0) {
+                    let isFilled = currentMonthResponses.some(r => 
+                        r.form_id === form.id && 
+                        (form.data_entry_mode === 'shared' ? true : r.employee_id === loggedInUser.id)
+                    );
+                    if (isFilled) showForm = false;
+                } else if (form.form_type !== 'list' && userVillages.length > 0) {
+                    let filledCount = 0;
+                    userVillages.forEach(v => {
+                        let isFilled = currentMonthResponses.some(r => 
+                            r.form_id === form.id && 
+                            r.village_id === v.id && 
+                            (form.data_entry_mode === 'shared' ? true : r.employee_id === loggedInUser.id) &&
+                            (form.form_type !== 'fortnightly' || r.report_fortnight === fN) 
+                        );
+                        if (isFilled) filledCount++;
+                    });
+                    if (filledCount >= userVillages.length) showForm = false; 
+                } else if (form.form_type === 'list' && userVillages.length > 0) {
+                    let nilCount = 0;
+                    userVillages.forEach(v => {
+                        let isNil = currentMonthResponses.some(r => 
+                            r.form_id === form.id && 
+                            r.village_id === v.id && 
+                            r.response_data && r.response_data.is_nil === true &&
+                            (form.form_type !== 'fortnightly' || r.report_fortnight === fN)
+                        );
+                        if (isNil) nilCount++;
+                    });
+                    if (nilCount >= userVillages.length) showForm = false;
+                }
+
+                if (showForm) {
+                    allFormsMap[form.id] = form;
+                    const opt = document.createElement('option');
+                    opt.value = form.id; 
+                    let tag = "";
+                    if(form.form_type === 'list') tag = " (यादी)";
+                    else if(form.form_type === 'fortnightly') tag = " (पंधरवाडी)";
+                    else if(form.form_type === 'subcenter') tag = " (उपकेंद्र एकत्रित)";
+                    opt.text = form.form_name + tag;
+                    fSelect.appendChild(opt);
+                }
+            });
+
+            if (allFormsMap[currentSelection]) {
+                fSelect.value = currentSelection;
+                loadFormSchema(); 
+            } else {
+                fSelect.value = "";
+                document.getElementById('villageSelect').innerHTML = '<option value="">-- आधी फॉर्म निवडा --</option>';
+                document.getElementById('villageHint').classList.add('hidden');
+                document.getElementById('fortnightDiv').classList.add('hidden');
+                document.getElementById('dynamicFieldsContainer').innerHTML = '<p class="text-center text-gray-400 font-bold py-10 text-lg">कृपया वरून फॉर्म आणि गाव निवडा.</p>';
+            }
+        }
+
+        function loadFormSchema() {
+            const formId = document.getElementById('formSelect').value;
+            const container = document.getElementById('dynamicFieldsContainer');
+            const vSelect = document.getElementById('villageSelect');
+            const vHint = document.getElementById('villageHint');
+            const fnDiv = document.getElementById('fortnightDiv');
+
+            document.getElementById('submitBtn').classList.add('hidden');
+            document.getElementById('btnNilReport').classList.add('hidden');
+            document.getElementById('btnSaveAndAddMore').classList.add('hidden');
+            container.innerHTML = '<p class="text-center text-gray-400 font-bold py-10 text-lg">कृपया गाव / कार्यक्षेत्र निवडा.</p>';
+
+            if (!formId) {
+                vSelect.innerHTML = '<option value="">-- आधी फॉर्म निवडा --</option>';
+                vHint.classList.add('hidden');
+                fnDiv.classList.add('hidden');
+                return;
+            }
+
+            currentFormObj = allFormsMap[formId];
+            globalPendingVillages = [];
+            let hiddenCount = 0;
+            
+            if (currentFormObj.form_type === 'fortnightly') fnDiv.classList.remove('hidden');
+            else fnDiv.classList.add('hidden');
+
+            let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
+
+            // 🟢 Subcenter Level Form Processing
+            if (currentFormObj.form_type === 'subcenter') {
+                let isFilled = currentMonthResponses.some(r => 
+                    r.form_id === formId && 
+                    (currentFormObj.data_entry_mode === 'shared' ? true : r.employee_id === loggedInUser.id)
+                );
+                
+                if (!isFilled && userVillages.length > 0) {
+                    globalPendingVillages.push({ ...userVillages[0], name: "🏢 संपूर्ण उपकेंद्र (Subcenter Level)" });
+                } else if (isFilled) {
+                    hiddenCount++;
+                }
+            } else {
+                userVillages.forEach(v => {
+                    let isFilled = false;
+                    
+                    if (currentFormObj.form_type === 'list') {
+                        isFilled = currentMonthResponses.some(r => 
+                            r.form_id === formId && r.village_id === v.id && 
+                            r.response_data && r.response_data.is_nil === true
+                        );
+                    } else {
+                        isFilled = currentMonthResponses.some(r => 
+                            r.form_id === formId && r.village_id === v.id && 
+                            (currentFormObj.data_entry_mode === 'shared' ? true : r.employee_id === loggedInUser.id) &&
+                            (currentFormObj.form_type !== 'fortnightly' || r.report_fortnight === fN)
+                        );
+                    }
+
+                    if (!isFilled) globalPendingVillages.push(v);
+                    else hiddenCount++;
+                });
+            }
+
+            vSelect.innerHTML = '<option value="">-- गाव / कार्यक्षेत्र निवडा --</option>';
+
+            if (globalPendingVillages.length > 0) {
+                if (globalPendingVillages.length > 1 && currentFormObj.form_type !== 'list') {
+                    vSelect.innerHTML += `<option value="ALL" class="bg-yellow-100 text-yellow-900 font-extrabold">🚀 सर्व गावे (एकत्रित भरा)</option>`;
+                }
+                globalPendingVillages.forEach(v => {
+                    vSelect.innerHTML += `<option value="${v.id}">${v.name}</option>`;
+                });
+            }
+
+            if (hiddenCount > 0) {
+                vHint.innerText = `✓ ${hiddenCount} अहवाल भरून झाले आहेत (ते लपवले आहेत).`;
+                vHint.classList.remove('hidden');
+            } else {
+                vHint.classList.add('hidden');
+            }
+            
+            // 🟢 Auto select if Subcenter
+            if(currentFormObj.form_type === 'subcenter' && globalPendingVillages.length > 0) {
+                vSelect.value = globalPendingVillages[0].id;
+                renderFormFields();
+            }
+        }
+
+        window.calculateFormulas = function(vid) {
+            if(!currentFormObj) return;
+            const allFields = currentFormObj.schema_json.fields;
+            const formulaFields = allFields.filter(f => f.formula && String(f.formula).trim() !== "");
+            
+            formulaFields.forEach(f => {
+                let formulaStr = String(f.formula).toLowerCase().trim();
+                
+                allFields.forEach(af => {
+                    if (!af.formula || String(af.formula).trim() === "") {
+                        let ph = `[${af.id.toLowerCase()}]`;
+                        if (formulaStr.includes(ph)) {
+                            let el = document.getElementById(`${af.id}_v${vid}`);
+                            let val = el && el.value !== "" ? parseFloat(el.value) : 0;
+                            if (isNaN(val)) val = 0;
+                            formulaStr = formulaStr.split(ph).join(val); 
+                        }
+                    }
+                });
+                
+                try {
+                    if (/^[0-9.+\-*/() ]+$/.test(formulaStr)) {
+                        let res = eval(formulaStr);
+                        let finalRes = isNaN(res) || !isFinite(res) ? 0 : res;
+                        let targetEl = document.getElementById(`${f.id}_v${vid}`);
+                        if (targetEl) {
+                            targetEl.value = Number.isInteger(finalRes) ? finalRes : parseFloat(finalRes.toFixed(2));
+                        }
+                    }
+                } catch(e) {}
+            });
+        };
+
+        function evaluateValidationFormula(formulaStr, vid, fields) {
+            let fStr = String(formulaStr).toLowerCase().trim();
+            if (fStr.includes('[')) {
+                fields.forEach(af => {
+                    let ph = `[${af.id.toLowerCase()}]`;
+                    if (fStr.includes(ph)) {
+                        let el = document.getElementById(`${af.id}_v${vid}`);
+                        let val = el && el.value !== "" ? parseFloat(el.value) : 0;
+                        if (isNaN(val)) val = 0;
+                        fStr = fStr.split(ph).join(val);
+                    }
+                });
+            }
+
+            try {
+                if (/^[0-9.+\-*/() ]+$/.test(fStr)) {
+                    let res = eval(fStr);
+                    return isNaN(res) || !isFinite(res) ? null : res;
+                }
+            } catch(e) {}
+            
+            let simpleNum = parseFloat(fStr);
+            return isNaN(simpleNum) ? null : simpleNum;
+        }
+
+        function renderFormFields() {
+            const formId = document.getElementById('formSelect').value;
+            const vid = document.getElementById('villageSelect').value;
+            const container = document.getElementById('dynamicFieldsContainer');
+            const submitBtn = document.getElementById('submitBtn');
+            const btnNilReport = document.getElementById('btnNilReport');
+            const btnSaveAndAddMore = document.getElementById('btnSaveAndAddMore');
+
+            if (!vid) {
+                container.innerHTML = '<p class="text-center text-gray-400 font-bold py-10 text-lg">कृपया गाव / कार्यक्षेत्र निवडा.</p>';
+                submitBtn.classList.add('hidden');
+                btnNilReport.classList.add('hidden');
+                btnSaveAndAddMore.classList.add('hidden');
+                return;
+            }
+
+            const allFields = currentFormObj.schema_json.fields;
+            currentDataFields = allFields.filter(f => f.type !== 'group_header');
+
+            if (vid === 'ALL') {
+                currentPendingVillages = globalPendingVillages;
+            } else {
+                currentPendingVillages = globalPendingVillages.filter(v => v.id === parseInt(vid) || v.id === vid);
+            }
+
+            let columns = currentDataFields.map(f => {
+                let chain = getFieldHierarchyChain(allFields, f);
+                let l1 = "", l2 = "";
+                if (chain.length === 1) { l1 = chain[0]; }
+                else if (chain.length >= 2) { l1 = chain[0]; l2 = chain[1]; }
+                return { ...f, l1, l2, l3: f.label };
+            });
+
+            let html = '<div class="table-responsive"><table class="w-full border-collapse block md:table">';
+            
+            let l1Row = `<tr><th rowspan="3" class="p-3 border text-center font-extrabold text-gray-800 min-w-[150px] bg-gray-200">गाव / कार्यक्षेत्र</th>`;
+            let l2Row = `<tr>`;
+            let l3Row = `<tr>`;
+
+            let i = 0;
+            while(i < columns.length) {
+                let c = columns[i]; let j = i + 1;
+                let formulaBadge = (c.formula && String(c.formula).trim() !== "") ? '<br><span class="text-[9px] bg-green-500 text-white px-1 rounded shadow mt-1">ऑटो बेरीज</span>' : '';
+                
+                if(c.l1 !== "") {
+                    while(j < columns.length && columns[j].l1 === c.l1) { j++; }
+                    let totalL1Span = j - i;
+                    l1Row += `<th colspan="${totalL1Span}" class="p-2 border text-sm font-extrabold bg-purple-100 text-purple-900 text-center">${c.l1}</th>`;
+
+                    let k = i;
+                    while(k < j) {
+                        let c2 = columns[k]; let m = k + 1;
+                        if(c2.l2 !== "") {
+                            while(m < j && columns[m].l2 === c2.l2) { m++; }
+                            let totalL2Span = m - k;
+                            l2Row += `<th colspan="${totalL2Span}" class="p-2 border text-xs font-bold bg-blue-50 text-blue-900 text-center">${c2.l2}</th>`;
+                            for(let n=k; n<m; n++) {
+                                let fBb = (columns[n].formula && String(columns[n].formula).trim() !== "") ? '<br><span class="text-[9px] bg-green-500 text-white px-1 rounded shadow mt-1 inline-block">ऑटो बेरीज</span>' : '';
+                                l3Row += `<th class="p-2 border text-xs font-bold text-gray-700 text-center leading-tight min-w-[100px]">${columns[n].l3} ${fBb}</th>`;
+                            }
+                            k = m;
+                        } else {
+                            let fBb = (c2.formula && String(c2.formula).trim() !== "") ? '<br><span class="text-[9px] bg-green-500 text-white px-1 rounded shadow mt-1 inline-block">ऑटो बेरीज</span>' : '';
+                            l2Row += `<th rowspan="2" class="p-2 border text-xs font-bold text-gray-700 text-center leading-tight min-w-[100px]">${c2.l3} ${fBb}</th>`;
+                            k++;
+                        }
+                    }
+                    i = j;
+                } else {
+                    l1Row += `<th rowspan="3" class="p-2 border text-xs font-bold text-gray-700 text-center bg-gray-200 leading-tight min-w-[100px]">${c.l3} ${formulaBadge}</th>`;
+                    i++;
+                }
+            }
+            l1Row += `</tr>`; l2Row += `</tr>`; l3Row += `</tr>`;
+            html += `<thead class="hidden md:table-header-group border-b-4 border-gray-400">${l1Row}${l2Row}${l3Row}</thead>`;
+
+            html += '<tbody class="block md:table-row-group">';
+
+            currentPendingVillages.forEach((v, index) => {
+                html += `<tr class="block md:table-row mb-8 md:mb-0 bg-white border-2 border-indigo-400 md:border-0 rounded-xl md:rounded-none shadow-xl md:shadow-none p-4 md:p-0">`;
+
+                html += `<td class="block md:table-cell p-4 md:p-2 border-b-2 border-indigo-200 md:border md:border-gray-300 text-center md:text-left bg-indigo-100 md:bg-white rounded-t-lg md:rounded-none mb-4 md:mb-0">
+                            <span class="text-2xl md:text-sm font-extrabold text-indigo-900 md:text-gray-900">${currentFormObj.form_type === 'subcenter' ? '🏢 ' : index+1+'. '}${v.name}</span>
+                         </td>`;
+
+                let prevL1 = null;
+                let prevL2 = null;
+
+                columns.forEach(col => {
+                    let isFormula = (col.formula && String(col.formula).trim() !== "");
+                    let reqAttr = (col.required && !isFormula) ? 'required' : '';
+                    let inputId = `${col.id}_v${v.id}`;
+                    let inputHtml = '';
+                    
+                    let onInputAttr = (col.type === 'number' && !isFormula) ? `oninput="calculateFormulas('${v.id}')"` : '';
+
+                    if (col.type === 'number') {
+                        if (isFormula) {
+                            inputHtml = `<input type="number" id="${inputId}" class="w-full md:w-20 p-4 md:p-2 text-2xl md:text-base font-extrabold md:font-bold text-center text-green-900 bg-green-100 border-2 border-green-500 rounded-lg md:rounded outline-none cursor-not-allowed shadow-inner" readonly tabindex="-1" placeholder="0">`;
+                        } else {
+                            inputHtml = `<input type="number" id="${inputId}" class="w-full md:w-20 p-4 md:p-2 text-2xl md:text-base font-extrabold md:font-bold text-center text-blue-900 bg-blue-50 border-2 border-blue-400 md:border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-blue-600 transition" ${reqAttr} placeholder="0" ${onInputAttr}>`;
+                        }
+                    } else if (col.type === 'yes_no') {
+                        inputHtml = `<select id="${inputId}" class="w-full md:w-24 p-4 md:p-2 text-xl md:text-sm font-extrabold md:font-bold text-center text-purple-900 bg-purple-50 border-2 border-purple-400 md:border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-purple-600" ${reqAttr} ${onInputAttr}><option value="">- निवडा -</option><option value="होय">होय</option><option value="नाही">नाही</option></select>`;
+                    } else if (col.type === 'date') {
+                        inputHtml = `<input type="date" id="${inputId}" class="w-full md:w-32 p-4 md:p-2 text-xl md:text-sm font-bold md:font-semibold text-center text-gray-900 bg-gray-50 border-2 border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-gray-600" ${reqAttr} ${onInputAttr}>`;
+                    } else if (col.type === 'dropdown' && col.options) {
+                        let optsHtml = `<option value="">- निवडा -</option>`;
+                        col.options.forEach(opt => optsHtml += `<option value="${opt}">${opt}</option>`);
+                        inputHtml = `<select id="${inputId}" class="w-full md:w-32 p-4 md:p-2 text-xl md:text-sm font-extrabold md:font-bold text-center text-purple-900 bg-purple-50 border-2 border-purple-400 md:border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-purple-600" ${reqAttr} ${onInputAttr}>${optsHtml}</select>`;
+                    } else {
+                        let patt = col.type === 'mobile' ? 'pattern="[0-9]{10}" placeholder="10 अंकी नंबर"' : '';
+                        let tType = col.type === 'mobile' ? 'tel' : 'text';
+                        inputHtml = `<input type="${tType}" id="${inputId}" class="w-full md:w-32 p-4 md:p-2 text-xl md:text-sm font-bold md:font-semibold text-center text-gray-900 bg-gray-50 border-2 border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-gray-600" ${reqAttr} ${patt} ${onInputAttr}>`;
+                    }
+
+                    let mobileHeaderHtml = '';
+                    if (col.l1 && col.l1 !== prevL1) {
+                        mobileHeaderHtml += `<div class="md:hidden w-full bg-purple-100 border border-purple-300 text-purple-900 font-extrabold text-sm p-1.5 mt-2 rounded shadow-sm text-center">${col.l1}</div>`;
+                        prevL1 = col.l1;
+                        prevL2 = null; 
+                    }
+                    if (col.l2 && col.l2 !== prevL2) {
+                        mobileHeaderHtml += `<div class="md:hidden w-full bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs p-1 mt-1 rounded text-center">${col.l2}</div>`;
+                        prevL2 = col.l2;
+                    }
+                    
+                    let formulaBadgeMobile = isFormula ? '<span class="text-[9px] bg-green-500 text-white px-1 rounded ml-1">ऑटो बेरीज</span>' : '';
+
+                    html += `<td class="flex md:table-cell flex-col md:flex-row items-center md:justify-center p-3 md:p-2 border-b border-dashed border-gray-200 md:border-solid md:border-b-0 md:border md:border-gray-300 gap-3 md:gap-0">
+                                ${mobileHeaderHtml}
+                                <label class="md:hidden text-lg font-extrabold text-gray-800 text-center w-full bg-yellow-50 p-2 rounded">${col.l3} ${formulaBadgeMobile}</label>
+                                ${inputHtml}
+                             </td>`;
+                });
+
+                html += `</tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+            
+            setTimeout(() => {
+                currentPendingVillages.forEach(v => calculateFormulas(v.id));
+            }, 100);
+
+            submitBtn.classList.remove('hidden');
+            
+            if (currentFormObj.form_type === 'list' || currentFormObj.form_type === 'fortnightly') {
+                btnNilReport.classList.remove('hidden');
+                btnSaveAndAddMore.classList.remove('hidden');
+                submitBtn.innerHTML = "💾 सेव्ह करा आणि बाहेर पडा";
+            } else {
+                btnNilReport.classList.add('hidden');
+                btnSaveAndAddMore.classList.add('hidden');
+                submitBtn.innerHTML = "💾 माहिती सेव्ह करा";
+            }
+        }
+
+        async function submitData(isNilReport, isAddMore) {
+            const formId = document.getElementById('formSelect').value;
+            const repMonth = document.getElementById('reportMonth').value;
+            const repYear = document.getElementById('reportYear').value;
+            const repFortnight = document.getElementById('reportFortnight').value || null;
+
+            if (!formId || currentPendingVillages.length === 0) return;
+
+            if (!isNilReport) {
+                const formEl = document.getElementById('dynamicDataForm');
+                if (!formEl.checkValidity()) { formEl.reportValidity(); return; }
+
+                for (let v of currentPendingVillages) {
+                    for (let f of currentDataFields) {
+                        let el = document.getElementById(`${f.id}_v${v.id}`);
+                        if (!el || el.value === "") continue;
+
+                        let val = parseFloat(el.value);
+                        if (isNaN(val)) continue;
+
+                        if (f.max && String(f.max).trim() !== "") {
+                            let maxVal = evaluateValidationFormula(f.max, v.id, currentDataFields);
+                            if (maxVal !== null && val > maxVal) {
+                                alert(`⚠️ चूक: ${v.name} साठी '${f.label}' मधील आकडा ${maxVal} पेक्षा जास्त असू शकत नाही!`);
+                                el.focus();
+                                return;
+                            }
+                        }
+
+                        if (f.min && String(f.min).trim() !== "") {
+                            let minVal = evaluateValidationFormula(f.min, v.id, currentDataFields);
+                            if (minVal !== null && val < minVal) {
+                                alert(`⚠️ चूक: ${v.name} साठी '${f.label}' मधील आकडा ${minVal} पेक्षा कमी असू शकत नाही!`);
+                                el.focus();
+                                return;
+                            }
+                        }
+                    }
+                }
+            } else {
+                if(!confirm("तुम्हाला खात्री आहे की या गावासाठी या कालावधीची माहिती 'निरंक (NIL)' आहे?\n(यानंतर या कालावधीत या गावाची नोंद करता येणार नाही)")) return;
+            }
+
+            document.getElementById('loaderText').innerText = "डेटा सुरक्षित सेव्ह होत आहे...";
+            document.getElementById('loader').classList.remove('hidden');
+
+            let payloads = [];
+
+            currentPendingVillages.forEach(v => {
+                let responseDataObj = {};
+                
+                if (isNilReport) {
+                    responseDataObj = { is_nil: true };
+                } else {
+                    currentDataFields.forEach(f => {
+                        let el = document.getElementById(`${f.id}_v${v.id}`);
+                        responseDataObj[f.id] = { value: el ? el.value : "" };
+                    });
+                }
+
+                let pLoad = {
+                    form_id: formId,
+                    village_id: v.id,
+                    employee_id: loggedInUser.id,
+                    report_month: parseInt(repMonth),
+                    report_year: parseInt(repYear),
+                    response_data: responseDataObj
+                };
+                
+                if (currentFormObj.form_type === 'fortnightly') {
+                    pLoad.report_fortnight = parseInt(repFortnight);
+                }
+
+                payloads.push(pLoad);
+            });
+
+            try {
+                const { error } = await supabaseClient.from('form_responses').insert(payloads);
+
+                document.getElementById('loader').classList.add('hidden');
+
+                if (error) {
+                    alert("माहिती सेव्ह करताना त्रुटी आली: " + error.message);
+                } else {
+                    currentMonthResponses.push(...payloads);
+
+                    if (isNilReport) {
+                        alert(`✅ उत्कृष्ट! ${currentPendingVillages.map(v=>v.name).join(', ')} चा निरंक (NIL) अहवाल यशस्वीरीत्या सबमिट झाला!`);
+                        updateFormDropdown(); 
+                    } else if (isAddMore) {
+                        alert("✅ माहिती सेव्ह झाली! तुम्ही या गावासाठी पुढची नोंद करू शकता.");
+                        document.getElementById('dynamicDataForm').reset();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setTimeout(() => {
+                            currentPendingVillages.forEach(vill => calculateFormulas(vill.id));
+                        }, 100);
+                        
+                        if(currentFormObj.form_type !== 'list') updateFormDropdown(); 
+                    } else {
+                        alert("✅ माहिती यशस्वीरीत्या सेव्ह झाली!");
+                        window.location.href = "dashboard.html"; 
+                    }
+                }
+            } catch (err) {
+                document.getElementById('loader').classList.add('hidden');
+                alert("नेटवर्क किंवा सिस्टीम एरर: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
