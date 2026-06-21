@@ -675,6 +675,7 @@
             return results;
         }
 // 🟢 नवीन फंक्शन: युझरच्या पदानुसार ३ ओळींचे हेडर बनवणे
+       // 🟢 नवीन फंक्शन: युझरच्या पदानुसार २ किंवा ३ ओळींचे हेडर बनवणे
         function getCustomHeader(rep) {
             let role = user.role;
             let l1 = "", l2 = "", l3 = "";
@@ -703,9 +704,10 @@
                      scName = `PHC ${phcName} (OPD)`;
                 }
                 
-                l1 = `उपकेंद्र ${scName}`;
-                l2 = `${formName}`;
-                l3 = `कर्मचाऱ्याचे नाव: ${empName} | अहवाल महिना: ${period}`;
+                // 🟢 सुधारणा: कर्मचाऱ्यांसाठी फक्त २ ओळींचे हेडर (जागा वाचवण्यासाठी)
+                l1 = `${formName}`;
+                l2 = `कर्मचारी: ${empName} | उपकेंद्र: ${scName} | महिना: ${period}`;
+                l3 = ""; // तिसरी ओळ पूर्णपणे काढून टाकली आहे
             }
             return { l1, l2, l3 };
         }
@@ -723,14 +725,13 @@
             reports.forEach(rep => {
                 let columns = rep.fields; let rows = rep.rows;
                 
-                // 🟢 सुधारणा: ३ ओळींचे कस्टमाईज्ड हेडर
                 let headInfo = getCustomHeader(rep);
 
                 html += `<div class="mb-8 p-4 border border-gray-300 rounded-xl bg-white shadow-sm overflow-hidden page-break-avoid">
                             <div class="text-center border-b pb-3 mb-4 bg-green-50 p-4 rounded-t-lg">
                                 <h1 class="text-xl font-extrabold text-green-900 mb-1">${headInfo.l1}</h1>
                                 <h2 class="text-lg font-bold text-green-800 mb-1">${headInfo.l2}</h2>
-                                <p class="text-sm font-bold text-gray-700">${headInfo.l3}</p>
+                                ${headInfo.l3 !== "" ? `<p class="text-sm font-bold text-gray-700">${headInfo.l3}</p>` : ''}
                             </div>`;
 
                 if(groupType === "SubCenterConsolidated") {
@@ -889,7 +890,10 @@
                         let [scName, empName] = empKey.split("###");
                         let subRows = employeeGroups[empKey];
 
-                        html += `<div style="margin-top:20px; margin-bottom:10px; background:#00705a; color:#ffffff; padding:10px; border-radius:4px; font-weight:bold; font-size:14px;">🏢 उपकेंद्र: ${scName} | 🧑‍⚕️ कर्मचारी: ${empName}</div>`;
+                        // 🟢 सुधारणा: कर्मचाऱ्यांसाठी हे ब्लॉक लपवले (कारण हेडर मध्येच त्यांची माहिती आहे)
+                        if (user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') {
+                            html += `<div style="margin-top:20px; margin-bottom:10px; background:#00705a; color:#ffffff; padding:10px; border-radius:4px; font-weight:bold; font-size:14px;">🏢 उपकेंद्र: ${scName} | 🧑‍⚕️ कर्मचारी: ${empName}</div>`;
+                        }
 
                         let l1Row = `<tr><th rowspan="${rep.isProg?4:3}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
                         let l2Row = `<tr>`; let l3Row = `<tr>`; let l4Row = rep.isProg ? `<tr>` : ``;
@@ -1071,39 +1075,40 @@
 
             currentReports.forEach((rep) => {
                 let columns = rep.fields; let rows = rep.rows;
-                let sheetData = []; let merges = []; let titleHeaderRows = [0, 1, 2]; let masterHeaderRows = []; let subTitleHeaderRows = []; let groupTotalRows = []; let phcTotalRows = [];
+                let sheetData = []; let merges = []; let titleHeaderRows = []; let masterHeaderRows = []; let subTitleHeaderRows = []; let groupTotalRows = []; let phcTotalRows = [];
 
                 if (groupType === "SubCenterConsolidated") {
                     let verticalColCount = 2 + (rows.length * (rep.isProg ? 2 : 1)) + (rep.isProg ? 2 : 1);
                     
-                    // 🟢 सुधारणा: Excel मध्ये ३ ओळींचे हेडर
+                    // 🟢 सुधारणा: Excel मध्ये डायनॅमिक हेडर
                     let headInfo = getCustomHeader(rep);
-                    sheetData.push([headInfo.l1]);
-                    sheetData.push([headInfo.l2]);
-                    sheetData.push([headInfo.l3]);
-
-                    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: verticalColCount - 1 } });
-                    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: verticalColCount - 1 } });
-                    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: verticalColCount - 1 } });
+                    let startIdx = sheetData.length;
+                    sheetData.push([headInfo.l1]); titleHeaderRows.push(startIdx); merges.push({ s: { r: startIdx, c: 0 }, e: { r: startIdx, c: verticalColCount - 1 } });
+                    sheetData.push([headInfo.l2]); titleHeaderRows.push(startIdx+1); merges.push({ s: { r: startIdx+1, c: 0 }, e: { r: startIdx+1, c: verticalColCount - 1 } });
+                    let startR = startIdx + 2;
+                    if(headInfo.l3 !== "") { 
+                        sheetData.push([headInfo.l3]); titleHeaderRows.push(startIdx+2); merges.push({ s: { r: startIdx+2, c: 0 }, e: { r: startIdx+2, c: verticalColCount - 1 } }); 
+                        startR = startIdx + 3;
+                    }
 
                     let r1 = ["अ.क्र.", "तपशील / मुख्य निर्देशांक प्रश्न"];
                     let r2 = rep.isProg ? ["", ""] : null;
-                    if(rep.isProg) { merges.push({ s: { r: 3, c: 0 }, e: { r: 4, c: 0 } }); merges.push({ s: { r: 3, c: 1 }, e: { r: 4, c: 1 } }); }
+                    if(rep.isProg) { merges.push({ s: { r: startR, c: 0 }, e: { r: startR+1, c: 0 } }); merges.push({ s: { r: startR, c: 1 }, e: { r: startR+1, c: 1 } }); }
 
                     let ccIdx = 2;
                     rows.forEach(r => {
                         let vName = r.village ? `${r.village} (${r.subcenter})` : "-";
                         r1.push(vName); if(rep.isProg) r1.push("");
-                        if(rep.isProg) { merges.push({ s: { r: 3, c: ccIdx }, e: { r: 3, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); ccIdx += 2; } else { ccIdx += 1; }
+                        if(rep.isProg) { merges.push({ s: { r: startR, c: ccIdx }, e: { r: startR, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); ccIdx += 2; } else { ccIdx += 1; }
                     });
                     
                     if(rep.formType !== 'list') {
                         r1.push("एकूण Total"); if(rep.isProg) r1.push("");
-                        if(rep.isProg) { merges.push({ s: { r: 3, c: ccIdx }, e: { r: 3, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); }
+                        if(rep.isProg) { merges.push({ s: { r: startR, c: ccIdx }, e: { r: startR, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); }
                     }
 
-                    sheetData.push(r1); subTitleHeaderRows.push(3);
-                    if(rep.isProg) { sheetData.push(r2); subTitleHeaderRows.push(4); }
+                    sheetData.push(r1); subTitleHeaderRows.push(startR);
+                    if(rep.isProg) { sheetData.push(r2); subTitleHeaderRows.push(startR+1); }
 
                     let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
 
@@ -1160,15 +1165,15 @@
                     let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
 
                     let headInfo = getCustomHeader(rep);
-                    sheetData.push([headInfo.l1]);
-                    sheetData.push([headInfo.l2]);
-                    sheetData.push([headInfo.l3]);
+                    let startIdx = sheetData.length;
+                    sheetData.push([headInfo.l1]); titleHeaderRows.push(startIdx); merges.push({ s: { r: startIdx, c: 0 }, e: { r: startIdx, c: totalColumnsCount - 1 } });
+                    sheetData.push([headInfo.l2]); titleHeaderRows.push(startIdx+1); merges.push({ s: { r: startIdx+1, c: 0 }, e: { r: startIdx+1, c: totalColumnsCount - 1 } });
+                    let startR = startIdx + 2;
+                    if(headInfo.l3 !== "") { 
+                        sheetData.push([headInfo.l3]); titleHeaderRows.push(startIdx+2); merges.push({ s: { r: startIdx+2, c: 0 }, e: { r: startIdx+2, c: totalColumnsCount - 1 } }); 
+                        startR = startIdx + 3;
+                    }
 
-                    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalColumnsCount - 1 } });
-                    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: totalColumnsCount - 1 } });
-                    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: totalColumnsCount - 1 } });
-
-                    let startR = 3;
                     let r1 = ["अ.क्र.", "उपकेंद्र"]; 
                     if(groupType === 'SubCenterFlat') {
                         r1.push("गाव/कार्यक्षेत्र");
@@ -1283,20 +1288,23 @@
                     let totalColumnsCount = 2; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
 
                     let headInfo = getCustomHeader(rep);
-                    sheetData.push([headInfo.l1]);
-                    sheetData.push([headInfo.l2]);
-                    sheetData.push([headInfo.l3]);
-
-                    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalColumnsCount - 1 } });
-                    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: totalColumnsCount - 1 } });
-                    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: totalColumnsCount - 1 } });
+                    let startIdx = sheetData.length;
+                    sheetData.push([headInfo.l1]); titleHeaderRows.push(startIdx); merges.push({ s: { r: startIdx, c: 0 }, e: { r: startIdx, c: totalColumnsCount - 1 } });
+                    sheetData.push([headInfo.l2]); titleHeaderRows.push(startIdx+1); merges.push({ s: { r: startIdx+1, c: 0 }, e: { r: startIdx+1, c: totalColumnsCount - 1 } });
+                    
+                    if(headInfo.l3 !== "") { 
+                        sheetData.push([headInfo.l3]); titleHeaderRows.push(startIdx+2); merges.push({ s: { r: startIdx+2, c: 0 }, e: { r: startIdx+2, c: totalColumnsCount - 1 } }); 
+                    }
 
                     Object.keys(employeeGroups).sort().forEach(empKey => {
                         let [scName, empName] = empKey.split("###"); let subRows = employeeGroups[empKey];
 
-                        let currentMetaIndex = sheetData.length;
-                        sheetData.push([`🏢 उपकेंद्र: ${scName} | 🧑‍⚕️ कर्मचारी: ${empName}`]);
-                        masterHeaderRows.push(currentMetaIndex); merges.push({ s: { r: currentMetaIndex, c: 0 }, e: { r: currentMetaIndex, c: totalColumnsCount - 1 } });
+                        // 🟢 सुधारणा: कर्मचाऱ्यांसाठी हे ब्लॉक लपवले
+                        if (user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') {
+                            let currentMetaIndex = sheetData.length;
+                            sheetData.push([`🏢 उपकेंद्र: ${scName} | 🧑‍⚕️ कर्मचारी: ${empName}`]);
+                            masterHeaderRows.push(currentMetaIndex); merges.push({ s: { r: currentMetaIndex, c: 0 }, e: { r: currentMetaIndex, c: totalColumnsCount - 1 } });
+                        }
 
                         let startR = sheetData.length;
                         let r1 = ["अ.क्र.", "गाव/कार्यक्षेत्र"]; let r2 = ["", ""]; let r3 = ["", ""]; let r4 = rep.isProg ? ["", ""] : null;
@@ -1467,8 +1475,7 @@
 
             let dlName = `अहवाल_${document.getElementById('periodType').value === 'custom' ? 'Custom' : document.getElementById('reportMonth').value}_${document.getElementById('reportYear').value}.xlsx`;
             XLSX.writeFile(wb, dlName);
-        }
-        function generatePendingReport() {
+        }        function generatePendingReport() {
             let periodType = document.getElementById('periodType').value;
             if (periodType === 'custom') {
                 alert("अपूर्ण यादी (Pending Report) शोधण्यासाठी कृपया 'महिन्यानुसार' कालावधी निवडा. कस्टम तारखांसाठी हे उपलब्ध नाही.");
