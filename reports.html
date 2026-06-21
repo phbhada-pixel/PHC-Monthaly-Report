@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root { --primary: #00705a; }
         .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; table-layout: auto; }
@@ -16,14 +15,7 @@
         .page-break { page-break-before: always !important; display: block; }
         .table-responsive { width: 100%; overflow-x: auto; margin-bottom: 20px;}
         
-        /* 🟢 थेट PDF डाऊनलोड होताना टेबल व्यवस्थित फिट बसण्यासाठी */
-        .pdf-mode .report-table { font-size: 10px !important; width: 100% !important; table-layout: auto; }
-        .pdf-mode .report-table th, .pdf-mode .report-table td { padding: 4px !important; }
-        .pdf-mode .shadow-sm, .pdf-mode .rounded-xl { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
-        .pdf-mode .p-4 { padding: 5px !important; margin-bottom: 0 !important; }
-        .pdf-mode .table-responsive { overflow-x: visible !important; }
-
-        /* 🟢 सुधारणा: PDF प्रिंट काढतानाचे नवीन सेटिंग्ज */
+        /* 🟢 PDF प्रिंट काढतानाचे सेटिंग्ज */
         @media print {
             @page {
                 size: A4 landscape; /* A4 साईज आणि लँडस्केप मोड */
@@ -744,7 +736,8 @@
             if (user.role === 'admin' || user.role === 'taluka_admin') phcHeaderTxt = "तालुका अहवाल - संपूर्ण डेटा";
             if (user.role === 'phc_admin') phcHeaderTxt = "तुमच्या PHC चा अहवाल";
 
-            downArea.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-center gap-2 p-3 bg-gray-50 rounded-lg border shadow-sm mb-4 no-print"><span class="font-bold text-gray-700">${phcHeaderTxt}</span><div class="flex gap-2"><button onclick="downloadConsolidatedExcel()" class="bg-green-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-green-700 transition">📥 Excel डाऊनलोड</button><button id="pdfDownloadBtn" onclick="downloadDirectPDF()" class="bg-red-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-red-700 transition">📥 PDF डाऊनलोड</button></div></div>`;
+            // 🟢 प्रिंट बटण ठेवले आणि PDF डाऊनलोड बटण काढले
+            downArea.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-center gap-2 p-3 bg-gray-50 rounded-lg border shadow-sm mb-4 no-print"><span class="font-bold text-gray-700">${phcHeaderTxt}</span><div class="flex gap-2"><button onclick="downloadConsolidatedExcel()" class="bg-green-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-green-700 transition">📥 Excel डाऊनलोड</button><button onclick="window.print()" class="bg-red-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-red-700 transition">🖨️ प्रिंट काढा</button></div></div>`;
 
             let html = '';
             reports.forEach(rep => {
@@ -1267,141 +1260,6 @@
                     }
 
                     sheetData.push(r1); subTitleHeaderRows.push(startR);
-                    if(rep.isProg) { sheetData.push(r2); subTitleHeaderRows.push(startR+1); }
-
-                    let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
-
-                    columns.forEach((c, vIndex) => {
-                        let fLabel = ""; if(c.l1) fLabel += c.l1+" - "; if(c.l2) fLabel += c.l2+" - "; fLabel += c.l3;
-                        let rowData = [vIndex + 1, fLabel];
-                        rows.forEach(r => {
-                            let val = r.values[c.id]; let mObj = (typeof val === 'object' && val !== null) ? val.M : val;
-                            rowData.push(mObj !== undefined && mObj !== "" ? (isNaN(Number(mObj)) ? String(mObj) : Number(mObj)) : 0);
-                            
-                            if(rep.isProg) { 
-                                let pObj = (typeof val === 'object' && val !== null) ? val.P : val; 
-                                rowData.push(pObj !== undefined && pObj !== "" ? (isNaN(Number(pObj)) ? String(pObj) : Number(pObj)) : 0); 
-                            }
-                        });
-
-                        if(rep.formType !== 'list') {
-                            let tM = phcTotals[c.id].isNum ? Number(phcTotals[c.id].M) : "-";
-                            let tP = phcTotals[c.id].isNum ? Number(phcTotals[c.id].P) : "-";
-                            rowData.push(tM); if(rep.isProg) rowData.push(tP);
-                        }
-                        sheetData.push(rowData); 
-                    });
-
-                } else if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
-                    let dataRowsToRender = rows;
-
-                    if(groupType === "SubCenterSum") {
-                        let scGroups = {};
-                        rows.forEach(r => { if(!scGroups[r.subcenter]) scGroups[r.subcenter] = []; scGroups[r.subcenter].push(r); });
-                        let subCenterAggregatedRows = [];
-                        Object.keys(scGroups).sort().forEach(sc => {
-                            let scRows = scGroups[sc];
-                            let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
-                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
-                            
-                            columns.forEach((c, idx) => {
-                                if (rep.formType === 'list') {
-                                    if (idx === 0) { scNewRow.values[c.id] = `एकूण नोंदी: ${scRows.length}`; } else { scNewRow.values[c.id] = '-'; }
-                                } else {
-                                    let t = scSmartTotals[c.id];
-                                    if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
-                                    else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
-                                }
-                            });
-                            subCenterAggregatedRows.push(scNewRow);
-                        });
-                        dataRowsToRender = subCenterAggregatedRows;
-                    } else if (groupType === "SubCenterFlat") {
-                        dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.employee.localeCompare(b.employee) || a.village.localeCompare(b.village));
-                    }
-
-                    let totalBaseCols = groupType === 'SubCenterFlat' ? 4 : 2; 
-                    let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
-
-                    let headInfo = getCustomHeader(rep);
-                    let startIdx = sheetData.length;
-                    sheetData.push([headInfo.l1]); titleHeaderRows.push(startIdx); merges.push({ s: { r: startIdx, c: 0 }, e: { r: startIdx, c: totalColumnsCount - 1 } });
-                    sheetData.push([headInfo.l2]); titleHeaderRows.push(startIdx+1); merges.push({ s: { r: startIdx+1, c: 0 }, e: { r: startIdx+1, c: totalColumnsCount - 1 } });
-                    let startR = startIdx + 2;
-                    if(headInfo.l3 !== "") { 
-                        sheetData.push([headInfo.l3]); titleHeaderRows.push(startIdx+2); merges.push({ s: { r: startIdx+2, c: 0 }, e: { r: startIdx+2, c: totalColumnsCount - 1 } }); 
-                        startR = startIdx + 3;
-                    }
-
-                    let r1 = ["अ.क्र.", "उपकेंद्र"]; 
-                    if(groupType === 'SubCenterFlat') {
-                        r1.push("गाव/कार्यक्षेत्र");
-                        r1.push("कर्मचारी");
-                    }
-                    
-                    let r2 = []; let r3 = []; let r4 = rep.isProg ? [] : null;
-
-                    for(let x=0; x<totalBaseCols; x++) { r2.push(""); r3.push(""); if(rep.isProg) r4.push(""); }
-                    let totalHeaderRows = rep.isProg ? 4 : 3;
-                    for(let x=0; x<totalBaseCols; x++) merges.push({ s: { r: startR, c: x }, e: { r: startR + totalHeaderRows - 1, c: x } });
-
-                    let i = 0;
-                    while(i < columns.length) {
-                        let c = columns[i]; let j = i + 1;
-                        if(c.l1 !== "") {
-                            while(j < columns.length && columns[j].l1 === c.l1) { j++; }
-                            let totalL1Span = 0; for(let k=i; k<j; k++) totalL1Span += (rep.isProg && columns[k].type === 'number') ? 2 : 1;
-                            r1.push(c.l1); for(let s=1; s<totalL1Span; s++) r1.push("");
-                            merges.push({ s: { r: startR, c: r1.length - totalL1Span }, e: { r: startR, c: r1.length - 1 } });
-
-                            let k = i;
-                            while(k < j) {
-                                let c2 = columns[k]; let m = k + 1;
-                                if(c2.l2 !== "") {
-                                    while(m < j && columns[m].l2 === c2.l2) { m++; }
-                                    let totalL2Span = 0; for(let n=k; n<m; n++) totalL2Span += (rep.isProg && columns[n].type === 'number') ? 2 : 1;
-                                    r2.push(c2.l2); for(let s=1; s<totalL2Span; s++) r2.push("");
-                                    merges.push({ s: { r: startR+1, c: r2.length - totalL2Span }, e: { r: startR+1, c: r2.length - 1 } });
-
-                                    for(let n=k; n<m; n++) {
-                                        let cn = columns[n]; let w = (rep.isProg && cn.type === 'number') ? 2 : 1;
-                                        r3.push(cn.l3);
-                                        if(w === 2) {
-                                            r3.push(""); merges.push({ s: { r: startR+2, c: r3.length - 2 }, e: { r: startR+2, c: r3.length - 1 } });
-                                            r4.push("मासिक"); r4.push("प्रगत");
-                                        } else { if(rep.isProg) { merges.push({ s: { r: startR+2, c: r3.length - 1 }, e: { r: startR+3, c: r3.length - 1 } }); r4.push(""); } }
-                                    }
-                                    k = m;
-                                } else {
-                                    let w = (rep.isProg && c2.type === 'number') ? 2 : 1;
-                                    r2.push(c2.l3);
-                                    if(w === 2) {
-                                        r2.push(""); merges.push({ s: { r: startR+1, c: r2.length - 2 }, e: { r: startR+2, c: r2.length - 1 } }); 
-                                        r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
-                                    } else {
-                                        if(rep.isProg) { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+3, c: r2.length - 1 } }); r3.push(""); r4.push(""); } 
-                                        else { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+2, c: r2.length - 1 } }); r3.push(""); }
-                                    }
-                                    k++;
-                                }
-                            }
-                            i = j;
-                        } else {
-                            let w = (rep.isProg && c.type === 'number') ? 2 : 1;
-                            r1.push(c.l3);
-                            if(w === 2) {
-                                r1.push(""); merges.push({ s: { r: startR, c: r1.length - 2 }, e: { r: startR+2, c: r1.length - 1 } }); 
-                                r2.push(""); r2.push(""); r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
-                            } else {
-                                let bottomR = rep.isProg ? startR+3 : startR+2;
-                                merges.push({ s: { r: startR, c: r1.length - 1 }, e: { r: bottomR, c: r1.length - 1 } });
-                                r2.push(""); r3.push(""); if(rep.isProg) r4.push("");
-                            }
-                            i++;
-                        }
-                    }
-
-                    sheetData.push(r1); subTitleHeaderRows.push(startR);
                     sheetData.push(r2); subTitleHeaderRows.push(startR + 1);
                     sheetData.push(r3); subTitleHeaderRows.push(startR + 2);
                     if(rep.isProg) { sheetData.push(r4); subTitleHeaderRows.push(startR + 3); }
@@ -1635,7 +1493,6 @@
             XLSX.writeFile(wb, dlName);
         }
 
-        // 🟢 सुधारणा: अपूर्ण यादीत नोटीस बटण जोडले
         function generatePendingReport() {
             let periodType = document.getElementById('periodType').value;
             if (periodType === 'custom') {
@@ -1693,7 +1550,7 @@
             });
 
             let container = document.getElementById('reportTableContainer'); let downArea = document.getElementById('downloadButtonsArea');
-            downArea.innerHTML = `<div class="no-print flex justify-end gap-2 mb-3"><button onclick="copyPendingListText()" class="bg-gray-600 text-white px-4 py-2 rounded text-xs font-bold shadow">📋 यादी कॉपी करा</button><button onclick="window.print()" class="bg-red-600 text-white px-4 py-2 rounded text-xs font-bold shadow">📥 PDF प्रिंट करा</button></div>`;
+            downArea.innerHTML = `<div class="no-print flex justify-end gap-2 mb-3"><button onclick="copyPendingListText()" class="bg-gray-600 text-white px-4 py-2 rounded text-xs font-bold shadow">📋 यादी कॉपी करा</button><button onclick="window.print()" class="bg-red-600 text-white px-4 py-2 rounded text-xs font-bold shadow">🖨️ प्रिंट काढा</button></div>`;
 
             let phcHeader = "तालुका आरोग्य प्रणाली";
             if (user.role === 'phc_admin') phcHeader = "तुमची अपूर्ण यादी";
@@ -1709,7 +1566,6 @@
                     
                     let empMap = {}; 
                     groupedData[fName].forEach(p => { 
-                        // 🟢 सुधारणा: की (Key) मध्ये role सुद्धा सेव्ह केला जेणेकरून नोटीससाठी वापरता येईल
                         let key = p.name + "###" + p.sc + "###" + p.role; 
                         if(!empMap[key]) empMap[key] = []; 
                         empMap[key].push(p.village); 
@@ -1720,7 +1576,6 @@
                         let [empName, scName, empRole] = key.split("###"); 
                         let villagesStr = empMap[key].join(", ");
                         
-                        // 🟢 नोटीस डेटा तयार करणे
                         let noticeDataStr = `${fName} (${villagesStr})`;
 
                         html += `<tr>
@@ -1755,44 +1610,6 @@
             navigator.clipboard.writeText(textToCopy).then(() => { alert("✅ यादी व्हॉट्सॲप मेसेजसाठी कॉपी झाली आहे!"); });
         }
 
-        function downloadDirectPDF() {
-            let element = document.getElementById('reportTableContainer');
-            if(!element || element.innerHTML.trim() === "") {
-                alert("अहवाल रिकामा आहे!"); return;
-            }
-
-            let btn = document.getElementById('pdfDownloadBtn');
-            let originalText = btn.innerText;
-            btn.innerText = "⏳ PDF तयार होत आहे (कृपया थांबा)..."; 
-            btn.disabled = true;
-
-            element.classList.add('pdf-mode');
-
-            let periodType = document.getElementById('periodType').value;
-            let fileName = `आरोग्य_अहवाल_${periodType === 'custom' ? 'Custom' : document.getElementById('reportMonth').value}_${document.getElementById('reportYear').value}.pdf`;
-
-            let opt = {
-                margin:       8,
-                filename:     fileName,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, windowWidth: 1200 },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak:    { mode: ['css', 'legacy'] }
-            };
-
-            html2pdf().set(opt).from(element).save().then(() => {
-                btn.innerText = originalText; 
-                btn.disabled = false;
-                element.classList.remove('pdf-mode');
-            }).catch(err => {
-                alert("PDF जनरेट करताना त्रुटी: " + err.message);
-                btn.innerText = originalText; 
-                btn.disabled = false;
-                element.classList.remove('pdf-mode');
-            });
-        }
-
-        // 🟢 नवीन: कारणे दाखवा नोटीस तयार करणारे फंक्शन
         function generateNotice(empName, empRole, scName, noticeDataStr) {
             const today = new Date().toLocaleDateString('mr-IN');
             const noticeWindow = window.open('', '_blank', 'width=900,height=800');
@@ -1801,7 +1618,6 @@
             
             let formsHtml = pendingItems.map((item, i) => {
                 let parts = item.split(' (');
-                // जर parts[1] मध्ये ')' असेल तर तो बरोबर दिसेल
                 let villages = parts[1] ? parts[1] : ''; 
                 return `<li style="margin-bottom: 5px; padding-left: 5px; line-height: 1.4;">
                             <strong style="font-size: 15px; color: #b71c1c;">${parts[0]}</strong> 
@@ -1813,7 +1629,6 @@
                 <html lang="mr">
                 <head>
                     <title>कारणे दाखवा नोटीस - ${empName}</title>
-                    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
                     <style>
                         body { font-family: 'Arial', sans-serif; background: #e9ecef; margin: 0; padding: 20px; color: #222;} 
                         .notice-wrapper { background: #fff; padding: 30px 40px; max-width: 210mm; min-height: 297mm; margin: auto; box-sizing: border-box; position: relative; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); border: none; outline: none; }
@@ -1897,25 +1712,7 @@
 
                     <div style="text-align: center; margin-top: 30px; display: flex; justify-content: center; gap: 15px;" class="no-print">
                         <button onclick="window.print()" style="padding: 12px 25px; background-color: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🖨️ डायरेक्ट प्रिंट काढा</button>
-                        <button onclick="downloadNoticePDF()" style="padding: 12px 25px; background-color: #dc3545; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">📥 A4 PDF डाऊनलोड करा</button>
                     </div>
-
-                    <script>
-                        function downloadNoticePDF() {
-                            const element = document.getElementById('noticeContent');
-                            const empFileName = '${empName}'.replace(/\\s+/g, '_'); 
-                            
-                            const opt = {
-                                margin:       [10, 10, 10, 10], 
-                                filename:     'कारणे_दाखवा_नोटीस_' + empFileName + '.pdf',
-                                image:        { type: 'jpeg', quality: 0.98 },
-                                html2canvas:  { scale: 2, useCORS: true },
-                                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                            };
-                            
-                            html2pdf().set(opt).from(element).save();
-                        }
-                    <\/script>
                 </body>
                 </html>
             `);
