@@ -545,12 +545,17 @@
                             if (!scObj || scObj.phc_id !== user.phc_id) return;
                         }
 
-                        let scName = scObj ? scObj.name : '-';
+                       let scName = scObj ? scObj.name : '-';
                         if(user.role !== 'employee' && filterSubCenter !== "सर्व" && scName !== filterSubCenter) return;
 
                         let vName = villageObj ? villageObj.name : '-';
                         if (formObj.form_type === 'subcenter') {
                             vName = "🏢 संपूर्ण उपकेंद्र (Subcenter Level)";
+                        } else if (villageObj && (formObj.form_type === 'monthly' || formObj.form_type === 'progressive' || formObj.form_type === 'fortnightly')) {
+                            // 🟢 नवीन बदल: पंधरवाडी, मासिक आणि प्रगत अहवालांसाठी गावाच्या नावासोबत लोकसंख्या आणि घरे जोडणे
+                            let pop = villageObj.population || 0;
+                            let houses = villageObj.total_houses || 0;
+                            vName = `${villageObj.name} (लोक.: ${pop}, घरे: ${houses})`;
                         }
 
                         let row = { 
