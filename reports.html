@@ -1129,10 +1129,6 @@
             currentReports.forEach((rep) => {
                 let columns = rep.fields; let rows = rep.rows;
                 let sheetData = []; let merges = []; let titleHeaderRows = []; let masterHeaderRows = []; let subTitleHeaderRows = []; let groupTotalRows = []; let phcTotalRows = [];
-                // 🟢 सुधारणा: आता फॉर्म प्रकारावरून नाही, तर फॉर्म बिल्डरमधील टिकमार्कवरून ठरवले जाईल
-                let showPop = rep.showPopConfig === true;
-                let columns = rep.fields; let rows = rep.rows;
-                let sheetData = []; let merges = []; let titleHeaderRows = []; let masterHeaderRows = []; let subTitleHeaderRows = []; let groupTotalRows = []; let phcTotalRows = [];
                 let showPop = (rep.formType === 'monthly' || rep.formType === 'progressive' || rep.formType === 'fortnightly');
 
                 if (groupType === "SubCenterConsolidated") {
