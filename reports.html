@@ -171,7 +171,7 @@
                 <button onclick="closeEditModal()" class="text-red-500 font-bold text-2xl hover:text-red-700">&times;</button>
             </div>
             <div class="p-6 overflow-y-auto flex-1 bg-gray-50" id="editModalBody">
-            </div>
+                </div>
             <div class="p-4 border-t flex justify-end gap-3 bg-white">
                 <button onclick="closeEditModal()" class="bg-gray-500 text-white px-5 py-2 rounded font-bold shadow">रद्द करा</button>
                 <button onclick="saveEditResponse()" class="bg-green-600 text-white px-5 py-2 rounded font-bold shadow hover:bg-green-700">💾 अपडेट करा</button>
@@ -292,14 +292,12 @@
 
                 const { data: formData } = await supabaseClient.from('dynamic_forms').select('*').eq('is_active', true);
                 
-                // 🟢 सुधारणा: कर्मचाऱ्याच्या पदानुसार (Role) फॉर्म्स फिल्टर करणे
                 let userRoleStr = String(user.role).trim().toUpperCase();
                 let isAdminRole = (userRoleStr === 'ADMIN' || userRoleStr === 'TALUKA_ADMIN' || userRoleStr === 'PHC_ADMIN');
 
                 let filteredForms = (formData || []).filter(form => {
                     let allowedRoles = form.allowed_roles ? String(form.allowed_roles).trim().toUpperCase() : "ALL";
                     if (isAdminRole || allowedRoles === "ALL") return true;
-                    // जर कर्मचाऱ्याचे पद फॉर्मच्या 'allowed_roles' मध्ये असेल तरच तो फॉर्म दिसेल
                     return allowedRoles.split(',').includes(userRoleStr);
                 });
 
@@ -410,7 +408,6 @@
             let mixedTypes = new Set(formsToProcess.map(f => f.form_type));
             
             let periodType = document.getElementById('periodType').value;
-            // 🟢 सुधारणा १: डेटाबेस कडून जास्तीत जास्त रेकॉर्ड्स ओढून घेणे (कोणताही डेटा सुटू नये म्हणून)
             let query = supabaseClient.from('form_responses').select('*').limit(10000); 
             
             let periodText = "";
@@ -479,12 +476,10 @@
                     
                     if (periodType === 'monthly') {
                         currentMonthResp = formResp.filter(r => {
-                            // 🟢 सुधारणा २: महिना आणि वर्षाचे सर्व्ह फॉरमॅट्स हाताळणे
                             let rMonth = String(r.report_month).trim().toLowerCase();
                             let rYear = parseInt(r.report_year);
                             let createdDt = new Date(r.created_at);
                             
-                            // जर डेटा भरताना वर्ष किंवा महिना सेव्ह झाला नसेल, तर फॉर्म भरल्याच्या तारखेवरून तो घेण्याची सोय (Fallback)
                             if (isNaN(rYear)) rYear = createdDt.getFullYear();
                             if (rMonth === "null" || rMonth === "" || rMonth === "undefined") rMonth = String(createdDt.getMonth() + 1);
 
@@ -513,7 +508,6 @@
 
                     currentMonthResp.forEach(res => {
                         
-                        // 🟢 नवीन बदल: जर फॉर्म 'यादी' (list) प्रकारचा असेल, तर निरंक (NIL) रेकॉर्ड्स वगळा
                         if (formObj.form_type === 'list') {
                             if (res.response_data && res.response_data.is_nil === true) return;
 
@@ -707,7 +701,6 @@
             return results;
         }
 
-        // 🟢 नवीन फंक्शन: युझरच्या पदानुसार २ किंवा ३ ओळींचे हेडर बनवणे
         function getCustomHeader(rep) {
             let role = user.role;
             let l1 = "", l2 = "", l3 = "";
@@ -736,10 +729,9 @@
                      scName = `PHC ${phcName} (OPD)`;
                 }
                 
-                // 🟢 सुधारणा: कर्मचाऱ्यांसाठी फक्त २ ओळींचे हेडर (जागा वाचवण्यासाठी)
                 l1 = `${formName}`;
                 l2 = `कर्मचारी: ${empName} | उपकेंद्र: ${scName} | महिना: ${period}`;
-                l3 = ""; // तिसरी ओळ पूर्णपणे काढून टाकली आहे
+                l3 = "";
             }
             return { l1, l2, l3 };
         }
@@ -752,7 +744,6 @@
             if (user.role === 'admin' || user.role === 'taluka_admin') phcHeaderTxt = "तालुका अहवाल - संपूर्ण डेटा";
             if (user.role === 'phc_admin') phcHeaderTxt = "तुमच्या PHC चा अहवाल";
 
-            // 🟢 सुधारणा: 'PDF डाऊनलोड' बटण जोडले
             downArea.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-center gap-2 p-3 bg-gray-50 rounded-lg border shadow-sm mb-4 no-print"><span class="font-bold text-gray-700">${phcHeaderTxt}</span><div class="flex gap-2"><button onclick="downloadConsolidatedExcel()" class="bg-green-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-green-700 transition">📥 Excel डाऊनलोड</button><button id="pdfDownloadBtn" onclick="downloadDirectPDF()" class="bg-red-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-red-700 transition">📥 PDF डाऊनलोड</button></div></div>`;
 
             let html = '';
@@ -1276,6 +1267,141 @@
                     }
 
                     sheetData.push(r1); subTitleHeaderRows.push(startR);
+                    if(rep.isProg) { sheetData.push(r2); subTitleHeaderRows.push(startR+1); }
+
+                    let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
+
+                    columns.forEach((c, vIndex) => {
+                        let fLabel = ""; if(c.l1) fLabel += c.l1+" - "; if(c.l2) fLabel += c.l2+" - "; fLabel += c.l3;
+                        let rowData = [vIndex + 1, fLabel];
+                        rows.forEach(r => {
+                            let val = r.values[c.id]; let mObj = (typeof val === 'object' && val !== null) ? val.M : val;
+                            rowData.push(mObj !== undefined && mObj !== "" ? (isNaN(Number(mObj)) ? String(mObj) : Number(mObj)) : 0);
+                            
+                            if(rep.isProg) { 
+                                let pObj = (typeof val === 'object' && val !== null) ? val.P : val; 
+                                rowData.push(pObj !== undefined && pObj !== "" ? (isNaN(Number(pObj)) ? String(pObj) : Number(pObj)) : 0); 
+                            }
+                        });
+
+                        if(rep.formType !== 'list') {
+                            let tM = phcTotals[c.id].isNum ? Number(phcTotals[c.id].M) : "-";
+                            let tP = phcTotals[c.id].isNum ? Number(phcTotals[c.id].P) : "-";
+                            rowData.push(tM); if(rep.isProg) rowData.push(tP);
+                        }
+                        sheetData.push(rowData); 
+                    });
+
+                } else if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
+                    let dataRowsToRender = rows;
+
+                    if(groupType === "SubCenterSum") {
+                        let scGroups = {};
+                        rows.forEach(r => { if(!scGroups[r.subcenter]) scGroups[r.subcenter] = []; scGroups[r.subcenter].push(r); });
+                        let subCenterAggregatedRows = [];
+                        Object.keys(scGroups).sort().forEach(sc => {
+                            let scRows = scGroups[sc];
+                            let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
+                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
+                            
+                            columns.forEach((c, idx) => {
+                                if (rep.formType === 'list') {
+                                    if (idx === 0) { scNewRow.values[c.id] = `एकूण नोंदी: ${scRows.length}`; } else { scNewRow.values[c.id] = '-'; }
+                                } else {
+                                    let t = scSmartTotals[c.id];
+                                    if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
+                                    else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                                }
+                            });
+                            subCenterAggregatedRows.push(scNewRow);
+                        });
+                        dataRowsToRender = subCenterAggregatedRows;
+                    } else if (groupType === "SubCenterFlat") {
+                        dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.employee.localeCompare(b.employee) || a.village.localeCompare(b.village));
+                    }
+
+                    let totalBaseCols = groupType === 'SubCenterFlat' ? 4 : 2; 
+                    let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
+
+                    let headInfo = getCustomHeader(rep);
+                    let startIdx = sheetData.length;
+                    sheetData.push([headInfo.l1]); titleHeaderRows.push(startIdx); merges.push({ s: { r: startIdx, c: 0 }, e: { r: startIdx, c: totalColumnsCount - 1 } });
+                    sheetData.push([headInfo.l2]); titleHeaderRows.push(startIdx+1); merges.push({ s: { r: startIdx+1, c: 0 }, e: { r: startIdx+1, c: totalColumnsCount - 1 } });
+                    let startR = startIdx + 2;
+                    if(headInfo.l3 !== "") { 
+                        sheetData.push([headInfo.l3]); titleHeaderRows.push(startIdx+2); merges.push({ s: { r: startIdx+2, c: 0 }, e: { r: startIdx+2, c: totalColumnsCount - 1 } }); 
+                        startR = startIdx + 3;
+                    }
+
+                    let r1 = ["अ.क्र.", "उपकेंद्र"]; 
+                    if(groupType === 'SubCenterFlat') {
+                        r1.push("गाव/कार्यक्षेत्र");
+                        r1.push("कर्मचारी");
+                    }
+                    
+                    let r2 = []; let r3 = []; let r4 = rep.isProg ? [] : null;
+
+                    for(let x=0; x<totalBaseCols; x++) { r2.push(""); r3.push(""); if(rep.isProg) r4.push(""); }
+                    let totalHeaderRows = rep.isProg ? 4 : 3;
+                    for(let x=0; x<totalBaseCols; x++) merges.push({ s: { r: startR, c: x }, e: { r: startR + totalHeaderRows - 1, c: x } });
+
+                    let i = 0;
+                    while(i < columns.length) {
+                        let c = columns[i]; let j = i + 1;
+                        if(c.l1 !== "") {
+                            while(j < columns.length && columns[j].l1 === c.l1) { j++; }
+                            let totalL1Span = 0; for(let k=i; k<j; k++) totalL1Span += (rep.isProg && columns[k].type === 'number') ? 2 : 1;
+                            r1.push(c.l1); for(let s=1; s<totalL1Span; s++) r1.push("");
+                            merges.push({ s: { r: startR, c: r1.length - totalL1Span }, e: { r: startR, c: r1.length - 1 } });
+
+                            let k = i;
+                            while(k < j) {
+                                let c2 = columns[k]; let m = k + 1;
+                                if(c2.l2 !== "") {
+                                    while(m < j && columns[m].l2 === c2.l2) { m++; }
+                                    let totalL2Span = 0; for(let n=k; n<m; n++) totalL2Span += (rep.isProg && columns[n].type === 'number') ? 2 : 1;
+                                    r2.push(c2.l2); for(let s=1; s<totalL2Span; s++) r2.push("");
+                                    merges.push({ s: { r: startR+1, c: r2.length - totalL2Span }, e: { r: startR+1, c: r2.length - 1 } });
+
+                                    for(let n=k; n<m; n++) {
+                                        let cn = columns[n]; let w = (rep.isProg && cn.type === 'number') ? 2 : 1;
+                                        r3.push(cn.l3);
+                                        if(w === 2) {
+                                            r3.push(""); merges.push({ s: { r: startR+2, c: r3.length - 2 }, e: { r: startR+2, c: r3.length - 1 } });
+                                            r4.push("मासिक"); r4.push("प्रगत");
+                                        } else { if(rep.isProg) { merges.push({ s: { r: startR+2, c: r3.length - 1 }, e: { r: startR+3, c: r3.length - 1 } }); r4.push(""); } }
+                                    }
+                                    k = m;
+                                } else {
+                                    let w = (rep.isProg && c2.type === 'number') ? 2 : 1;
+                                    r2.push(c2.l3);
+                                    if(w === 2) {
+                                        r2.push(""); merges.push({ s: { r: startR+1, c: r2.length - 2 }, e: { r: startR+2, c: r2.length - 1 } }); 
+                                        r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                                    } else {
+                                        if(rep.isProg) { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+3, c: r2.length - 1 } }); r3.push(""); r4.push(""); } 
+                                        else { merges.push({ s: { r: startR+1, c: r2.length - 1 }, e: { r: startR+2, c: r2.length - 1 } }); r3.push(""); }
+                                    }
+                                    k++;
+                                }
+                            }
+                            i = j;
+                        } else {
+                            let w = (rep.isProg && c.type === 'number') ? 2 : 1;
+                            r1.push(c.l3);
+                            if(w === 2) {
+                                r1.push(""); merges.push({ s: { r: startR, c: r1.length - 2 }, e: { r: startR+2, c: r1.length - 1 } }); 
+                                r2.push(""); r2.push(""); r3.push(""); r3.push(""); r4.push("मासिक"); r4.push("प्रगत");
+                            } else {
+                                let bottomR = rep.isProg ? startR+3 : startR+2;
+                                merges.push({ s: { r: startR, c: r1.length - 1 }, e: { r: bottomR, c: r1.length - 1 } });
+                                r2.push(""); r3.push(""); if(rep.isProg) r4.push("");
+                            }
+                            i++;
+                        }
+                    }
+
+                    sheetData.push(r1); subTitleHeaderRows.push(startR);
                     sheetData.push(r2); subTitleHeaderRows.push(startR + 1);
                     sheetData.push(r3); subTitleHeaderRows.push(startR + 2);
                     if(rep.isProg) { sheetData.push(r4); subTitleHeaderRows.push(startR + 3); }
@@ -1509,6 +1635,7 @@
             XLSX.writeFile(wb, dlName);
         }
 
+        // 🟢 सुधारणा: अपूर्ण यादीत नोटीस बटण जोडले
         function generatePendingReport() {
             let periodType = document.getElementById('periodType').value;
             if (periodType === 'custom') {
@@ -1579,11 +1706,34 @@
                 if(groupedData[fName].length > 0) {
                     hasData = true; let pbClass = isFirstPending ? "" : "page-break"; isFirstPending = false;
                     html += `<div class="${pbClass}"><div class="pdf-group-header" style="background:#f8f9fa; color:#c0392b; padding:10px; font-weight:bold; font-size:16px; margin-top:10px; border:1px solid #ddd;">📄 फॉर्म: ${fName}</div><table class="report-table pending-data-table" style="width:100%; border-collapse:collapse; margin-bottom:30px;"><thead style="background:#f4f7f6;"><tr><th style="border: 1px solid #ccc; padding: 8px; width:10%; text-align:center;">अ.क्र.</th><th style="border: 1px solid #ccc; padding: 8px; text-align:left;">अहवाल प्रलंबित असणारे कर्मचारी (उपकेंद्र) - अपूर्ण गावे</th></tr></thead><tbody>`;
-                    let empMap = {}; groupedData[fName].forEach(p => { let key = p.name + "###" + p.sc; if(!empMap[key]) empMap[key] = []; empMap[key].push(p.village); });
+                    
+                    let empMap = {}; 
+                    groupedData[fName].forEach(p => { 
+                        // 🟢 सुधारणा: की (Key) मध्ये role सुद्धा सेव्ह केला जेणेकरून नोटीससाठी वापरता येईल
+                        let key = p.name + "###" + p.sc + "###" + p.role; 
+                        if(!empMap[key]) empMap[key] = []; 
+                        empMap[key].push(p.village); 
+                    });
+                    
                     let sortedKeys = Object.keys(empMap).sort();
                     sortedKeys.forEach((key, idx) => {
-                        let [empName, scName] = key.split("###"); let villagesStr = empMap[key].join(", ");
-                        html += `<tr><td style="border: 1px solid #ccc; padding: 8px; text-align:center; font-weight:bold;">${idx+1}</td><td style="border: 1px solid #ccc; padding: 8px; text-align:left; font-size:15px;"><span style="color:#0056b3; font-weight:bold;">${empName}</span> - <span style="color:#d35400; font-weight:bold;">${scName}</span> <span style="color:#28a745; font-weight:bold;">(${villagesStr})</span></td></tr>`;
+                        let [empName, scName, empRole] = key.split("###"); 
+                        let villagesStr = empMap[key].join(", ");
+                        
+                        // 🟢 नोटीस डेटा तयार करणे
+                        let noticeDataStr = `${fName} (${villagesStr})`;
+
+                        html += `<tr>
+                                    <td style="border: 1px solid #ccc; padding: 8px; text-align:center; font-weight:bold;">${idx+1}</td>
+                                    <td style="border: 1px solid #ccc; padding: 8px; text-align:left; font-size:15px; display:flex; justify-content:space-between; align-items:center;">
+                                        <div>
+                                            <span style="color:#0056b3; font-weight:bold;">${empName}</span> - 
+                                            <span style="color:#d35400; font-weight:bold;">${scName}</span> 
+                                            <span style="color:#28a745; font-weight:bold;">(${villagesStr})</span>
+                                        </div>
+                                        <button onclick="generateNotice('${empName}', '${empRole}', '${scName}', '${noticeDataStr}')" class="bg-red-100 text-red-700 px-3 py-1 rounded text-xs font-bold shadow-sm hover:bg-red-200 no-print border border-red-300">⚠️ नोटीस</button>
+                                    </td>
+                                </tr>`;
                     });
                     html += `</tbody></table></div>`;
                 }
@@ -1599,13 +1749,12 @@
             tables.forEach((table, tableIndex) => {
                 let formName = formHeaders[tableIndex] ? formHeaders[tableIndex].innerText.replace('📄 फॉर्म: ', '').trim() : "अहवाल";
                 textToCopy += `📌 *${formName}*\n`;
-                table.querySelectorAll('tbody tr').forEach((row, rowIndex) => { let cells = row.querySelectorAll('td'); if(cells.length >= 2) textToCopy += `${rowIndex + 1}. ${cells[1].innerText.replace(/\n/g, " ").trim()}\n`; });
+                table.querySelectorAll('tbody tr').forEach((row, rowIndex) => { let cells = row.querySelectorAll('td'); if(cells.length >= 2) textToCopy += `${rowIndex + 1}. ${cells[1].innerText.replace(/\n/g, " ").replace("⚠️ नोटीस", "").trim()}\n`; });
                 textToCopy += `\n`;
             });
             navigator.clipboard.writeText(textToCopy).then(() => { alert("✅ यादी व्हॉट्सॲप मेसेजसाठी कॉपी झाली आहे!"); });
         }
 
-        // 🟢 नवीन: थेट PDF डाऊनलोड करणारे फंक्शन
         function downloadDirectPDF() {
             let element = document.getElementById('reportTableContainer');
             if(!element || element.innerHTML.trim() === "") {
@@ -1617,23 +1766,20 @@
             btn.innerText = "⏳ PDF तयार होत आहे (कृपया थांबा)..."; 
             btn.disabled = true;
 
-            // टेबल PDF मध्ये व्यवस्थित फिट बसण्यासाठी क्लास लावणे
             element.classList.add('pdf-mode');
 
             let periodType = document.getElementById('periodType').value;
             let fileName = `आरोग्य_अहवाल_${periodType === 'custom' ? 'Custom' : document.getElementById('reportMonth').value}_${document.getElementById('reportYear').value}.pdf`;
 
-            // PDF चे सेटिंग्ज (A4, Landscape, 8mm Margin)
             let opt = {
                 margin:       8,
                 filename:     fileName,
                 image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, windowWidth: 1200 }, // हाय-क्वालिटीसाठी
+                html2canvas:  { scale: 2, useCORS: true, windowWidth: 1200 },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
                 pagebreak:    { mode: ['css', 'legacy'] }
             };
 
-            // PDF जनरेट करणे आणि डाऊनलोड करणे
             html2pdf().set(opt).from(element).save().then(() => {
                 btn.innerText = originalText; 
                 btn.disabled = false;
@@ -1644,6 +1790,136 @@
                 btn.disabled = false;
                 element.classList.remove('pdf-mode');
             });
+        }
+
+        // 🟢 नवीन: कारणे दाखवा नोटीस तयार करणारे फंक्शन
+        function generateNotice(empName, empRole, scName, noticeDataStr) {
+            const today = new Date().toLocaleDateString('mr-IN');
+            const noticeWindow = window.open('', '_blank', 'width=900,height=800');
+            
+            let pendingItems = noticeDataStr.split('|||');
+            
+            let formsHtml = pendingItems.map((item, i) => {
+                let parts = item.split(' (');
+                // जर parts[1] मध्ये ')' असेल तर तो बरोबर दिसेल
+                let villages = parts[1] ? parts[1] : ''; 
+                return `<li style="margin-bottom: 5px; padding-left: 5px; line-height: 1.4;">
+                            <strong style="font-size: 15px; color: #b71c1c;">${parts[0]}</strong> 
+                            <span style="font-size: 13px; color: #444;">(${villages}</span>
+                        </li>`;
+            }).join('');
+
+            noticeWindow.document.write(`
+                <html lang="mr">
+                <head>
+                    <title>कारणे दाखवा नोटीस - ${empName}</title>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+                    <style>
+                        body { font-family: 'Arial', sans-serif; background: #e9ecef; margin: 0; padding: 20px; color: #222;} 
+                        .notice-wrapper { background: #fff; padding: 30px 40px; max-width: 210mm; min-height: 297mm; margin: auto; box-sizing: border-box; position: relative; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); border: none; outline: none; }
+                        .title-block { text-align: center; border-bottom: 2px solid #222; padding-bottom: 15px; margin-bottom: 25px; }
+                        .title { font-weight: 900; font-size: 26px; color: #000; margin-bottom: 5px; }
+                        .subtitle { font-size: 18px; font-weight: bold; color: #333; }
+                        .header-info { display: flex; justify-content: space-between; margin-bottom: 20px; font-weight: bold; font-size: 15px;}
+                        .to-address { margin-bottom: 20px; font-weight: bold; font-size: 16px; line-height: 1.5; padding-left: 10px; border-left: 3px solid #b71c1c;}
+                        .subject-box { background: #f4f4f4; padding: 12px; border: 1px dashed #666; font-weight: bold; margin-bottom: 20px; text-align: center; font-size: 16px;}
+                        .content { text-align: justify; font-size: 16px; line-height: 1.6; margin-bottom: 15px;}
+                        .content p { text-indent: 50px; margin-bottom: 8px; }
+                        .forms-box { margin: 15px 0 15px 40px; padding: 15px 15px 15px 10px; border: 1px solid #ccc; background-color: #fafafa; border-radius: 5px; box-shadow: inset 0 0 5px rgba(0,0,0,0.05);}
+                        .forms-box ul { margin: 0; padding-left: 20px; list-style-type: decimal; }
+                        .sign-block { text-align: right; margin-top: 30px; font-weight: bold; font-size: 16px; line-height: 1.5; }
+                        .copy-to { margin-top: 40px; font-size: 15px; font-weight: bold; line-height: 1.6; }
+                        
+                        @media print { 
+                            body { background: #fff; padding: 0; }
+                            .notice-wrapper { border: none; outline: none; margin: 0; padding: 20px; min-height: auto; box-shadow: none;}
+                            .no-print { display: none; } 
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div id="noticeContent" class="notice-wrapper">
+                        <div class="title-block">
+                            <div class="title">महाराष्ट्र शासन</div>
+                            <div class="subtitle">कार्यालय: वैद्यकीय अधिकारी, प्राथमिक आरोग्य केंद्र, भादा</div>
+                            <div style="font-size: 15px; margin-top: 5px; color: #555;">ता. औसा जि. लातूर</div>
+                        </div>
+                        
+                        <div class="header-info">
+                            <div>जावक क्र. प्राआकें/भादा/नोटीस/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/२०२६</div>
+                            <div>दिनांक: ${today}</div>
+                        </div>
+                        
+                        <div class="to-address">
+                            प्रति,<br>
+                            श्री./सौ. <span style="font-size: 18px; color: #b71c1c;">${empName}</span>,<br>
+                            ${empRole}, उपकेंद्र: ${scName}.
+                        </div>
+                        
+                        <div class="subject-box">
+                            <span style="text-decoration: underline;">विषय:</span> प्रलंबित अहवाल विहित वेळेत सादर न केल्याबाबत <strong>कारणे दाखवा नोटीस</strong>.
+                        </div>
+                        
+                        <div class="content">
+                            <p>उपरोक्त विषयान्वये आपणास या नोटीसीद्वारे कळविण्यात येते की, आपल्या कार्यक्षेत्रातील खालील अत्यंत महत्त्वाच्या कार्यक्रमांचे अहवाल आपण अद्यापपर्यंत कार्यालयास सादर केलेले नाहीत.</p>
+                        </div>
+                        
+                        <div class="forms-box">
+                            <ul>
+                                ${formsHtml}
+                            </ul>
+                        </div>
+
+                        <div class="content">
+                            <p>शासकीय अहवाल विहित वेळेत सादर न करणे ही अत्यंत गंभीर व प्रशासकीय दृष्ट्या अक्षम्य बाब असून, हे आपल्या कामातील हलगर्जीपणाचे व वरिष्ठांच्या आदेशाचे जाणीवपूर्वक उल्लंघन केल्याचे स्पष्ट लक्षण आहे.</p>
+                            
+                            <p>तरी, ही नोटीस प्राप्त होताच <strong>पुढील २४ तासांच्या आत</strong> सदर सर्व प्रलंबित अहवाल प्रणालीवर अचूकपणे अद्ययावत करावेत आणि विहित वेळेत अहवाल न पाठवल्याबाबतचा आपला खुलासा लेखी स्वरूपात त्वरित या कार्यालयास सादर करावा.</p>
+                            
+                            <p>आपला खुलासा असमाधानकारक आढळल्यास किंवा मुदतीत प्राप्त न झाल्यास, आपल्यावर 'महाराष्ट्र नागरी सेवा (शिस्त व अपील) नियम' नुसार <strong>कठोर प्रशासकीय कारवाई</strong> का प्रस्तावित करू नये, याबाबत आपली भूमिका स्पष्ट करावी.</p>
+                        </div>
+                        
+                        <div class="sign-block">
+                            <strong>वैद्यकीय अधिकारी</strong>,<br>
+                            प्राथमिक आरोग्य केंद्र, भादा
+                        </div>
+                        
+                        <div class="copy-to">
+                            प्रत माहितीस्तव सविनय सादर,<br>
+                            १. मा. जिल्हा आरोग्य अधिकारी, जिल्हा परिषद, लातूर.<br>
+                            २. मा. तालुका आरोग्य अधिकारी, तालुका कार्यालय, औसा.
+                        </div>
+                        
+                        <div class="sign-block" style="margin-top: 20px;">
+                            <strong>वैद्यकीय अधिकारी</strong>,<br>
+                            प्राथमिक आरोग्य केंद्र, भादा
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 30px; display: flex; justify-content: center; gap: 15px;" class="no-print">
+                        <button onclick="window.print()" style="padding: 12px 25px; background-color: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🖨️ डायरेक्ट प्रिंट काढा</button>
+                        <button onclick="downloadNoticePDF()" style="padding: 12px 25px; background-color: #dc3545; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">📥 A4 PDF डाऊनलोड करा</button>
+                    </div>
+
+                    <script>
+                        function downloadNoticePDF() {
+                            const element = document.getElementById('noticeContent');
+                            const empFileName = '${empName}'.replace(/\\s+/g, '_'); 
+                            
+                            const opt = {
+                                margin:       [10, 10, 10, 10], 
+                                filename:     'कारणे_दाखवा_नोटीस_' + empFileName + '.pdf',
+                                image:        { type: 'jpeg', quality: 0.98 },
+                                html2canvas:  { scale: 2, useCORS: true },
+                                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                            };
+                            
+                            html2pdf().set(opt).from(element).save();
+                        }
+                    <\/script>
+                </body>
+                </html>
+            `);
+            noticeWindow.document.close();
         }
     </script>
 </body>
