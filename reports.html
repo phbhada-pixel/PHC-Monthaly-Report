@@ -7,16 +7,38 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-    <style>
+   <style>
         :root { --primary: #00705a; }
         .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; table-layout: auto; }
         .report-table th, .report-table td { border: 1px solid #000; padding: 6px; text-align: center; word-wrap: break-word; }
         .report-table th { font-weight: bold; color: #333; }
         .page-break { page-break-before: always !important; display: block; }
         .table-responsive { width: 100%; overflow-x: auto; margin-bottom: 20px;}
+        
+        /* 🟢 सुधारणा: PDF प्रिंट काढतानाचे नवीन सेटिंग्ज */
         @media print {
+            @page {
+                size: A4 landscape; /* A4 साईज आणि लँडस्केप मोड */
+                margin: 8mm; /* अगदी कमी (Minimum) पेज बॉर्डर */
+            }
             .no-print { display: none !important; }
-            body { background: #fff; padding: 0; }
+            body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; }
+            
+            /* प्रत्येक अहवाल नवीन पेजवर घेण्यासाठी */
+            .report-block { page-break-after: always; }
+            .report-block:last-child { page-break-after: auto; }
+            
+            /* सर्व कॉलम्स पेजवर फिट बसण्यासाठी फॉन्ट साईज ॲडजस्ट करणे */
+            .report-table { font-size: 10px !important; width: 100% !important; table-layout: auto; }
+            .report-table th, .report-table td { padding: 4px !important; }
+            
+            /* प्रिंटसाठी नको असलेल्या शेड आणि बॉर्डर्स लपवणे */
+            .shadow-sm, .rounded-xl { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+            .p-4 { padding: 0 !important; margin-bottom: 0 !important; }
+            
+            /* टेबल कट होऊ नये म्हणून ओव्हरफ्लो सेटिंग्ज बदलणे */
+            .overflow-hidden { overflow: visible !important; }
+            .table-responsive { overflow-x: visible !important; }
         }
     </style>
 </head>
