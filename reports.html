@@ -7,8 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-    <!-- 🟢 नवीन: थेट PDF डाऊनलोड करण्यासाठी लायब्ररी -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root { --primary: #00705a; }
         .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; table-layout: auto; }
@@ -17,35 +15,23 @@
         .page-break { page-break-before: always !important; display: block; }
         .table-responsive { width: 100%; overflow-x: auto; margin-bottom: 20px;}
         
-        /* 🟢 थेट PDF डाऊनलोड होताना टेबल व्यवस्थित फिट बसण्यासाठी */
-        .pdf-mode .report-table { font-size: 10px !important; width: 100% !important; table-layout: auto; }
-        .pdf-mode .report-table th, .pdf-mode .report-table td { padding: 4px !important; }
-        .pdf-mode .shadow-sm, .pdf-mode .rounded-xl { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
-        .pdf-mode .p-4 { padding: 5px !important; margin-bottom: 0 !important; }
-        .pdf-mode .table-responsive { overflow-x: visible !important; }
-
-        /* 🟢 सुधारणा: PDF प्रिंट काढतानाचे नवीन सेटिंग्ज */
         @media print {
             @page {
-                size: A4 landscape; /* A4 साईज आणि लँडस्केप मोड */
-                margin: 8mm; /* अगदी कमी (Minimum) पेज बॉर्डर */
+                size: A4 landscape; 
+                margin: 8mm; 
             }
             .no-print { display: none !important; }
             body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; }
             
-            /* प्रत्येक अहवाल नवीन पेजवर घेण्यासाठी */
             .report-block { page-break-after: always; }
             .report-block:last-child { page-break-after: auto; }
             
-            /* सर्व कॉलम्स पेजवर फिट बसण्यासाठी फॉन्ट साईज ॲडजस्ट करणे */
             .report-table { font-size: 10px !important; width: 100% !important; table-layout: auto; }
             .report-table th, .report-table td { padding: 4px !important; }
             
-            /* प्रिंटसाठी नको असलेल्या शेड आणि बॉर्डर्स लपवणे */
             .shadow-sm, .rounded-xl { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
             .p-4 { padding: 0 !important; margin-bottom: 0 !important; }
             
-            /* टेबल कट होऊ नये म्हणून ओव्हरफ्लो सेटिंग्ज बदलणे */
             .overflow-hidden { overflow: visible !important; }
             .table-responsive { overflow-x: visible !important; }
         }
@@ -146,7 +132,6 @@
                 </select>
             </div>
 
-            <!-- 🟢 नवीन: अपूर्ण यादीचा प्रकार निवडण्यासाठी ड्रॉपडाऊन -->
             <div id="pendingFilterDiv">
                 <label class="block text-gray-700 text-xs font-bold mb-1">अपूर्ण यादी (Pending List) प्रकार</label>
                 <select id="pendingGroupFilter" class="w-full p-2 border border-red-300 rounded bg-red-50 text-sm font-bold text-red-800 focus:ring-2 focus:ring-red-500">
@@ -545,23 +530,25 @@
                             if (!scObj || scObj.phc_id !== user.phc_id) return;
                         }
 
-                       let scName = scObj ? scObj.name : '-';
+                        let scName = scObj ? scObj.name : '-';
                         if(user.role !== 'employee' && filterSubCenter !== "सर्व" && scName !== filterSubCenter) return;
 
+                        // 🟢 सुधारणा: स्वतंत्र लोकसंख्या व घरे मिळवणे
                         let vName = villageObj ? villageObj.name : '-';
+                        let pop = 0; let houses = 0;
                         if (formObj.form_type === 'subcenter') {
                             vName = "🏢 संपूर्ण उपकेंद्र (Subcenter Level)";
-                        } else if (villageObj && (formObj.form_type === 'monthly' || formObj.form_type === 'progressive' || formObj.form_type === 'fortnightly')) {
-                            // 🟢 नवीन बदल: पंधरवाडी, मासिक आणि प्रगत अहवालांसाठी गावाच्या नावासोबत लोकसंख्या आणि घरे जोडणे
-                            let pop = villageObj.population || 0;
-                            let houses = villageObj.total_houses || 0;
-                            vName = `${villageObj.name} (लोक.: ${pop}, घरे: ${houses})`;
+                        } else if (villageObj) {
+                            pop = villageObj.population || 0;
+                            houses = villageObj.total_houses || 0;
                         }
 
                         let row = { 
                             response_id: res.id, report_month: res.report_month, report_year: res.report_year,
                             month: periodText, year: '', subcenter: scName, village: vName, 
-                            employee: empObj?empObj.full_name:'-', values: {} 
+                            employee: empObj?empObj.full_name:'-', 
+                            population: pop, houses: houses,
+                            values: {} 
                         };
 
                         validDataFields.forEach(f => {
@@ -759,7 +746,6 @@
             if (user.role === 'admin' || user.role === 'taluka_admin') phcHeaderTxt = "तालुका अहवाल - संपूर्ण डेटा";
             if (user.role === 'phc_admin') phcHeaderTxt = "तुमच्या PHC चा अहवाल";
 
-            // 🟢 प्रिंट काढा बटण
             downArea.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-center gap-2 p-3 bg-gray-50 rounded-lg border shadow-sm mb-4 no-print"><span class="font-bold text-gray-700">${phcHeaderTxt}</span><div class="flex gap-2"><button onclick="downloadConsolidatedExcel()" class="bg-green-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-green-700 transition">📥 Excel डाऊनलोड</button><button onclick="window.print()" class="bg-red-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-red-700 transition">🖨️ प्रिंट काढा</button></div></div>`;
 
             let html = '';
@@ -767,6 +753,7 @@
                 let columns = rep.fields; let rows = rep.rows;
                 
                 let headInfo = getCustomHeader(rep);
+                let showPop = (rep.formType === 'monthly' || rep.formType === 'progressive' || rep.formType === 'fortnightly');
 
                 html += `<div class="mb-8 p-4 border border-gray-300 rounded-xl bg-white shadow-sm overflow-hidden report-block">
                             <div class="text-center border-b pb-3 mb-4 bg-green-50 p-4 rounded-t-lg">                                
@@ -781,7 +768,8 @@
                     let l2Row = `<tr>`; let l3Row = rep.isProg ? `<tr>` : ``;
 
                     rows.forEach((r) => {
-                        let vName = r.village ? `${r.village} <br/><span class="text-[10px] text-gray-500">(${r.subcenter})</span>` : "-";
+                        let extra = showPop ? `<br/><span class="text-[10px] text-gray-600">लोक.: ${r.population || 0} | घरे: ${r.houses || 0}</span>` : '';
+                        let vName = r.village ? `${r.village} <br/><span class="text-[10px] text-gray-500">(${r.subcenter})</span>${extra}` : "-";
                         l1Row += `<th colspan="${rep.isProg ? 2 : 1}" class="border p-2 bg-purple-100">${vName}</th>`;
                         if (rep.isProg) { l2Row += `<th class="border p-1 bg-yellow-50 text-[10px]">मासिक</th><th class="border p-1 bg-orange-50 text-[10px]">प्रगत</th></tr>`; }
                     });
@@ -824,7 +812,11 @@
                         Object.keys(scGroups).sort().forEach(sc => {
                             let scRows = scGroups[sc];
                             let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
-                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
+                            
+                            let sumPop = 0, sumHouses = 0;
+                            scRows.forEach(sr => { sumPop += (parseInt(sr.population) || 0); sumHouses += (parseInt(sr.houses) || 0); });
+                            
+                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", population: sumPop, houses: sumHouses, values: {} };
                             
                             columns.forEach((c, idx) => {
                                 if (rep.formType === 'list') {
@@ -846,6 +838,10 @@
                     if (groupType === 'SubCenterFlat') {
                         l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
                         l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2">कर्मचारी</th>`;
+                    }
+                    if (showPop) {
+                        l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 bg-yellow-50">लोकसंख्या</th>`;
+                        l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 bg-yellow-50">घर संख्या</th>`;
                     }
                     
                     let l2Row = `<tr>`; let l3Row = `<tr>`; let l4Row = rep.isProg ? `<tr>` : ``;
@@ -900,6 +896,10 @@
                             tbodyHtml += `<td class="border p-2 font-bold text-gray-800 text-left">${r.village} ${actionHtml}</td>`;
                             tbodyHtml += `<td class="border p-2 font-medium text-gray-700 text-left">${r.employee}</td>`;
                         }
+                        if(showPop) {
+                            tbodyHtml += `<td class="border p-2 text-center font-bold text-gray-700">${r.population || 0}</td>`;
+                            tbodyHtml += `<td class="border p-2 text-center font-bold text-gray-700">${r.houses || 0}</td>`;
+                        }
                         
                         columns.forEach(c => {
                             let val = r.values[c.id];
@@ -911,7 +911,7 @@
 
                     if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(dataRowsToRender, columns, rep.isProg);
-                        let colspanTotal = groupType === 'SubCenterFlat' ? 4 : 2; 
+                        let colspanTotal = groupType === 'SubCenterFlat' ? (showPop ? 6 : 4) : (showPop ? 4 : 2); 
                         tbodyHtml += `<tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2 text-left" colspan="${colspanTotal}">एकूण Total</td>`;
                         columns.forEach(c => {
                             let pVal = phcTotals[c.id];
@@ -936,6 +936,11 @@
                         }
 
                         let l1Row = `<tr><th rowspan="${rep.isProg?4:3}" class="border p-2">अ.क्र.</th><th rowspan="${rep.isProg?4:3}" class="border p-2">गाव/कार्यक्षेत्र</th>`;
+                        if (showPop) {
+                            l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 bg-yellow-50">लोकसंख्या</th>`;
+                            l1Row += `<th rowspan="${rep.isProg?4:3}" class="border p-2 bg-yellow-50">घर संख्या</th>`;
+                        }
+                        
                         let l2Row = `<tr>`; let l3Row = `<tr>`; let l4Row = rep.isProg ? `<tr>` : ``;
 
                         let i = 0;
@@ -984,6 +989,11 @@
                             }
 
                             tbodyHtml += `<tr class="hover:bg-gray-50 text-xs"><td class="border p-2 text-center font-bold">${rIdx+1}</td><td class="border p-2 font-bold text-gray-800 text-left">${r.village} ${actionHtml}</td>`;
+                            if(showPop) {
+                                tbodyHtml += `<td class="border p-2 text-center font-bold text-gray-700">${r.population || 0}</td>`;
+                                tbodyHtml += `<td class="border p-2 text-center font-bold text-gray-700">${r.houses || 0}</td>`;
+                            }
+                            
                             columns.forEach(c => {
                                 let val = r.values[c.id];
                                 if(typeof val === 'object' && val !== null) { tbodyHtml += `<td class="border p-2 text-blue-800 text-center font-bold">${val.M}</td><td class="border p-2 font-bold bg-orange-50/30 text-orange-800 text-center">${val.P}</td>`; } 
@@ -993,8 +1003,9 @@
                         });
 
                         if(rep.formType !== 'list') {
+                            let colspanTotal = showPop ? 4 : 2;
                             let groupTotals = calculateSmartTotals(subRows, columns, rep.isProg);
-                            tbodyHtml += `<tr class="bg-blue-50 font-bold text-blue-900 text-xs"><td class="border p-2 text-left" colspan="2">गटाची एकूण बेरीज</td>`;
+                            tbodyHtml += `<tr class="bg-blue-50 font-bold text-blue-900 text-xs"><td class="border p-2 text-left" colspan="${colspanTotal}">गटाची एकूण बेरीज</td>`;
                             columns.forEach(c => {
                                 let gVal = groupTotals[c.id];
                                 if(rep.isProg && c.type === 'number') { tbodyHtml += `<td class="border p-2 text-center">${gVal.isNum ? formatNumberDecimals(gVal.M) : '-'}</td><td class="border p-2 text-center">${gVal.isNum ? formatNumberDecimals(gVal.P) : '-'}</td>`; }
@@ -1007,8 +1018,9 @@
                     });
 
                     if (((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin')) && rep.formType !== 'list') {
+                        let colspanTotal = showPop ? 4 : 2;
                         let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
-                        html += `<div class="table-responsive"><table class="report-table"><tbody><tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2" style="width:200px;" colspan="2">एकूण Total</td>`;
+                        html += `<div class="table-responsive"><table class="report-table"><tbody><tr class="bg-green-100 font-extrabold text-green-900 text-sm"><td class="border p-2 text-left" colspan="${colspanTotal}">एकूण Total</td>`;
                         columns.forEach(c => {
                             let pVal = phcTotals[c.id];
                             if(rep.isProg && c.type === 'number') { html += `<td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.M) : '-'}</td><td class="border p-2 text-center">${pVal.isNum ? formatNumberDecimals(pVal.P) : '-'}</td>`; }
@@ -1029,7 +1041,7 @@
             document.getElementById('reportLoader').classList.add('hidden');
             
             if(error) alert("डिलीट करताना त्रुटी: " + error.message);
-            else { alert("✅ डेटा डिली জ্ঞ झाला!"); fetchReportData(); }
+            else { alert("✅ डेटा डिलीट झाला!"); fetchReportData(); }
         }
 
         let currentEditResponseId = null;
@@ -1117,6 +1129,7 @@
             currentReports.forEach((rep) => {
                 let columns = rep.fields; let rows = rep.rows;
                 let sheetData = []; let merges = []; let titleHeaderRows = []; let masterHeaderRows = []; let subTitleHeaderRows = []; let groupTotalRows = []; let phcTotalRows = [];
+                let showPop = (rep.formType === 'monthly' || rep.formType === 'progressive' || rep.formType === 'fortnightly');
 
                 if (groupType === "SubCenterConsolidated") {
                     let verticalColCount = 2 + (rows.length * (rep.isProg ? 2 : 1)) + (rep.isProg ? 2 : 1);
@@ -1137,7 +1150,8 @@
 
                     let ccIdx = 2;
                     rows.forEach(r => {
-                        let vName = r.village ? `${r.village} (${r.subcenter})` : "-";
+                        let extra = showPop ? `\n(लोक.: ${r.population} | घरे: ${r.houses})` : '';
+                        let vName = r.village ? `${r.village} (${r.subcenter})${extra}` : "-";
                         r1.push(vName); if(rep.isProg) r1.push("");
                         if(rep.isProg) { merges.push({ s: { r: startR, c: ccIdx }, e: { r: startR, c: ccIdx + 1 } }); r2.push("मासिक"); r2.push("प्रगत"); ccIdx += 2; } else { ccIdx += 1; }
                     });
@@ -1183,7 +1197,10 @@
                         Object.keys(scGroups).sort().forEach(sc => {
                             let scRows = scGroups[sc];
                             let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
-                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
+                            
+                            let sumPop = 0, sumHouses = 0;
+                            scRows.forEach(sr => { sumPop += (parseInt(sr.population) || 0); sumHouses += (parseInt(sr.houses) || 0); });
+                            let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", population: sumPop, houses: sumHouses, values: {} };
                             
                             columns.forEach((c, idx) => {
                                 if (rep.formType === 'list') {
@@ -1201,7 +1218,7 @@
                         dataRowsToRender = rows.sort((a,b) => a.subcenter.localeCompare(b.subcenter) || a.employee.localeCompare(b.employee) || a.village.localeCompare(b.village));
                     }
 
-                    let totalBaseCols = groupType === 'SubCenterFlat' ? 4 : 2; 
+                    let totalBaseCols = groupType === 'SubCenterFlat' ? (showPop ? 6 : 4) : (showPop ? 4 : 2); 
                     let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
 
                     let headInfo = getCustomHeader(rep);
@@ -1218,6 +1235,10 @@
                     if(groupType === 'SubCenterFlat') {
                         r1.push("गाव/कार्यक्षेत्र");
                         r1.push("कर्मचारी");
+                    }
+                    if (showPop) {
+                        r1.push("लोकसंख्या");
+                        r1.push("घर संख्या");
                     }
                     
                     let r2 = []; let r3 = []; let r4 = rep.isProg ? [] : null;
@@ -1293,6 +1314,10 @@
                             rowData.push(r.village);
                             rowData.push(r.employee);
                         }
+                        if(showPop) {
+                            rowData.push(r.population || 0);
+                            rowData.push(r.houses || 0);
+                        }
                         
                         columns.forEach(c => {
                             let val = r.values[c.id];
@@ -1325,7 +1350,8 @@
                     let employeeGroups = {};
                     rows.forEach(r => { let key = `${r.subcenter}###${r.employee}`; if(!employeeGroups[key]) employeeGroups[key] = []; employeeGroups[key].push(r); });
 
-                    let totalColumnsCount = 2; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
+                    let totalBaseCols = showPop ? 4 : 2; 
+                    let totalColumnsCount = totalBaseCols; columns.forEach(c => { totalColumnsCount += (rep.isProg && c.type === 'number') ? 2 : 1; });
 
                     let headInfo = getCustomHeader(rep);
                     let startIdx = sheetData.length;
@@ -1346,11 +1372,17 @@
                         }
 
                         let startR = sheetData.length;
-                        let r1 = ["अ.क्र.", "गाव/कार्यक्षेत्र"]; let r2 = ["", ""]; let r3 = ["", ""]; let r4 = rep.isProg ? ["", ""] : null;
+                        let r1 = ["अ.क्र.", "गाव/कार्यक्षेत्र"]; 
+                        if (showPop) {
+                            r1.push("लोकसंख्या");
+                            r1.push("घर संख्या");
+                        }
+                        
+                        let r2 = []; let r3 = []; let r4 = rep.isProg ? [] : null;
 
+                        for(let x=0; x<totalBaseCols; x++) { r2.push(""); r3.push(""); if(rep.isProg) r4.push(""); }
                         let totalHeaderRows = rep.isProg ? 4 : 3;
-                        merges.push({ s: { r: startR, c: 0 }, e: { r: startR + totalHeaderRows - 1, c: 0 } });
-                        merges.push({ s: { r: startR, c: 1 }, e: { r: startR + totalHeaderRows - 1, c: 1 } });
+                        for(let x=0; x<totalBaseCols; x++) merges.push({ s: { r: startR, c: x }, e: { r: startR + totalHeaderRows - 1, c: x } });
 
                         let i = 0;
                         while(i < columns.length) {
@@ -1417,6 +1449,11 @@
 
                         subRows.forEach((r, rIdx) => {
                             let rowData = [rIdx + 1, r.village];
+                            if(showPop) {
+                                rowData.push(r.population || 0);
+                                rowData.push(r.houses || 0);
+                            }
+                            
                             columns.forEach(c => {
                                 let val = r.values[c.id];
                                 if(typeof val === 'object' && val !== null) { 
@@ -1431,7 +1468,9 @@
 
                         if(rep.formType !== 'list') {
                             let groupTotals = calculateSmartTotals(subRows, columns, rep.isProg);
-                            let gRow = ["गटाची एकूण बेरीज", ""];
+                            let gRow = ["गटाची एकूण बेरीज"];
+                            for(let x=1; x<totalBaseCols; x++) gRow.push("");
+                            
                             columns.forEach(c => {
                                 let gVal = groupTotals[c.id];
                                 if(rep.isProg && c.type === 'number') { gRow.push(gVal.isNum ? Number(gVal.M) : '-'); gRow.push(gVal.isNum ? Number(gVal.P) : '-'); }
@@ -1439,7 +1478,7 @@
                             });
                             let gRowIdx = sheetData.length;
                             sheetData.push(gRow); groupTotalRows.push(gRowIdx);
-                            merges.push({ s: { r: gRowIdx, c: 0 }, e: { r: gRowIdx, c: 1 } });
+                            merges.push({ s: { r: gRowIdx, c: 0 }, e: { r: gRowIdx, c: totalBaseCols - 1 } });
                         }
 
                         sheetData.push(Array(totalColumnsCount).fill(""));
@@ -1447,7 +1486,10 @@
 
                     if ((user.role === 'admin' || user.role === 'taluka_admin' || user.role === 'phc_admin') && rep.formType !== 'list') {
                         let phcTotals = calculateSmartTotals(rows, columns, rep.isProg);
-                        let pRow = ["एकूण Total", ""];
+                        let pRow = ["एकूण Total"];
+                        for(let x=1; x<totalBaseCols; x++) pRow.push("");
+                        merges.push({ s: { r: sheetData.length, c: 0 }, e: { r: sheetData.length, c: totalBaseCols - 1 } });
+
                         columns.forEach(c => {
                             let pVal = phcTotals[c.id];
                             if(rep.isProg && c.type === 'number') { pRow.push(pVal.isNum ? Number(pVal.M) : '-'); pRow.push(pVal.isNum ? Number(pVal.P) : '-'); }
@@ -1455,7 +1497,7 @@
                         });
                         let pRowIdx = sheetData.length;
                         sheetData.push(pRow); phcTotalRows.push(pRowIdx);
-                        merges.push({ s: { r: pRowIdx, c: 0 }, e: { r: pRowIdx, c: 1 } });
+                        merges.push({ s: { r: pRowIdx, c: 0 }, e: { r: pRowIdx, c: totalBaseCols - 1 } });
                     }
                 }
 
@@ -1505,6 +1547,11 @@
                     wscols.push({ wch: 25 }); 
                 }
                 
+                if (groupType !== "SubCenterConsolidated" && showPop) {
+                    wscols.push({ wch: 10 });
+                    wscols.push({ wch: 10 });
+                }
+
                 if (groupType === "SubCenterConsolidated") { wscols[1] = { wch: 45 }; }
                 for(let c=wscols.length; c<finalColLimit; c++) wscols.push({ wch: 14 });
                 ws["!cols"] = wscols;
@@ -1516,7 +1563,6 @@
             XLSX.writeFile(wb, dlName);
         }
 
-        // 🟢 सुधारणा: अपूर्ण यादी (Pending List) ड्रॉपडाऊननुसार बनवणे
         function generatePendingReport() {
             let periodType = document.getElementById('periodType').value;
             if (periodType === 'custom') {
@@ -1734,9 +1780,11 @@
             let formsHtml = pendingItems.map((item, i) => {
                 let parts = item.split(' (');
                 let villages = parts[1] ? parts[1] : ''; 
+                if(villages.endsWith(')')) villages = villages.slice(0, -1);
+
                 return `<li style="margin-bottom: 5px; padding-left: 5px; line-height: 1.4;">
                             <strong style="font-size: 15px; color: #b71c1c;">${parts[0]}</strong> 
-                            <span style="font-size: 13px; color: #444;">(${villages}</span>
+                            <span style="font-size: 13px; color: #444;">(${villages})</span>
                         </li>`;
             }).join('');
 
