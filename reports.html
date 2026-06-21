@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <!-- 🟢 नवीन: थेट PDF डाऊनलोड करण्यासाठी लायब्ररी -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root { --primary: #00705a; }
         .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; table-layout: auto; }
@@ -15,7 +17,14 @@
         .page-break { page-break-before: always !important; display: block; }
         .table-responsive { width: 100%; overflow-x: auto; margin-bottom: 20px;}
         
-        /* 🟢 PDF प्रिंट काढतानाचे सेटिंग्ज */
+        /* 🟢 थेट PDF डाऊनलोड होताना टेबल व्यवस्थित फिट बसण्यासाठी */
+        .pdf-mode .report-table { font-size: 10px !important; width: 100% !important; table-layout: auto; }
+        .pdf-mode .report-table th, .pdf-mode .report-table td { padding: 4px !important; }
+        .pdf-mode .shadow-sm, .pdf-mode .rounded-xl { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+        .pdf-mode .p-4 { padding: 5px !important; margin-bottom: 0 !important; }
+        .pdf-mode .table-responsive { overflow-x: visible !important; }
+
+        /* 🟢 सुधारणा: PDF प्रिंट काढतानाचे नवीन सेटिंग्ज */
         @media print {
             @page {
                 size: A4 landscape; /* A4 साईज आणि लँडस्केप मोड */
@@ -126,7 +135,7 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-200 pt-4">
             <div id="groupFilterDiv">
                 <label class="block text-gray-700 text-xs font-bold mb-1">अहवाल मांडणी प्रकार (Group View)</label>
                 <select id="reportGroupFilter" class="w-full p-2 border border-gray-300 rounded bg-blue-50 text-sm font-bold text-blue-800 focus:ring-2 focus:ring-blue-500">
@@ -134,6 +143,15 @@
                     <option value="SubCenterFlat">२. सर्व उपकेंद्रांची सलग गावनिहाय यादी (Flat Village List)</option>
                     <option value="SubCenterSum">३. उपकेंद्र निहाय एकूण बेरजेची यादी (SubCenter Wise Sum)</option>
                     <option value="SubCenterConsolidated">४. उपकेंद्र एकत्रित उभी मांडणी (Vertical Consolidated)</option>
+                </select>
+            </div>
+
+            <!-- 🟢 नवीन: अपूर्ण यादीचा प्रकार निवडण्यासाठी ड्रॉपडाऊन -->
+            <div id="pendingFilterDiv">
+                <label class="block text-gray-700 text-xs font-bold mb-1">अपूर्ण यादी (Pending List) प्रकार</label>
+                <select id="pendingGroupFilter" class="w-full p-2 border border-red-300 rounded bg-red-50 text-sm font-bold text-red-800 focus:ring-2 focus:ring-red-500">
+                    <option value="employee">🧑‍⚕️ कर्मचारी नुसार (Employee Wise) - नोटीससाठी उत्तम</option>
+                    <option value="form">📄 अहवालानुसार (Form Wise)</option>
                 </select>
             </div>
 
@@ -163,7 +181,7 @@
                 <button onclick="closeEditModal()" class="text-red-500 font-bold text-2xl hover:text-red-700">&times;</button>
             </div>
             <div class="p-6 overflow-y-auto flex-1 bg-gray-50" id="editModalBody">
-                </div>
+            </div>
             <div class="p-4 border-t flex justify-end gap-3 bg-white">
                 <button onclick="closeEditModal()" class="bg-gray-500 text-white px-5 py-2 rounded font-bold shadow">रद्द करा</button>
                 <button onclick="saveEditResponse()" class="bg-green-600 text-white px-5 py-2 rounded font-bold shadow hover:bg-green-700">💾 अपडेट करा</button>
@@ -736,7 +754,7 @@
             if (user.role === 'admin' || user.role === 'taluka_admin') phcHeaderTxt = "तालुका अहवाल - संपूर्ण डेटा";
             if (user.role === 'phc_admin') phcHeaderTxt = "तुमच्या PHC चा अहवाल";
 
-            // 🟢 प्रिंट बटण ठेवले आणि PDF डाऊनलोड बटण काढले
+            // 🟢 प्रिंट काढा बटण
             downArea.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-center gap-2 p-3 bg-gray-50 rounded-lg border shadow-sm mb-4 no-print"><span class="font-bold text-gray-700">${phcHeaderTxt}</span><div class="flex gap-2"><button onclick="downloadConsolidatedExcel()" class="bg-green-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-green-700 transition">📥 Excel डाऊनलोड</button><button onclick="window.print()" class="bg-red-600 text-white font-extrabold px-6 py-2 rounded-lg shadow-lg hover:bg-red-700 transition">🖨️ प्रिंट काढा</button></div></div>`;
 
             let html = '';
@@ -1006,7 +1024,7 @@
             document.getElementById('reportLoader').classList.add('hidden');
             
             if(error) alert("डिलीट करताना त्रुटी: " + error.message);
-            else { alert("✅ डेटा डिलीट झाला!"); fetchReportData(); }
+            else { alert("✅ डेटा डिली জ্ঞ झाला!"); fetchReportData(); }
         }
 
         let currentEditResponseId = null;
@@ -1493,6 +1511,7 @@
             XLSX.writeFile(wb, dlName);
         }
 
+        // 🟢 सुधारणा: अपूर्ण यादी (Pending List) ड्रॉपडाऊननुसार बनवणे
         function generatePendingReport() {
             let periodType = document.getElementById('periodType').value;
             if (periodType === 'custom') {
@@ -1508,25 +1527,23 @@
             let selectedIDs = getSelectedReportIDs();
             if (selectedIDs.length === 0) { alert("कृपया किमान एक अहवाल निवडा!"); return; }
 
-            let groupedData = {}; 
             let filterSubCenter = document.getElementById('reportSubCenterFilter').value;
+            let pendingGroupType = document.getElementById('pendingGroupFilter').value;
+            
             let formsToCheck = masterData.forms;
             if(!selectedIDs.includes("ALL")) formsToCheck = formsToCheck.filter(f => selectedIDs.includes(f.id));
 
+            let rawPendingData = [];
+
             formsToCheck.forEach(f => {
-                groupedData[f.form_name] = [];
                 masterData.employees.forEach(u => {
-
                     let empRole = String(u.role).toUpperCase().trim();
-
                     if (['ADMIN', 'TALUKA_ADMIN', 'PHC_ADMIN'].includes(empRole)) return;
                     if (!u.sub_center_id || u.sub_center_id === '00000000-0000-0000-0000-000000000000') return;
-
                     if (f.allowed_roles && f.allowed_roles.toUpperCase() !== 'ALL') {
                         let allowedArray = f.allowed_roles.toUpperCase().split(',').map(r => r.trim());
                         if (!allowedArray.includes(empRole)) return; 
                     }
-
                     if (user.role === 'phc_admin' && u.phc_id !== user.phc_id) return;
                     if (user.role !== "admin" && user.role !== "taluka_admin" && user.role !== "phc_admin" && String(u.mobile_number).trim() !== String(user.mobile).trim()) return;
 
@@ -1544,7 +1561,15 @@
                             h.report_year === parseInt(selYear) &&
                             (!isFortnightly || h.report_fortnight === parseInt(selFortnight))
                         );
-                        if (!isFilled) groupedData[f.form_name].push({ sc: scName, name: u.full_name, role: u.role, village: v.name });
+                        if (!isFilled) {
+                            rawPendingData.push({
+                                formName: f.form_name,
+                                empName: u.full_name,
+                                role: u.role,
+                                sc: scName,
+                                village: v.name
+                            });
+                        }
                     });
                 });
             });
@@ -1557,16 +1582,88 @@
             if (filterSubCenter !== 'सर्व') phcHeader += ` (उपकेंद्र: ${filterSubCenter})`;
 
             let html = `<div id="pdfExportArea" class="pdf-container"><div style="text-align:center; border-bottom: 2px solid var(--primary); padding-bottom:10px; margin-bottom:20px;"><h2 style="margin:0; color:var(--primary); font-size:24px;">${phcHeader}</h2><h3 style="margin:5px 0 0 0; color:#444; font-size:18px;">अपूर्ण अहवाल यादी - कालावधी: ${selMonth} ${selYear}</h3></div>`;
-            let hasData = false; let isFirstPending = true;
+            
+            if(rawPendingData.length === 0) { 
+                html = `<h3 style="text-align:center; color:green; padding:30px; font-weight:bold;">🎉 उत्कृष्ट! तुमचे सर्व अहवाल पूर्ण भरले आहेत.</h3>`; 
+                downArea.innerHTML = ""; 
+                container.innerHTML = html + `</div>`; 
+                document.getElementById('reportContentArea').classList.remove('hidden');
+                return;
+            }
 
-            for(let fName in groupedData) {
-                if(groupedData[fName].length > 0) {
-                    hasData = true; let pbClass = isFirstPending ? "" : "page-break"; isFirstPending = false;
+            let isFirstPending = true;
+
+            if (pendingGroupType === 'employee') {
+                let groupedByEmp = {};
+                rawPendingData.forEach(item => {
+                    let key = item.empName + "###" + item.sc + "###" + item.role;
+                    if(!groupedByEmp[key]) groupedByEmp[key] = [];
+                    groupedByEmp[key].push(item);
+                });
+
+                let sortedEmpKeys = Object.keys(groupedByEmp).sort();
+                
+                sortedEmpKeys.forEach(empKey => {
+                    let pbClass = isFirstPending ? "" : "page-break"; isFirstPending = false;
+                    let [empName, scName, empRole] = empKey.split("###");
+                    
+                    let formMap = {};
+                    groupedByEmp[empKey].forEach(p => {
+                        if(!formMap[p.formName]) formMap[p.formName] = [];
+                        formMap[p.formName].push(p.village);
+                    });
+
+                    let noticeDataArr = [];
+                    let rowsHtml = '';
+                    let idx = 1;
+
+                    Object.keys(formMap).sort().forEach(fName => {
+                        let villagesStr = formMap[fName].join(", ");
+                        noticeDataArr.push(`${fName} (${villagesStr})`);
+                        
+                        rowsHtml += `<tr>
+                            <td style="border: 1px solid #ccc; padding: 8px; text-align:center; font-weight:bold;">${idx++}</td>
+                            <td style="border: 1px solid #ccc; padding: 8px; text-align:left; font-size:15px; font-weight:bold; color:#0056b3;">${fName}</td>
+                            <td style="border: 1px solid #ccc; padding: 8px; text-align:left; font-size:14px; font-weight:bold; color:#28a745;">${villagesStr}</td>
+                        </tr>`;
+                    });
+
+                    let noticeDataStr = noticeDataArr.join('|||');
+
+                    html += `<div class="${pbClass}">
+                                <div class="pdf-group-header" style="background:#f8f9fa; color:#c0392b; padding:10px; font-weight:bold; font-size:16px; margin-top:10px; border:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                                    <span>🧑‍⚕️ कर्मचारी: ${empName} (${scName})</span>
+                                    <button onclick="generateNotice('${empName}', '${empRole}', '${scName}', '${noticeDataStr}')" class="bg-red-100 text-red-700 px-3 py-1 rounded text-xs font-bold shadow-sm hover:bg-red-200 no-print border border-red-300">⚠️ सर्व प्रलंबित अहवालांची नोटीस काढा</button>
+                                </div>
+                                <table class="report-table pending-data-table" style="width:100%; border-collapse:collapse; margin-bottom:30px;">
+                                    <thead style="background:#f4f7f6;">
+                                        <tr>
+                                            <th style="border: 1px solid #ccc; padding: 8px; width:10%; text-align:center;">अ.क्र.</th>
+                                            <th style="border: 1px solid #ccc; padding: 8px; text-align:left; width:45%;">प्रलंबित अहवाल (फॉर्म)</th>
+                                            <th style="border: 1px solid #ccc; padding: 8px; text-align:left; width:45%;">अपूर्ण गावे</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rowsHtml}</tbody>
+                                </table>
+                             </div>`;
+                });
+                
+            } else {
+                let groupedByForm = {};
+                rawPendingData.forEach(item => {
+                    if(!groupedByForm[item.formName]) groupedByForm[item.formName] = [];
+                    groupedByForm[item.formName].push(item);
+                });
+
+                let sortedFormKeys = Object.keys(groupedByForm).sort();
+
+                sortedFormKeys.forEach(fName => {
+                    let pbClass = isFirstPending ? "" : "page-break"; isFirstPending = false;
                     html += `<div class="${pbClass}"><div class="pdf-group-header" style="background:#f8f9fa; color:#c0392b; padding:10px; font-weight:bold; font-size:16px; margin-top:10px; border:1px solid #ddd;">📄 फॉर्म: ${fName}</div><table class="report-table pending-data-table" style="width:100%; border-collapse:collapse; margin-bottom:30px;"><thead style="background:#f4f7f6;"><tr><th style="border: 1px solid #ccc; padding: 8px; width:10%; text-align:center;">अ.क्र.</th><th style="border: 1px solid #ccc; padding: 8px; text-align:left;">अहवाल प्रलंबित असणारे कर्मचारी (उपकेंद्र) - अपूर्ण गावे</th></tr></thead><tbody>`;
                     
                     let empMap = {}; 
-                    groupedData[fName].forEach(p => { 
-                        let key = p.name + "###" + p.sc + "###" + p.role; 
+                    groupedByForm[fName].forEach(p => { 
+                        let key = p.empName + "###" + p.sc + "###" + p.role; 
                         if(!empMap[key]) empMap[key] = []; 
                         empMap[key].push(p.village); 
                     });
@@ -1591,20 +1688,33 @@
                                 </tr>`;
                     });
                     html += `</tbody></table></div>`;
-                }
+                });
             }
-            if(!hasData) { html = `<h3 style="text-align:center; color:green; padding:30px; font-weight:bold;">🎉 उत्कृष्ट! तुमचे सर्व अहवाल पूर्ण भरले आहेत.</h3>`; downArea.innerHTML = ""; }
-            container.innerHTML = html + `</div>`; document.getElementById('reportContentArea').classList.remove('hidden');
+
+            container.innerHTML = html + `</div>`; 
+            document.getElementById('reportContentArea').classList.remove('hidden');
         }
 
         function copyPendingListText() {
             let textToCopy = `*अपूर्ण अहवाल यादी*\n\n`;
             let tables = document.querySelectorAll('.pending-data-table'); if(tables.length === 0) return;
             let formHeaders = document.querySelectorAll('.pdf-group-header');
+            
             tables.forEach((table, tableIndex) => {
-                let formName = formHeaders[tableIndex] ? formHeaders[tableIndex].innerText.replace('📄 फॉर्म: ', '').trim() : "अहवाल";
-                textToCopy += `📌 *${formName}*\n`;
-                table.querySelectorAll('tbody tr').forEach((row, rowIndex) => { let cells = row.querySelectorAll('td'); if(cells.length >= 2) textToCopy += `${rowIndex + 1}. ${cells[1].innerText.replace(/\n/g, " ").replace("⚠️ नोटीस", "").trim()}\n`; });
+                let headerText = formHeaders[tableIndex] ? formHeaders[tableIndex].innerText : "अहवाल";
+                headerText = headerText.replace('⚠️ नोटीस काढा', '').replace('⚠️ सर्व प्रलंबित अहवालांची नोटीस काढा', '').trim();
+                textToCopy += `📌 *${headerText}*\n`;
+                
+                table.querySelectorAll('tbody tr').forEach((row, rowIndex) => { 
+                    let cells = row.querySelectorAll('td'); 
+                    if(cells.length >= 2) {
+                        let rowContent = "";
+                        for(let i=1; i<cells.length; i++) {
+                            rowContent += cells[i].innerText.replace(/\n/g, " ").replace("⚠️ नोटीस", "").trim() + " ";
+                        }
+                        textToCopy += `${rowIndex + 1}. ${rowContent.trim()}\n`; 
+                    }
+                });
                 textToCopy += `\n`;
             });
             navigator.clipboard.writeText(textToCopy).then(() => { alert("✅ यादी व्हॉट्सॲप मेसेजसाठी कॉपी झाली आहे!"); });
