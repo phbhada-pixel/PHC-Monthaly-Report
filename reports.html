@@ -749,9 +749,9 @@
                 
                 let headInfo = getCustomHeader(rep);
 
-                html += `<div class="mb-8 p-4 border border-gray-300 rounded-xl bg-white shadow-sm overflow-hidden page-break-avoid">
-                            <div class="text-center border-b pb-3 mb-4 bg-green-50 p-4 rounded-t-lg">
-                                <h1 class="text-xl font-extrabold text-green-900 mb-1">${headInfo.l1}</h1>
+            // 🟢 सुधारणा: 'report-block' हा क्लास जोडला जेणेकरून प्रत्येक अहवाल नवीन पेजवर जाईल
+                html += `<div class="mb-8 p-4 border border-gray-300 rounded-xl bg-white shadow-sm overflow-hidden report-block">
+                            <div class="text-center border-b pb-3 mb-4 bg-green-50 p-4 rounded-t-lg">                                <h1 class="text-xl font-extrabold text-green-900 mb-1">${headInfo.l1}</h1>
                                 <h2 class="text-lg font-bold text-green-800 mb-1">${headInfo.l2}</h2>
                                 ${headInfo.l3 !== "" ? `<p class="text-sm font-bold text-gray-700">${headInfo.l3}</p>` : ''}
                             </div>`;
