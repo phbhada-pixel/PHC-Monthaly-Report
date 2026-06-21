@@ -732,7 +732,7 @@
                 } else if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
                     let dataRowsToRender = rows;
 
-                    if(groupType === "SubCenterSum") {
+                   if(groupType === "SubCenterSum") {
                         let scGroups = {};
                         rows.forEach(r => { if(!scGroups[r.subcenter]) scGroups[r.subcenter] = []; scGroups[r.subcenter].push(r); });
                         let subCenterAggregatedRows = [];
@@ -740,15 +740,25 @@
                             let scRows = scGroups[sc];
                             let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
                             let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
-                            columns.forEach(c => {
-                                let t = scSmartTotals[c.id];
-                                if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
-                                else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                            
+                            columns.forEach((c, idx) => {
+                                // 🟢 नवीन बदल: जर फॉर्म 'यादी' असेल, तर बेरीज न करता 'एकूण नोंदी' दाखवा
+                                if (rep.formType === 'list') {
+                                    if (idx === 0) {
+                                        scNewRow.values[c.id] = `एकूण नोंदी: ${scRows.length}`;
+                                    } else {
+                                        scNewRow.values[c.id] = '-';
+                                    }
+                                } else {
+                                    let t = scSmartTotals[c.id];
+                                    if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
+                                    else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                                }
                             });
                             subCenterAggregatedRows.push(scNewRow);
                         });
                         dataRowsToRender = subCenterAggregatedRows;
-                   } else if (groupType === "SubCenterFlat") {
+                    } else if (groupType === "SubCenterFlat") {
     dataRowsToRender = rows.sort((a,b) => 
         a.subcenter.localeCompare(b.subcenter) || 
         a.employee.localeCompare(b.employee) || 
@@ -1084,7 +1094,7 @@
                 } else if (groupType === "SubCenterSum" || groupType === "SubCenterFlat") {
                     let dataRowsToRender = rows;
 
-                    if(groupType === "SubCenterSum") {
+                   if(groupType === "SubCenterSum") {
                         let scGroups = {};
                         rows.forEach(r => { if(!scGroups[r.subcenter]) scGroups[r.subcenter] = []; scGroups[r.subcenter].push(r); });
                         let subCenterAggregatedRows = [];
@@ -1092,16 +1102,25 @@
                             let scRows = scGroups[sc];
                             let scSmartTotals = calculateSmartTotals(scRows, columns, rep.isProg);
                             let scNewRow = { subcenter: sc, village: "एकत्रित", employee: "-", values: {} };
-                            columns.forEach(c => {
-                                let t = scSmartTotals[c.id];
-                                if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
-                                else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                            
+                            columns.forEach((c, idx) => {
+                                // 🟢 नवीन बदल: Excel मध्येही यादी फॉर्मसाठी बेरीज न करता 'एकूण नोंदी' दाखवा
+                                if (rep.formType === 'list') {
+                                    if (idx === 0) {
+                                        scNewRow.values[c.id] = `एकूण नोंदी: ${scRows.length}`;
+                                    } else {
+                                        scNewRow.values[c.id] = '-';
+                                    }
+                                } else {
+                                    let t = scSmartTotals[c.id];
+                                    if(rep.isProg && c.type === 'number') { scNewRow.values[c.id] = { M: t.isNum ? t.M : '-', P: t.isNum ? t.P : '-' }; } 
+                                    else { scNewRow.values[c.id] = t.isNum ? t.M : '-'; }
+                                }
                             });
                             subCenterAggregatedRows.push(scNewRow);
                         });
                         dataRowsToRender = subCenterAggregatedRows;
-                    } else if (groupType === "SubCenterFlat") {
-    dataRowsToRender = rows.sort((a,b) => 
+                    } else if (groupType === "SubCenterFlat") {    dataRowsToRender = rows.sort((a,b) => 
         a.subcenter.localeCompare(b.subcenter) || 
         a.employee.localeCompare(b.employee) || 
         a.village.localeCompare(b.village)
