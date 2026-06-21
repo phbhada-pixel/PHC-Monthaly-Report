@@ -1592,10 +1592,7 @@
             });
             navigator.clipboard.writeText(textToCopy).then(() => { alert("✅ यादी व्हॉट्सॲप मेसेजसाठी कॉपी झाली आहे!"); });
         }
-    </script>
-</body>
-</html>
-function generateNotice(empName, empRole, scName, noticeDataStr) {
+   function generateNotice(empName, empRole, scName, noticeDataStr) {
         const today = new Date().toLocaleDateString('mr-IN');
         const noticeWindow = window.open('', '_blank', 'width=900,height=800');
         
