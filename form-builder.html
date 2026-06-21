@@ -31,7 +31,6 @@
                     <option value="monthly">मासिक अहवाल (गावनिहाय)</option>
                     <option value="progressive">प्रगत अहवाल (गावनिहाय)</option>
                     <option value="fortnightly">पंधरवाडी अहवाल (गावनिहाय)</option>
-                    <!-- 🟢 नवीन प्रकार जोडला -->
                     <option value="subcenter" class="font-extrabold text-green-700">🏢 उपकेंद्र एकत्रित (Subcenter Level)</option>
                 </select>
             </div>
@@ -51,6 +50,13 @@
                     <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" class="role-chk w-4 h-4 text-purple-600" value="CHO" checked> CHO</label>
                     <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" class="role-chk w-4 h-4 text-purple-600" value="आशा कार्यकर्ती"> आशा</label>
                 </div>
+            </div>
+
+            <div class="md:col-span-4 bg-blue-50 p-3 border border-blue-300 rounded shadow-sm">
+                <label class="flex items-center gap-3 cursor-pointer text-blue-900 font-bold text-sm">
+                    <input type="checkbox" id="showVillageInfoChk" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
+                    📊 या फॉर्मसाठी 'गावाची लोकसंख्या' आणि 'एकूण घरे' दाखवा (Show Village Population & Houses)
+                </label>
             </div>
         </div>
 
@@ -119,7 +125,14 @@
                 }
             }
 
-            const fields = data.schema_json.fields;
+            // 🟢 एडिट करताना लोकसंख्या दाखवायची सेटिंग लोड करणे
+            if (data.schema_json && data.schema_json.show_village_info) {
+                document.getElementById('showVillageInfoChk').checked = true;
+            } else {
+                document.getElementById('showVillageInfoChk').checked = false;
+            }
+
+            const fields = data.schema_json.fields || [];
 
             fields.forEach(field => {
                 const numId = parseInt(field.id.replace('f', ''));
@@ -252,7 +265,14 @@
             const formName = document.getElementById('formName').value;
             if(!formName) return alert("फॉर्मला नाव द्या!");
 
-            const schema = { fields: [] };
+            // 🟢 चेकबॉक्सचे मूल्य घेणे
+            const showVillageInfoChecked = document.getElementById('showVillageInfoChk').checked;
+
+            const schema = {
+                show_village_info: showVillageInfoChecked, // 🟢 डेटाबेस मध्ये सेव्ह करण्यासाठी
+                fields: []
+            };
+
             const allBoxes = document.getElementById('fieldsContainer').querySelectorAll('[id$="_box"]');
 
             allBoxes.forEach(box => {
