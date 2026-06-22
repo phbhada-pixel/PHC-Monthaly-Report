@@ -312,10 +312,7 @@
             globalPendingVillages = [];
             let hiddenCount = 0;
             
-            if (currentFormObj.form_type === 'fortnightly') fnDiv.classList.remove('hidden');
-            else fnDiv.classList.add('hidden');
-
-            let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
+           let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
 
             // 🟢 Subcenter Level Form Processing
             if (currentFormObj.form_type === 'subcenter') {
