@@ -216,7 +216,6 @@
             allFormsMap = {};
 
             let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
-            
             let hasFortnightly = false; 
 
             allowedForms.forEach(form => {
@@ -452,32 +451,9 @@
             }
 
             let html = '';
-
-            // 🟢 नवीन बदल: जर फॉर्म बिल्डरमध्ये लोकसंख्या आणि घरे ऑन असेल, तर गावाच्या नावानंतर स्वतंत्र फील्ड्स दाखवा
-            if (currentFormObj.schema_json && currentFormObj.schema_json.show_population === true) {
-                let totalPop = 0;
-                let totalHouses = 0;
-                
-                currentPendingVillages.forEach(v => {
-                    totalPop += (parseInt(v.population) || 0);
-                    totalHouses += (parseInt(v.total_houses) || 0);
-                });
-
-                html += `
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 mb-4 bg-green-50 border border-green-200 rounded-xl shadow-sm">
-                        <div>
-                            <label class="block text-green-900 text-xs font-bold mb-1">📊 गावाची एकूण लोकसंख्या (Population)</label>
-                            <input type="text" value="${totalPop}" class="w-full p-2 border border-green-300 rounded-lg bg-gray-50 font-extrabold text-green-800 text-sm tracking-wider" readonly>
-                            <p class="text-[10px] text-green-600 mt-0.5">* हा मास्टर डेटा मधील संदर्भ आहे (Read-Only)</p>
-                        </div>
-                        <div>
-                            <label class="block text-green-900 text-xs font-bold mb-1">🏠 गावाची एकूण घर संख्या (Total Houses)</label>
-                            <input type="text" value="${totalHouses}" class="w-full p-2 border border-green-300 rounded-lg bg-gray-50 font-extrabold text-green-800 text-sm tracking-wider" readonly>
-                            <p class="text-[10px] text-green-600 mt-0.5">* हा मास्टर डेटा मधील संदर्भ आहे (Read-Only)</p>
-                        </div>
-                    </div>
-                `;
-            }
+            
+            // 🟢 चेकबॉक्सवरून अट ठरवणे
+            let showPop = currentFormObj.schema_json && currentFormObj.schema_json.show_population === true;
 
             let columns = currentDataFields.map(f => {
                 let chain = getFieldHierarchyChain(allFields, f);
@@ -489,7 +465,13 @@
 
             html += '<div class="table-responsive"><table class="w-full border-collapse block md:table">';
             
+            // 🟢 मुख्य बदल: टेबल हेडरमध्ये लोकसंख्या व कुटुंब संख्या कॉलम जोडले (फक्त ऑन असल्यास)
             let l1Row = `<tr><th rowspan="3" class="p-3 border text-center font-extrabold text-gray-800 min-w-[150px] bg-gray-200">गाव / कार्यक्षेत्र</th>`;
+            if (showPop) {
+                l1Row += `<th rowspan="3" class="p-3 border text-center font-extrabold text-indigo-950 bg-yellow-100 min-w-[85px]">लोकसंख्या</th>`;
+                l1Row += `<th rowspan="3" class="p-3 border text-center font-extrabold text-indigo-950 bg-yellow-100 min-w-[85px]">कुटुंब संख्या</th>`;
+            }
+
             let l2Row = `<tr>`;
             let l3Row = `<tr>`;
 
@@ -539,6 +521,16 @@
                             <span class="text-2xl md:text-sm font-extrabold text-indigo-900 md:text-gray-900">${currentFormObj.form_type === 'subcenter' ? '🏢 ' : index+1+'. '}${v.name}</span>
                          </td>`;
 
+                // 🟢 मुख्य बदल: टेबल बॉडीमध्ये प्रत्येक गावासमोर लोकसंख्या व कुटुंब संख्या कॉलम डेटा दाखवला (फक्त ऑन असल्यास)
+                if (showPop) {
+                    html += `<td class="block md:table-cell p-4 md:p-2 border-b border-gray-200 md:border md:border-gray-300 text-center bg-yellow-50/40 font-black text-indigo-950 text-base md:text-sm">
+                                <span class="md:hidden text-xs text-gray-500 block font-bold mb-0.5">📊 लोकसंख्या:</span>${v.population || 0}
+                             </td>`;
+                    html += `<td class="block md:table-cell p-4 md:p-2 border-b border-gray-200 md:border md:border-gray-300 text-center bg-yellow-50/40 font-black text-indigo-950 text-base md:text-sm">
+                                <span class="md:hidden text-xs text-gray-500 block font-bold mb-0.5">🏠 कुटुंब संख्या:</span>${v.total_houses || 0}
+                             </td>`;
+                }
+
                 let prevL1 = null;
                 let prevL2 = null;
 
@@ -561,7 +553,7 @@
                     } else if (col.type === 'date') {
                         inputHtml = `<input type="date" id="${inputId}" class="w-full md:w-32 p-4 md:p-2 text-xl md:text-sm font-bold md:font-semibold text-center text-gray-900 bg-gray-50 border-2 border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-gray-600" ${reqAttr} ${onInputAttr}>`;
                     } else if (col.type === 'dropdown' && col.options) {
-                        let optsHtml = `<option value="">- निवडा -</option>`;
+                        let optsHtml = `<option value="">-- निवडा --</option>`;
                         col.options.forEach(opt => optsHtml += `<option value="${opt}">${opt}</option>`);
                         inputHtml = `<select id="${inputId}" class="w-full md:w-32 p-4 md:p-2 text-xl md:text-sm font-extrabold md:font-bold text-center text-purple-900 bg-purple-50 border-2 border-purple-400 md:border-gray-400 rounded-lg md:rounded outline-none focus:ring-4 focus:ring-purple-600" ${reqAttr} ${onInputAttr}>${optsHtml}</select>`;
                     } else {
