@@ -1591,10 +1591,12 @@
                     let empRole = String(u.role).toUpperCase().trim();
                     if (['ADMIN', 'TALUKA_ADMIN', 'PHC_ADMIN'].includes(empRole)) return;
                     if (!u.sub_center_id || u.sub_center_id === '00000000-0000-0000-0000-000000000000') return;
+                    
                     if (f.allowed_roles && f.allowed_roles.toUpperCase() !== 'ALL') {
-                        let allowedArray = f.allowed_roles.toUpperCase().split(',').map(r => r.trim());
+                        let allowedArray = f.allowed_roles.split(',').map(r => r.trim().toUpperCase());
                         if (!allowedArray.includes(empRole)) return; 
                     }
+
                     if (user.role === 'phc_admin' && u.phc_id !== user.phc_id) return;
                     if (user.role !== "admin" && user.role !== "taluka_admin" && user.role !== "phc_admin" && String(u.mobile_number).trim() !== String(user.mobile).trim()) return;
 
@@ -1605,13 +1607,26 @@
                     let userVillages = masterData.villages.filter(v => v.sub_center_id === u.sub_center_id);
                     userVillages.forEach(v => {
                         let isFortnightly = f.form_type === 'fortnightly';
-                        let isFilled = masterData.filledStats.some(h => 
-                            h.form_id === f.id && 
-                            h.village_id === v.id && 
-                            h.report_month === parseInt(selMonthNum) && 
-                            h.report_year === parseInt(selYear) &&
-                            (!isFortnightly || h.report_fortnight === parseInt(selFortnight))
-                        );
+                        
+                        // 🟢 सुधारणा: String vs Number प्रकारातील तफावत (Type mismatch) दूर केली
+                        let isFilled = masterData.filledStats.some(h => {
+                            if (h.form_id !== f.id || h.village_id !== v.id) return false;
+                            
+                            let dbMonth = String(h.report_month).trim().toLowerCase();
+                            let matchM = (dbMonth == selMonthNum || dbMonth === `0${selMonthNum}` || dbMonth === selMonth.toLowerCase() || dbMonth === monthNamesNumeric[selMonthNum]?.toLowerCase());
+                            
+                            let matchY = (parseInt(h.report_year) == parseInt(selYear));
+                            
+                            let matchFn = true;
+                            if (isFortnightly) {
+                                let dbFn = String(h.report_fortnight).trim();
+                                if(dbFn === "null" || dbFn === "undefined" || dbFn === "") dbFn = "1";
+                                matchFn = (dbFn == selFortnight || dbFn === `0${selFortnight}`);
+                            }
+                            
+                            return matchM && matchY && matchFn;
+                        });
+
                         if (!isFilled) {
                             rawPendingData.push({
                                 formName: f.form_name,
@@ -1632,7 +1647,13 @@
             if (user.role === 'phc_admin') phcHeader = "तुमची अपूर्ण यादी";
             if (filterSubCenter !== 'सर्व') phcHeader += ` (उपकेंद्र: ${filterSubCenter})`;
 
-            let html = `<div id="pdfExportArea" class="pdf-container"><div style="text-align:center; border-bottom: 2px solid var(--primary); padding-bottom:10px; margin-bottom:20px;"><h2 style="margin:0; color:var(--primary); font-size:24px;">${phcHeader}</h2><h3 style="margin:5px 0 0 0; color:#444; font-size:18px;">अपूर्ण अहवाल यादी - कालावधी: ${selMonth} ${selYear}</h3></div>`;
+            // 🟢 सुधारणा: पंधरवाडा कोणता आहे ते PDF च्या हेडिंगमध्ये दाखवले
+            let fnText = selFortnight == '1' ? '१ ते १५ तारीख' : '१६ ते महिनाअखेर';
+            let isFnVisible = !document.getElementById('fortnightInputs').classList.contains('hidden');
+            let periodDisplay = `${selMonth} ${selYear}`;
+            if(isFnVisible) periodDisplay += ` (पंधरवाडा: ${fnText})`;
+
+            let html = `<div id="pdfExportArea" class="pdf-container"><div style="text-align:center; border-bottom: 2px solid var(--primary); padding-bottom:10px; margin-bottom:20px;"><h2 style="margin:0; color:var(--primary); font-size:24px;">${phcHeader}</h2><h3 style="margin:5px 0 0 0; color:#444; font-size:18px;">अपूर्ण अहवाल यादी - कालावधी: ${periodDisplay}</h3></div>`;
             
             if(rawPendingData.length === 0) { 
                 html = `<h3 style="text-align:center; color:green; padding:30px; font-weight:bold;">🎉 उत्कृष्ट! तुमचे सर्व अहवाल पूर्ण भरले आहेत.</h3>`; 
@@ -1745,7 +1766,6 @@
             container.innerHTML = html + `</div>`; 
             document.getElementById('reportContentArea').classList.remove('hidden');
         }
-
         function copyPendingListText() {
             let textToCopy = `*अपूर्ण अहवाल यादी*\n\n`;
             let tables = document.querySelectorAll('.pending-data-table'); if(tables.length === 0) return;
