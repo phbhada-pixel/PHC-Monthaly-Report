@@ -216,8 +216,13 @@
             allFormsMap = {};
 
             let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
+            
+            // 🟢 नवीन बदल: युझरकडे पंधरवाडी फॉर्म आहे की नाही हे तपासण्यासाठी
+            let hasFortnightly = false; 
 
             allowedForms.forEach(form => {
+                if (form.form_type === 'fortnightly') hasFortnightly = true; // 🟢 पंधरवाडी फॉर्म सापडला
+                
                 let showForm = true;
                 
                 // 🟢 Subcenter Level Form Filtering Logic
@@ -266,6 +271,14 @@
                 }
             });
 
+            // 🟢 नवीन बदल: जर युझरकडे किमान एक पंधरवाडी फॉर्म असेल, तर 'पंधरवाडा' ड्रॉपडाऊन नेहमी दिसू द्या
+            const fnDiv = document.getElementById('fortnightDiv');
+            if (hasFortnightly) {
+                fnDiv.classList.remove('hidden');
+            } else {
+                fnDiv.classList.add('hidden');
+            }
+
             if (allFormsMap[currentSelection]) {
                 fSelect.value = currentSelection;
                 loadFormSchema(); 
@@ -273,11 +286,9 @@
                 fSelect.value = "";
                 document.getElementById('villageSelect').innerHTML = '<option value="">-- आधी फॉर्म निवडा --</option>';
                 document.getElementById('villageHint').classList.add('hidden');
-                document.getElementById('fortnightDiv').classList.add('hidden');
                 document.getElementById('dynamicFieldsContainer').innerHTML = '<p class="text-center text-gray-400 font-bold py-10 text-lg">कृपया वरून फॉर्म आणि गाव निवडा.</p>';
             }
         }
-
         function loadFormSchema() {
             const formId = document.getElementById('formSelect').value;
             const container = document.getElementById('dynamicFieldsContainer');
