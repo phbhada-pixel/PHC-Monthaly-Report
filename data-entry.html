@@ -217,15 +217,13 @@
 
             let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
             
-            // 🟢 नवीन बदल: युझरकडे पंधरवाडी फॉर्म आहे की नाही हे तपासण्यासाठी
             let hasFortnightly = false; 
 
             allowedForms.forEach(form => {
-                if (form.form_type === 'fortnightly') hasFortnightly = true; // 🟢 पंधरवाडी फॉर्म सापडला
+                if (form.form_type === 'fortnightly') hasFortnightly = true; 
                 
                 let showForm = true;
                 
-                // 🟢 Subcenter Level Form Filtering Logic
                 if (form.form_type === 'subcenter' && userVillages.length > 0) {
                     let isFilled = currentMonthResponses.some(r => 
                         r.form_id === form.id && 
@@ -271,7 +269,6 @@
                 }
             });
 
-            // 🟢 नवीन बदल: जर युझरकडे किमान एक पंधरवाडी फॉर्म असेल, तर 'पंधरवाडा' ड्रॉपडाऊन नेहमी दिसू द्या
             const fnDiv = document.getElementById('fortnightDiv');
             if (hasFortnightly) {
                 fnDiv.classList.remove('hidden');
@@ -289,6 +286,7 @@
                 document.getElementById('dynamicFieldsContainer').innerHTML = '<p class="text-center text-gray-400 font-bold py-10 text-lg">कृपया वरून फॉर्म आणि गाव निवडा.</p>';
             }
         }
+
         function loadFormSchema() {
             const formId = document.getElementById('formSelect').value;
             const container = document.getElementById('dynamicFieldsContainer');
@@ -304,7 +302,6 @@
             if (!formId) {
                 vSelect.innerHTML = '<option value="">-- आधी फॉर्म निवडा --</option>';
                 vHint.classList.add('hidden');
-                fnDiv.classList.add('hidden');
                 return;
             }
 
@@ -312,9 +309,8 @@
             globalPendingVillages = [];
             let hiddenCount = 0;
             
-           let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
+            let fN = parseInt(document.getElementById('reportFortnight').value) || 1;
 
-            // 🟢 Subcenter Level Form Processing
             if (currentFormObj.form_type === 'subcenter') {
                 let isFilled = currentMonthResponses.some(r => 
                     r.form_id === formId && 
@@ -366,7 +362,6 @@
                 vHint.classList.add('hidden');
             }
             
-            // 🟢 Auto select if Subcenter
             if(currentFormObj.form_type === 'subcenter' && globalPendingVillages.length > 0) {
                 vSelect.value = globalPendingVillages[0].id;
                 renderFormFields();
@@ -456,6 +451,34 @@
                 currentPendingVillages = globalPendingVillages.filter(v => v.id === parseInt(vid) || v.id === vid);
             }
 
+            let html = '';
+
+            // 🟢 नवीन बदल: जर फॉर्म बिल्डरमध्ये लोकसंख्या आणि घरे ऑन असेल, तर गावाच्या नावानंतर स्वतंत्र फील्ड्स दाखवा
+            if (currentFormObj.schema_json && currentFormObj.schema_json.show_population === true) {
+                let totalPop = 0;
+                let totalHouses = 0;
+                
+                currentPendingVillages.forEach(v => {
+                    totalPop += (parseInt(v.population) || 0);
+                    totalHouses += (parseInt(v.total_houses) || 0);
+                });
+
+                html += `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 mb-4 bg-green-50 border border-green-200 rounded-xl shadow-sm">
+                        <div>
+                            <label class="block text-green-900 text-xs font-bold mb-1">📊 गावाची एकूण लोकसंख्या (Population)</label>
+                            <input type="text" value="${totalPop}" class="w-full p-2 border border-green-300 rounded-lg bg-gray-50 font-extrabold text-green-800 text-sm tracking-wider" readonly>
+                            <p class="text-[10px] text-green-600 mt-0.5">* हा मास्टर डेटा मधील संदर्भ आहे (Read-Only)</p>
+                        </div>
+                        <div>
+                            <label class="block text-green-900 text-xs font-bold mb-1">🏠 गावाची एकूण घर संख्या (Total Houses)</label>
+                            <input type="text" value="${totalHouses}" class="w-full p-2 border border-green-300 rounded-lg bg-gray-50 font-extrabold text-green-800 text-sm tracking-wider" readonly>
+                            <p class="text-[10px] text-green-600 mt-0.5">* हा मास्टर डेटा मधील संदर्भ आहे (Read-Only)</p>
+                        </div>
+                    </div>
+                `;
+            }
+
             let columns = currentDataFields.map(f => {
                 let chain = getFieldHierarchyChain(allFields, f);
                 let l1 = "", l2 = "";
@@ -464,7 +487,7 @@
                 return { ...f, l1, l2, l3: f.label };
             });
 
-            let html = '<div class="table-responsive"><table class="w-full border-collapse block md:table">';
+            html += '<div class="table-responsive"><table class="w-full border-collapse block md:table">';
             
             let l1Row = `<tr><th rowspan="3" class="p-3 border text-center font-extrabold text-gray-800 min-w-[150px] bg-gray-200">गाव / कार्यक्षेत्र</th>`;
             let l2Row = `<tr>`;
